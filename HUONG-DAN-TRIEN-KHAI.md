@@ -140,6 +140,14 @@ git init
 ```
 
 ```bash
+git config user.name "TEN-TAI-KHOAN"
+```
+
+```bash
+git config user.email "email-cua-thay-co@gmail.com"
+```
+
+```bash
 git add -A
 ```
 
@@ -160,6 +168,16 @@ git push -u origin main
 ```
 
    Lần push đầu, cửa sổ đăng nhập GitHub hiện ra → đăng nhập trình duyệt → xong.
+
+   **Lỗi thường gặp:**
+
+   | Thông báo | Nguyên nhân → cách xử lí |
+   |---|---|
+   | `Author identity unknown` / `Please tell me who you are` (khi commit) | Chưa khai báo tên/email → chạy 2 lệnh `git config user.name/user.email` ở trên rồi `git commit` lại. |
+   | `src refspec main does not match any` (khi push) | Chưa có commit nào (bước commit bị lỗi) → kiểm tra bằng `git log --oneline`; commit thành công rồi push lại. |
+   | `remote origin already exists` | Đã thêm remote rồi — bỏ qua, không cần chạy lại. Muốn đổi địa chỉ: `git remote set-url origin <địa-chỉ-mới>`. |
+   | `rejected ... (fetch first)` | Repo GitHub đã có sẵn file (lỡ tick README) → chạy `git pull origin main --allow-unrelated-histories` rồi push lại. |
+   | `Repository not found` / `403` | Sai tên tài khoản/repo trong địa chỉ, hoặc đăng nhập GitHub bằng tài khoản khác. |
 
 > `.gitignore` đã chặn thư mục `lop-hoc/data/` (họ tên HS, kết quả offline) — **không** bị đưa lên GitHub.
 > Repo để **Private** vì chứa email giáo viên trong `config/online.json`.
