@@ -1,0 +1,12 @@
+{
+  "teacherEmail": "tungthcsthptvinhloc@gmail.com",
+  "firebase": {
+    "apiKey": "AIzaSyA8wOhsTXuIaVjZYAFbU_wrOW_QNFDfUSI",
+    "authDomain": "bai-giang-tuong-tac-web.firebaseapp.com",
+    "databaseURL": "https://bai-giang-tuong-tac-web-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "projectId": "bai-giang-tuong-tac-web",
+    "storageBucket": "bai-giang-tuong-tac-web.firebasestorage.app",
+    "messagingSenderId": "50457103865",
+    "appId": "1:50457103865:web:27c486b0926cb68be30128"
+  }
+}

@@ -1,0 +1,165 @@
+{
+ "generatedAt": "2026-09-24T11:20:03.082Z",
+ "lessons": [
+  {
+   "id": "tin6-bai01-thong-tin-va-du-lieu",
+   "title": "Bài 1: Thông tin và dữ liệu",
+   "grade": "6",
+   "subject": "Tin học",
+   "unit": "Chủ đề 1: Máy tính và cộng đồng",
+   "activities": 9,
+   "items": 13,
+   "open": 1
+  },
+  {
+   "id": "tin6-bai02-xu-li-thong-tin",
+   "title": "Bài 2: Xử lí thông tin",
+   "grade": "6",
+   "subject": "Tin học",
+   "unit": "Chủ đề 1: Máy tính và cộng đồng",
+   "activities": 9,
+   "items": 11,
+   "open": 1
+  },
+  {
+   "id": "tin6-bai03-thong-tin-trong-may-tinh",
+   "title": "Bài 3: Thông tin trong máy tính",
+   "grade": "6",
+   "subject": "Tin học",
+   "unit": "Chủ đề 1 — Máy tính và cộng đồng",
+   "activities": 13,
+   "items": 21,
+   "open": 2
+  },
+  {
+   "id": "tin6-bai04-mang-may-tinh",
+   "title": "Bài 4: Mạng máy tính",
+   "grade": "6",
+   "subject": "Tin học",
+   "unit": "Chủ đề 2 — Mạng máy tính và Internet",
+   "activities": 10,
+   "items": 11,
+   "open": 2
+  },
+  {
+   "id": "tin6-bai05-internet",
+   "title": "Bài 5: Internet",
+   "grade": "6",
+   "subject": "Tin học",
+   "unit": "Chủ đề 2 — Mạng máy tính và Internet",
+   "activities": 12,
+   "items": 14,
+   "open": 2
+  },
+  {
+   "id": "tin6-bai06-mang-thong-tin-toan-cau",
+   "title": "Bài 6: Mạng thông tin toàn cầu",
+   "grade": "6",
+   "subject": "Tin học",
+   "unit": "Chủ đề 3 — Tổ chức lưu trữ, tìm kiếm và trao đổi thông tin",
+   "activities": 12,
+   "items": 13,
+   "open": 2
+  },
+  {
+   "id": "tin7-bai01-thiet-bi-vao-ra",
+   "title": "Bài 1: Thiết bị vào – ra",
+   "grade": "7",
+   "subject": "Tin học",
+   "unit": "Chủ đề 1: Máy tính và cộng đồng",
+   "activities": 12,
+   "items": 27,
+   "open": 3
+  },
+  {
+   "id": "tin7-bai02-phan-mem-may-tinh",
+   "title": "Bài 2: Phần mềm máy tính",
+   "grade": "7",
+   "subject": "Tin học",
+   "unit": "Chủ đề 1: Máy tính và cộng đồng",
+   "activities": 9,
+   "items": 12,
+   "open": 1
+  },
+  {
+   "id": "tin7-bai03-quan-li-du-lieu-trong-may-tinh",
+   "title": "Bài 3: Quản lí dữ liệu trong máy tính",
+   "grade": "7",
+   "subject": "Tin học",
+   "unit": "Chủ đề 1 — Máy tính và cộng đồng",
+   "activities": 16,
+   "items": 22,
+   "open": 2
+  },
+  {
+   "id": "tin7-bai04-mang-xa-hoi",
+   "title": "Bài 4: Mạng xã hội và một số kênh trao đổi thông tin trên Internet",
+   "grade": "7",
+   "subject": "Tin học",
+   "unit": "Chủ đề 2 — Tổ chức lưu trữ, tìm kiếm và trao đổi thông tin",
+   "activities": 12,
+   "items": 16,
+   "open": 2
+  },
+  {
+   "id": "tin7-bai05-ung-xu-tren-mang",
+   "title": "Bài 5: Ứng xử trên mạng",
+   "grade": "7",
+   "subject": "Tin học",
+   "unit": "Chủ đề 3 — Đạo đức, pháp luật và văn hoá trong môi trường số",
+   "activities": 11,
+   "items": 14,
+   "open": 2
+  },
+  {
+   "id": "tin9-bai01-the-gioi-ki-thuat-so",
+   "title": "Bài 1: Thế giới kĩ thuật số",
+   "grade": "9",
+   "subject": "Tin học",
+   "unit": "Chủ đề 1: Máy tính và cộng đồng",
+   "activities": 10,
+   "items": 14,
+   "open": 1
+  },
+  {
+   "id": "tin9-bai02-thong-tin-trong-giai-quyet-van-de",
+   "title": "Bài 2: Thông tin trong giải quyết vấn đề",
+   "grade": "9",
+   "subject": "Tin học",
+   "unit": "Chủ đề 2: Tổ chức lưu trữ, tìm kiếm và trao đổi thông tin",
+   "activities": 8,
+   "items": 11,
+   "open": 1
+  },
+  {
+   "id": "tin9-bai03-danh-gia-chat-luong-thong-tin",
+   "title": "Bài 3: Thực hành — Đánh giá chất lượng thông tin",
+   "grade": "9",
+   "subject": "Tin học",
+   "unit": "Chủ đề 2 — Tổ chức lưu trữ, tìm kiếm và trao đổi thông tin",
+   "activities": 12,
+   "items": 12,
+   "open": 5
+  },
+  {
+   "id": "tin9-bai04-phap-li-su-dung-internet",
+   "title": "Bài 4: Một số vấn đề pháp lí về sử dụng dịch vụ Internet",
+   "grade": "9",
+   "subject": "Tin học",
+   "unit": "Chủ đề 3 — Đạo đức, pháp luật và văn hoá trong môi trường số",
+   "activities": 13,
+   "items": 13,
+   "open": 6
+  },
+  {
+   "id": "tin9-bai05-phan-mem-mo-phong",
+   "title": "Bài 5: Tìm hiểu phần mềm mô phỏng",
+   "grade": "9",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4 — Ứng dụng tin học",
+   "activities": 9,
+   "items": 11,
+   "open": 2
+  }
+ ]
+}

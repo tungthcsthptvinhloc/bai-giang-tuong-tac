@@ -1,0 +1,54 @@
+{
+  "rules": {
+    "teacher": { ".read": "__T__", ".write": "__T__" },
+    "public": { ".read": "auth != null", ".write": "__T__" },
+    "sessions": {
+      "$s": {
+        ".read": "__T__",
+        ".write": "__T__",
+        "meta": { ".read": "auth != null" },
+        "roster": { ".read": "auth != null" },
+        "machines": { ".read": "auth != null" },
+        "live": { ".read": "auth != null" },
+        "claims": {
+          ".read": "auth != null",
+          "$kind": {
+            "$k": {
+              ".write": "auth != null && root.child('sessions/' + $s + '/meta/status').val() === 'open' && ((!data.exists() && newData.exists() && root.child('sessions/' + $s + '/groups/' + newData.val() + '/uid').val() === auth.uid) || (data.exists() && !newData.exists() && root.child('sessions/' + $s + '/groups/' + data.val() + '/uid').val() === auth.uid))"
+            }
+          }
+        },
+        "groups": {
+          "$g": {
+            ".read": "auth != null && data.child('uid').val() === auth.uid",
+            ".write": "auth != null && root.child('sessions/' + $s + '/meta/status').val() === 'open' && ((!data.exists() && newData.child('uid').val() === auth.uid) || (data.child('uid').val() === auth.uid && (!newData.exists() || newData.child('uid').val() === auth.uid)))"
+          }
+        },
+        "grading": {
+          "$g": { ".read": "auth != null && root.child('sessions/' + $s + '/groups/' + $g + '/uid').val() === auth.uid" }
+        },
+        "answers": {
+          "$g": {
+            ".read": "auth != null && root.child('sessions/' + $s + '/groups/' + $g + '/uid').val() === auth.uid",
+            "$a": {
+              "$i": {
+                ".write": "auth != null && newData.exists() && root.child('sessions/' + $s + '/meta/status').val() === 'open' && root.child('sessions/' + $s + '/groups/' + $g + '/uid').val() === auth.uid && ((root.child('sessions/' + $s + '/live/follow').val() !== true && !data.exists()) || (root.child('sessions/' + $s + '/live/follow').val() === true && (!root.child('sessions/' + $s + '/live/acts/' + $a + '/state').exists() || root.child('sessions/' + $s + '/live/acts/' + $a + '/state').val() === 'open') && (!root.child('sessions/' + $s + '/live/acts/' + $a + '/endsAt').exists() || now < root.child('sessions/' + $s + '/live/acts/' + $a + '/endsAt').val() + 3000)))"
+              }
+            }
+          }
+        },
+        "texts": {
+          "$g": {
+            ".read": "auth != null && root.child('sessions/' + $s + '/groups/' + $g + '/uid').val() === auth.uid",
+            "$a": {
+              "$i": {
+                ".write": "auth != null && root.child('sessions/' + $s + '/meta/status').val() === 'open' && root.child('sessions/' + $s + '/groups/' + $g + '/uid').val() === auth.uid",
+                ".validate": "!newData.exists() || (newData.child('text').isString() && newData.child('text').val().length <= 3000)"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

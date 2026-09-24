@@ -1,0 +1,162 @@
+/* THCS Lesson App — giao diện tối ưu cho MÁY CHIẾU. Chữ lớn, nút lớn, tương phản cao. */
+:root {
+  --bg: #f4f7fb;
+  --surface: #ffffff;
+  --ink: #14213d;
+  --muted: #5b6b86;
+  --primary: #2563eb;
+  --primary-dark: #1d4ed8;
+  --accent: #f59e0b;
+  --correct: #16a34a;
+  --wrong: #dc2626;
+  --a: #ef4444; --b: #3b82f6; --c: #f59e0b; --d: #10b981; /* màu 4 đáp án */
+  --radius: 18px;
+  --shadow: 0 10px 30px rgba(20, 33, 61, .12);
+  --maxw: 1180px;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: "Segoe UI", system-ui, "Noto Sans", Arial, sans-serif;
+  font-size: 18px; line-height: 1.5;
+}
+button { font-family: inherit; cursor: pointer; }
+
+/* Khung ứng dụng */
+.app { display: flex; flex-direction: column; min-height: 100vh; }
+
+/* Thanh trên: tên hoạt động + tiến trình */
+.topbar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 14px 26px; background: var(--surface); box-shadow: var(--shadow);
+  position: sticky; top: 0; z-index: 20;
+}
+.topbar .act-name { font-size: 1.5rem; font-weight: 800; }
+.topbar .spacer { flex: 1; }
+.progress { flex: 0 0 260px; height: 14px; background: #e3e9f3; border-radius: 999px; overflow: hidden; }
+.progress > i { display: block; height: 100%; background: linear-gradient(90deg, var(--primary), var(--accent)); width: 0; transition: width .35s ease; }
+.progress-label { font-weight: 700; color: var(--muted); min-width: 64px; text-align: right; }
+
+/* Vùng nội dung chính */
+.stage { flex: 1; display: flex; align-items: center; justify-content: center; padding: 28px; }
+.card {
+  width: 100%; max-width: var(--maxw); background: var(--surface);
+  border-radius: var(--radius); box-shadow: var(--shadow); padding: 40px 46px;
+  animation: rise .3s ease;
+}
+@keyframes rise { from { opacity: 0; transform: translateY(14px);} to { opacity: 1; transform: none; } }
+h1.title { font-size: 2.8rem; margin: 0 0 6px; }
+.subtitle { color: var(--muted); font-size: 1.3rem; margin: 0 0 18px; }
+.prompt { font-size: 2rem; font-weight: 700; margin: 10px 0 28px; }
+.lead { font-size: 1.5rem; }
+img.lesson-img { display: block; max-width: 100%; max-height: 42vh; margin: 16px auto; border-radius: 12px; }
+.caption { text-align: center; color: var(--muted); font-size: 1.05rem; }
+.ext-tag { display: inline-block; background: #fff7ed; color: #b45309; border: 1px solid #fed7aa; border-radius: 999px; padding: 2px 12px; font-size: .95rem; font-weight: 700; }
+.check-tag { background: #fef2f2; color: var(--wrong); border: 1px dashed var(--wrong); padding: 2px 10px; border-radius: 8px; font-weight: 700; }
+
+/* Nút lớn */
+.btn {
+  border: none; border-radius: 14px; padding: 16px 30px; font-size: 1.25rem; font-weight: 800;
+  background: var(--primary); color: #fff; transition: transform .08s, background .2s;
+}
+.btn:hover { background: var(--primary-dark); }
+.btn:active { transform: scale(.97); }
+.btn.ghost { background: #e8eefb; color: var(--primary-dark); }
+.btn.big { font-size: 1.6rem; padding: 20px 42px; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Lưới đáp án kiểu Kahoot */
+.options { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 12px; }
+.opt {
+  display: flex; align-items: center; gap: 16px; text-align: left;
+  border: none; border-radius: 16px; padding: 24px 26px; font-size: 1.5rem; font-weight: 700;
+  color: #fff; min-height: 92px; transition: transform .1s, box-shadow .2s, opacity .2s;
+}
+.opt:hover { transform: translateY(-2px); }
+.opt .key { background: rgba(255,255,255,.28); border-radius: 10px; width: 44px; height: 44px; display: grid; place-items: center; font-size: 1.4rem; flex: 0 0 auto; }
+.opt:nth-child(1) { background: var(--a); }
+.opt:nth-child(2) { background: var(--b); }
+.opt:nth-child(3) { background: var(--c); }
+.opt:nth-child(4) { background: var(--d); }
+.opt.correct { outline: 6px solid var(--correct); background: var(--correct); }
+.opt.wrong { outline: 6px solid var(--wrong); opacity: .65; }
+.opt.dim { opacity: .45; }
+
+/* Phản hồi (feedback) */
+.feedback { margin-top: 24px; padding: 20px 24px; border-radius: 14px; font-size: 1.4rem; font-weight: 700; }
+.feedback.ok { background: #dcfce7; color: #166534; }
+.feedback.no { background: #fee2e2; color: #991b1b; }
+.feedback .explain { font-weight: 500; margin-top: 6px; font-size: 1.2rem; }
+
+/* Em cần nhớ */
+.remember { background: linear-gradient(135deg, #fff7ed, #fef9c3); border: 3px solid var(--accent); }
+.remember h2 { font-size: 2.2rem; margin: 0 0 18px; color: #b45309; }
+.remember ol { font-size: 1.7rem; line-height: 1.7; margin: 0; padding-left: 1.2em; }
+.remember .num { font-weight: 900; color: var(--accent); }
+
+/* Chân trang điều khiển */
+.controls { display: flex; align-items: center; gap: 16px; padding: 16px 26px; background: var(--surface); box-shadow: 0 -6px 20px rgba(20,33,61,.08); }
+.score { font-size: 1.3rem; font-weight: 800; }
+.streak { color: var(--accent); }
+.controls .spacer { flex: 1; }
+
+/* Matching / dragdrop / ordering */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.chip {
+  background: #eef2ff; border: 2px solid #c7d2fe; border-radius: 12px; padding: 16px 20px;
+  font-size: 1.3rem; font-weight: 700; margin: 10px 0; cursor: grab; user-select: none;
+}
+.chip.selected { border-color: var(--primary); background: #dbeafe; }
+.chip.done { background: #dcfce7; border-color: var(--correct); cursor: default; }
+.dropzone { min-height: 90px; border: 3px dashed #c7d2fe; border-radius: 14px; padding: 12px; }
+.dropzone h3 { margin: 4px 0 10px; }
+.dropzone.over { border-color: var(--primary); background: #f0f5ff; }
+.order-list { list-style: none; padding: 0; margin: 0; }
+.order-list li { background: #eef2ff; border: 2px solid #c7d2fe; border-radius: 12px; padding: 16px 20px; font-size: 1.3rem; margin: 10px 0; display: flex; gap: 14px; align-items: center; }
+.order-list button { border: none; background: #c7d2fe; border-radius: 8px; width: 40px; height: 40px; font-size: 1.3rem; font-weight: 900; }
+
+/* Flashcard */
+.flashcard { perspective: 1200px; }
+.flashcard .inner { position: relative; height: 320px; transition: transform .5s; transform-style: preserve-3d; cursor: pointer; }
+.flashcard.flipped .inner { transform: rotateY(180deg); }
+.flashcard .face { position: absolute; inset: 0; backface-visibility: hidden; display: grid; place-items: center; border-radius: 18px; font-size: 2rem; font-weight: 800; padding: 30px; text-align: center; }
+.flashcard .front { background: #dbeafe; }
+.flashcard .back { background: #dcfce7; transform: rotateY(180deg); }
+
+/* Fill blank */
+.fill input { font-size: 1.4rem; padding: 8px 14px; border: 2px solid #c7d2fe; border-radius: 10px; min-width: 180px; }
+
+/* Tổng kết */
+.summary .badge { font-size: 2.4rem; font-weight: 900; }
+.keywords { display: flex; gap: 16px; flex-wrap: wrap; margin: 18px 0; }
+.keywords span { background: var(--primary); color: #fff; border-radius: 999px; padding: 12px 26px; font-size: 1.4rem; font-weight: 800; }
+
+/* Trang chủ */
+.home { text-align: center; }
+.home .meta { color: var(--muted); font-size: 1.3rem; }
+.menu { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 14px; margin-top: 22px; text-align: left; }
+.menu button { background: #eef2ff; border: 2px solid #c7d2fe; border-radius: 14px; padding: 16px; font-size: 1.15rem; font-weight: 700; color: var(--ink); }
+.menu button:hover { border-color: var(--primary); }
+
+/* Chế độ giáo viên */
+.teacher-bar { position: fixed; bottom: 84px; right: 20px; background: #14213d; color: #fff; border-radius: 14px; padding: 14px; display: none; flex-direction: column; gap: 8px; z-index: 40; box-shadow: var(--shadow); }
+.teacher-bar.show { display: flex; }
+.teacher-bar button { background: #2b3a5c; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; font-size: .95rem; font-weight: 700; }
+.teacher-bar .hint { font-size: .8rem; color: #9fb0d0; }
+.timer { font-size: 1.4rem; font-weight: 900; color: var(--wrong); }
+
+/* Responsive: laptop nhỏ 1366px, tablet, điện thoại */
+@media (max-width: 1000px) {
+  .options, .two-col { grid-template-columns: 1fr; }
+  h1.title { font-size: 2.2rem; }
+  .prompt { font-size: 1.6rem; }
+}
+@media (max-width: 640px) {
+  body { font-size: 16px; }
+  .card { padding: 24px 18px; }
+  .progress { flex-basis: 120px; }
+}
+
+.shake { animation: shake .4s; }
+@keyframes shake { 0%,100%{transform:none} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }

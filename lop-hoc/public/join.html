@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vào lớp học</title>
+<script src="/config.js"></script>
+<script src="/static/db.js"></script>
+<script src="/static/core.js"></script>
+<style>
+  :root { --bg: #f4f2ff; --card: #fff; --ink: #1f1b3a; --muted: #6b6690; --pri: #6d28d9; --pri2: #7c3aed; --line: #e4e0f5; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Segoe UI", system-ui, "Noto Sans", Arial, sans-serif; font-size: 17px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 22px 16px 120px; }
+  header { text-align: center; margin-bottom: 18px; }
+  header .logo { font-size: 3rem; }
+  h1 { margin: 4px 0; font-size: 1.9rem; }
+  .sub { color: var(--muted); font-size: 1.05rem; }
+  .card { background: var(--card); border-radius: 18px; box-shadow: 0 8px 26px rgba(40, 20, 90, .08); padding: 20px; margin-bottom: 16px; }
+  .step { font-weight: 800; color: var(--pri); margin: 0 0 10px; font-size: 1.1rem; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  input[type=search] { font: inherit; padding: 12px 14px; border: 2px solid var(--line); border-radius: 12px; flex: 1; min-width: 200px; }
+  input:focus { outline: none; border-color: var(--pri2); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; margin-top: 12px; }
+  .mgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+  .st { display: flex; align-items: center; gap: 10px; text-align: left; font: inherit; padding: 12px 14px; border-radius: 12px; border: 2px solid var(--line); background: #fff; cursor: pointer; min-height: 56px; color: var(--ink); }
+  .st .no { min-width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: #efeaff; color: var(--pri); font-weight: 800; font-size: .9rem; }
+  .st .nm { flex: 1; font-weight: 600; }
+  .st small { display: block; color: var(--muted); font-weight: 400; font-size: .82rem; }
+  .st.sel { border-color: var(--pri2); background: #f3edff; box-shadow: 0 0 0 3px #7c3aed22; }
+  .st.sel .no { background: var(--pri2); color: #fff; }
+  .st:disabled { opacity: .45; cursor: not-allowed; background: #f6f6f8; }
+  .mc { justify-content: center; flex-direction: column; gap: 2px; text-align: center; min-height: 64px; }
+  .mc .ic { font-size: 1.4rem; }
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; box-shadow: 0 -8px 24px rgba(40, 20, 90, .12); padding: 12px 16px; }
+  .bar .in { max-width: 1100px; margin: 0 auto; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .chosen { flex: 1; min-width: 180px; color: var(--muted); }
+  .chosen b { color: var(--ink); }
+  .btn { font: inherit; font-weight: 800; border: none; border-radius: 999px; padding: 14px 28px; background: var(--pri2); color: #fff; cursor: pointer; font-size: 1.1rem; text-decoration: none; display: inline-block; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.ghost { background: #efeaff; color: var(--pri); }
+  .msg { padding: 12px 16px; border-radius: 12px; margin: 10px 0; }
+  .msg.err { background: #fef2f2; color: #b91c1c; }
+  .wait { text-align: center; padding: 40px 20px; }
+  .wait .big { font-size: 4rem; animation: bob 1.6s ease-in-out infinite; }
+  @keyframes bob { 50% { transform: translateY(-8px); } }
+  .mine { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+  [hidden] { display: none !important; }
+  @media (max-width: 640px) { h1 { font-size: 1.45rem; } .grid { grid-template-columns: 1fr 1fr; gap: 8px; } .mgrid { grid-template-columns: repeat(3, 1fr); } .st { padding: 10px; gap: 8px; font-size: .95rem; } .st .no { min-width: 26px; height: 26px; } .btn { padding: 12px 20px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">🏫</div>
+    <h1 id="title">Vào lớp học</h1>
+    <div class="sub" id="subtitle">Đang kết nối…</div>
+  </header>
+
+  <div class="card wait" id="waitBox" hidden>
+    <div class="big">⏳</div>
+    <h2>Chưa có tiết học nào đang mở</h2>
+    <p class="sub">Chờ thầy/cô bắt đầu tiết học — trang sẽ tự cập nhật.</p>
+  </div>
+
+  <div class="card" id="mineBox" hidden>
+    <div class="mine">
+      <div>Máy này đang ở <b id="mineName"></b>: <span id="mineMembers"></span></div>
+      <div class="row"><a class="btn" id="btnContinue">Tiếp tục làm bài →</a><button class="btn ghost" id="btnAdd">➕ Thêm bạn</button></div>
+    </div>
+  </div>
+
+  <div id="pickBox" hidden>
+    <div class="card" id="machineCard">
+      <p class="step">① Em đang ngồi ở máy nào? <span class="sub">(chọn 1 máy)</span></p>
+      <div class="mgrid" id="mgrid"></div>
+    </div>
+    <div class="card">
+      <p class="step" id="stepText">② Chọn tên TẤT CẢ các bạn ngồi cùng máy</p>
+      <div class="row"><input type="search" id="q" placeholder="🔍 Gõ tên để tìm nhanh…" autocomplete="off"></div>
+      <div class="grid" id="grid"></div>
+    </div>
+    <div id="err" class="msg err" hidden></div>
+  </div>
+</div>
+
+<div class="bar" id="bar" hidden>
+  <div class="in">
+    <div class="chosen" id="chosen"></div>
+    <button class="btn" id="btnJoin" disabled>🚀 Vào học</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  const $ = (s) => document.querySelector(s), C = window.LHCore, esc = C.esc;
+  const LS = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }, del(k) { try { localStorage.removeItem(k); } catch (e) {} } };
+  let sid = null, meta = null, roster = {}, machines = {}, claims = {}, uid = null, myGid = null, mode = new URLSearchParams(location.search).has("add") ? "add" : "new";
+  let machine = null; const selected = new Set(); const unsubs = [];
+
+  function showErr(m) { $("#err").textContent = "⚠️ " + m; $("#err").hidden = !m; }
+  function draw() {
+    $("#waitBox").hidden = !!sid;
+    if (!sid || !meta) { $("#title").textContent = "Vào lớp học"; $("#subtitle").textContent = sid ? "Đang tải…" : ""; $("#pickBox").hidden = $("#mineBox").hidden = $("#bar").hidden = true; return; }
+    $("#title").textContent = meta.lessonTitle; $("#subtitle").textContent = "Lớp " + meta.className;
+    const cm = claims.machines || {}, cs = claims.students || {};
+    const mNames = Object.fromEntries(Object.entries(cm).map(([m, g]) => [g, (machines[m] || {}).name || m]));
+    const mine = myGid && Object.values(cm).includes(myGid);
+    if (!mine && mode === "add") mode = "new";
+    $("#mineBox").hidden = !mine || mode === "add";
+    if (mine) {
+      const myM = Object.keys(cm).find((m) => cm[m] === myGid);
+      $("#mineName").textContent = (machines[myM] || {}).name || "Nhóm";
+      $("#mineMembers").textContent = C.sortedEntries(roster).filter(([s]) => cs[s] === myGid).map(([, s]) => s.name).join(", ") || "(chưa có bạn nào)";
+      $("#btnContinue").href = "/lessons/" + encodeURIComponent(meta.lessonId) + "/";
+    }
+    const picking = !mine || mode === "add";
+    $("#pickBox").hidden = $("#bar").hidden = !picking;
+    $("#machineCard").hidden = mode === "add";
+    $("#stepText").textContent = mode === "add" ? "Chọn thêm bạn vào " + $("#mineName").textContent : "② Chọn tên TẤT CẢ các bạn ngồi cùng máy";
+    $("#btnJoin").textContent = mode === "add" ? "➕ Thêm vào nhóm" : "🚀 Vào học";
+    // máy
+    const mg = $("#mgrid"); mg.innerHTML = "";
+    if (machine && cm[machine]) machine = null;
+    C.sortedEntries(machines).forEach(([m, x]) => {
+      const taken = !!cm[m], b = document.createElement("button");
+      b.className = "st mc" + (machine === m ? " sel" : ""); b.disabled = taken;
+      b.innerHTML = `<span class="ic">${m.startsWith("p") ? "📱" : "💻"}</span><span class="nm">${esc(x.name)}</span>${taken ? "<small>đã có nhóm</small>" : ""}`;
+      b.onclick = () => { machine = m; draw(); };
+      mg.appendChild(b);
+    });
+    // học sinh
+    const q = C.norm($("#q").value), grid = $("#grid"); grid.innerHTML = "";
+    C.sortedEntries(roster).forEach(([s, st], i) => {
+      if (q && !C.norm(st.name).includes(q)) return;
+      const g = cs[s]; if (g && selected.has(s)) selected.delete(s);
+      const b = document.createElement("button");
+      b.className = "st" + (selected.has(s) ? " sel" : ""); b.disabled = !!g;
+      b.innerHTML = `<span class="no">${i + 1}</span><span class="nm">${esc(st.name)}${g ? `<small>đã vào ${esc(mNames[g] || "nhóm khác")}</small>` : ""}</span>`;
+      b.onclick = () => { selected.has(s) ? selected.delete(s) : selected.add(s); draw(); };
+      grid.appendChild(b);
+    });
+    const names = C.sortedEntries(roster).filter(([s]) => selected.has(s)).map(([, s]) => s.name);
+    const mtxt = mode === "add" ? "" : machine ? `<b>${esc(machines[machine].name)}</b> · ` : "Chưa chọn máy · ";
+    $("#chosen").innerHTML = mtxt + (names.length ? `<b>${names.length}</b> bạn: ${esc(names.join(", "))}` : "chưa chọn bạn nào");
+    $("#btnJoin").disabled = !names.length || (mode !== "add" && !machine);
+  }
+
+  async function join() {
+    const btn = $("#btnJoin"); btn.disabled = true; showErr("");
+    const base = "sessions/" + sid;
+    try {
+      let gid = myGid;
+      if (mode !== "add") {
+        gid = DB.newId();
+        await DB.set(`${base}/groups/${gid}`, { uid, machine, createdAt: DB.now(), members: {} });
+        if (!(await DB.claim(`${base}/claims/machines/${machine}`, gid))) { await DB.remove(`${base}/groups/${gid}`).catch(() => {}); throw new Error("Máy này vừa có nhóm khác chọn. Hãy chọn đúng máy em đang ngồi."); }
+      }
+      const got = [], lost = [];
+      for (const s of selected) (await DB.claim(`${base}/claims/students/${s}`, gid).catch(() => false) ? got : lost).push(s);
+      if (got.length) await DB.update(`${base}/groups/${gid}/members`, Object.fromEntries(got.map((s) => [s, true])));
+      if (!got.length && mode !== "add") { await DB.update(base, { [`claims/machines/${machine}`]: null }).catch(() => {}); await DB.remove(`${base}/groups/${gid}`).catch(() => {}); }
+      if (lost.length) { selected.clear(); throw new Error("Bạn " + lost.map((s) => roster[s].name).join(", ") + " đã vào nhóm khác. Nhờ thầy/cô chuyển nếu nhầm."); }
+      LS.set("lh_auth", { sid, gid, lessonId: meta.lessonId });
+      location.href = "/lessons/" + encodeURIComponent(meta.lessonId) + "/";
+    } catch (e) { showErr(e.message || String(e)); btn.disabled = false; draw(); }
+  }
+
+  $("#q").oninput = draw;
+  $("#btnJoin").onclick = join;
+  $("#btnAdd").onclick = () => { mode = "add"; selected.clear(); draw(); };
+
+  DB.ready.then(() => DB.student()).then((u) => {
+    uid = u; $("#subtitle").textContent = "";
+    DB.on("public/active", (id) => {
+      unsubs.splice(0).forEach((f) => f()); sid = id || null; meta = null; roster = {}; machines = {}; claims = {};
+      const auth = LS.get("lh_auth"); myGid = auth && auth.sid === sid ? auth.gid : null;
+      if (!sid) return draw();
+      unsubs.push(DB.on(`sessions/${sid}/meta`, (m) => { meta = m && m.status === "open" ? m : null; if (!meta) sid = null; draw(); }));
+      unsubs.push(DB.on(`sessions/${sid}/roster`, (r) => { roster = r || {}; draw(); }));
+      unsubs.push(DB.on(`sessions/${sid}/machines`, (r) => { machines = r || {}; draw(); }));
+      unsubs.push(DB.on(`sessions/${sid}/claims`, (r) => { claims = r || {}; draw(); }));
+      draw();
+    });
+  }).catch((e) => { $("#subtitle").textContent = "⚠️ Không kết nối được máy chủ lớp học. " + (e.message || "") + " Kiểm tra mạng rồi tải lại trang."; });
+})();
+</script>
+</body>
+</html>

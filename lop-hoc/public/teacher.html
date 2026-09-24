@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bảng điều khiển giáo viên — Lớp học tương tác</title>
+<link rel="stylesheet" href="/static/teacher.css">
+<script src="/config.js"></script>
+<script src="/static/db.js"></script>
+<script src="/static/core.js"></script>
+<script src="/static/xlsx.js"></script>
+<script src="/static/qr.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">🏫 Lớp học tương tác <small>Bảng điều khiển giáo viên</small></div>
+  <span class="mode" id="modeBadge"></span>
+  <div class="sess" id="sessInfo"></div>
+  <button class="btn small ghost" id="btnLogout" hidden>Đăng xuất</button>
+  <span class="conn off" id="conn" title="Kết nối máy chủ"></span>
+</header>
+
+<div class="login" id="login" hidden>
+  <form class="card" id="loginForm">
+    <h2>🔐 Đăng nhập giáo viên</h2>
+    <div id="loginFields"></div>
+    <p class="msg err" id="loginErr" hidden></p>
+    <button class="btn big" type="submit">Đăng nhập</button>
+  </form>
+</div>
+
+<main class="layout" id="layout" hidden>
+  <aside class="side">
+    <div class="card join">
+      <h3>📱 Học sinh vào lớp</h3>
+      <div class="qr" id="qr"></div>
+      <div class="url" id="joinUrl">…</div>
+      <div class="hint" id="otherUrls"></div>
+      <button class="btn ghost wide" id="btnQrBig">🖥️ Chiếu mã QR lên máy chiếu</button>
+      <p class="hint" id="sideHint"></p>
+    </div>
+  </aside>
+  <section class="main" id="main"></section>
+</main>
+
+<div class="overlay" id="overlay" hidden></div>
+<div class="toast" id="toast" hidden></div>
+<input type="file" id="fileIn" accept=".xlsx,.csv,.txt" hidden>
+<script src="/static/teacher.js"></script>
+</body>
+</html>

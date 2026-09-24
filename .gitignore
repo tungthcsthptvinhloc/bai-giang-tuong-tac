@@ -1,0 +1,13 @@
+# Dữ liệu lớp học OFFLINE (họ tên học sinh, kết quả làm bài) — KHÔNG đưa lên GitHub
+lop-hoc/data/
+
+# Thư mục build bản online (Cloudflare tự dựng lại từ mã nguồn)
+dist/
+
+# Luật Firebase sinh ra từ config (tạo lại bằng: node tools/make-rules.js)
+firebase/database.rules.json
+
+node_modules/
+*.tmp
+Thumbs.db
+.DS_Store
