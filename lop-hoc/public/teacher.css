@@ -176,3 +176,14 @@ table.t td.num { text-align: center; font-weight: 700; }
 .main, .form > label { min-width: 0; }
 select { max-width: 100%; }
 .form select { width: 100%; }
+
+/* ---- Mã vào lớp (4 chữ số) ---- */
+.join .code { margin: 4px 0 12px; padding: 10px 8px; border-radius: 14px; background: #f5f3ff; color: #5b21b6; }
+.join .code.on { background: linear-gradient(135deg, #ede9fe, #e0f2fe); box-shadow: inset 0 0 0 2px #c4b5fd; }
+.join .code small { display: block; font-size: .85rem; color: #6b6690; }
+.join .code b { display: block; font-size: 3.2rem; line-height: 1.1; letter-spacing: .18em; font-weight: 900; font-variant-numeric: tabular-nums; }
+.bigcode-box { margin: 0 0 12px; }
+.bigcode-box small { display: block; font-size: 1.5rem; color: #6b6690; }
+.bigcode-box b { display: block; font-size: min(8rem, 16vw); line-height: 1; letter-spacing: .14em; color: #5b21b6; font-variant-numeric: tabular-nums; }
+.bigcode-box + svg { width: min(42vh, 70vw) !important; }
+.bigcode { font-size: 1.5rem; letter-spacing: .12em; color: #5b21b6; }

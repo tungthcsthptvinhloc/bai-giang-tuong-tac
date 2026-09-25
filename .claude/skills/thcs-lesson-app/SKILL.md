@@ -73,7 +73,7 @@ menu hoạt động, chế độ giáo viên, bảng màu, phím tắt. Xem `ref
 ### Bước 5 — Lập trình
 Dựng app từ scaffold trong `assets/app-starter/` (đã có sẵn engine trò chơi tái
 sử dụng: Quiz/Kahoot, TrueFalse, Matching, DragDrop, Ordering, FlashCard,
-MemoryGame, Wheel, WordPuzzle, ImageQuiz, Scenario). **Tách dữ liệu khỏi code**:
+MemoryGame, Wheel, WordPuzzle, ImageQuiz, Scenario, **Bảng tính mô phỏng**). **Tách dữ liệu khỏi code**:
 toàn bộ nội dung bài học nằm trong `data/lesson.js` để giáo viên chỉnh dễ dàng;
 không viết lại engine nếu component đã có. Xem `references/gamification.md` cho
 điểm/streak/hiệu ứng và `references/question-design.md` cho chất lượng câu hỏi.
@@ -128,21 +128,82 @@ Nếu project có thư mục `tools/` và `lop-hoc/` (hệ thống lớp học t
 - **Kết thúc tiết:** màn TỔNG KẾT gồm "Hôm nay em đã học" + "3 từ khóa cần nhớ" +
   1–3 câu thử thách tổng hợp.
 
-## Chế độ lớp học nhiều máy (engine v4 — thư mục `lop-hoc/` của project)
+## Chế độ lớp học nhiều máy (engine v5 — thư mục `lop-hoc/` của project)
 
 Engine có hooks (`window.LESSON_HOOKS`) để cả lớp làm bài đồng thời trên máy HS/điện
 thoại (offline: máy chủ LAN `lop-hoc/server.js`; online: Firebase + Cloudflare Pages),
 chấm theo nhóm, xuất Excel; có chế độ "theo nhịp GV" (giấu đúng/sai tới khi GV bấm
 Kết thúc, đồng hồ đồng bộ). Mở file trực tiếp thì chạy như v2. KHÔNG sửa engine riêng
 trong từng bài — sửa `assets/app-starter/app.js` rồi chạy `tools/update-lessons.js`.
+
+Hệ thống đã có sẵn (không cần làm gì trong bài, chỉ cần biết để viết TEACHER_GUIDE đúng):
+- **Mã vào lớp 4 chữ số**: GV bấm Bắt đầu → tự sinh mã (dữ liệu `codes/{mã}` → id tiết);
+  HS mở web → nhập mã (quét QR `/?c=mã` là tự điền) → chọn máy + tên. Mỗi tiết / mỗi lần
+  Mở lại là mã mới; kết thúc tiết thì mã bị xóa. Có ở cả offline lẫn online.
+- **Một đồng hồ duy nhất**: ⏱️ trên bài giảng (trang trình chiếu nối tiết học — hook
+  `timer.state()/act()`), bảng 📊 và bảng GV cùng điều khiển đồng hồ chung `live/acts/{aid}`.
+  Đồng hồ hiện trên **thanh tiêu đề cố định** (`.topbar`) của máy HS và màn trình chiếu. HS tự
+  làm: đồng hồ gắn cờ `free` — hiện trên máy HS, hết giờ chỉ báo; theo nhịp: hết giờ khóa, 🏁 công
+  bố. Bảng ⏱️ có nút ✕ ẩn (Esc cũng ẩn). Mở file trực tiếp thì ⏱️ là đồng hồ riêng như cũ.
+- **Chế độ giáo viên** (phím T) nằm **góc trái**; "Làm lại hoạt động" khi nối tiết học xóa kết
+  quả hoạt động đó của **cả lớp** (hook `classMode()/resetActivity(aid)`); bảng GV có nút
+  "🔄 Cả lớp làm lại".
+- **Cổ vũ khi GV bấm Kết thúc**: máy nhóm đúng hoàn toàn hiện màn chúc mừng + pháo giấy (không
+  âm thanh), nhóm chưa đúng được động viên; màn trình chiếu hiện **🏆 Bảng vinh danh** + kèn
+  chiến thắng/vỗ tay (theo nút 🔊). Engine cung cấp `LessonApp.celebrate()` / `fanfare()`.
+- Vị trí/CSS các thành phần engine (bảng GV, bảng ⏱️, bảng tính…) do engine tự chèn
+  (`ensureEngineCSS`) — bài cũ không cần sửa `styles/app.css`. Muốn đổi giao diện chung thì
+  sửa ở đó rồi chạy `tools/update-lessons.js`.
+- **Máy HS: ghép đôi / phân loại / sắp xếp / điền khuyết luôn "làm hết rồi nộp"**, chấm
+  theo **kết quả cuối** (máy GV chấm lại từ bài làm `{m}|{g}|{o}|{v}`, không tin "ok" máy HS
+  gửi). Tự do: nộp 1 lần rồi xem ngay; theo nhịp: làm đủ thì **tự lưu** sau mỗi lần sửa.
+  Có kết quả → HS thấy **bài của nhóm mình ✓/✗ từng mục** + đáp án đúng. (Màn trình chiếu
+  1 máy vẫn là trò chơi báo đúng/sai từng mục.)
+
 Để bài mới tương thích, chỉ cần:
 - Mỗi hoạt động PHẢI có `id` duy nhất, KHÔNG đổi sau khi đã dạy (kết quả lưu theo id);
   id chỉ gồm chữ, số, `-`, `_` (Firebase cấm `. # $ [ ] /`, engine dùng `:`).
 - Nên đặt `time` (giây) cho hoạt động có bài tập — là thời gian mặc định khi GV bấm giờ.
-- Câu chấm điểm: `questions` (multiple-choice/multiple-select/true-false), `matching`,
+- Câu chấm điểm: `questions` (multiple-choice/multiple-select/true-false/**sheet**), `matching`,
   `dragdrop`, `ordering`, `fillblank`, `content.challenge` của summary.
 - Câu tự luận nhóm gửi cho GV: `vandung.cases[].question`, `scenario.content.question`.
 - `data/lesson.js` phải giữ dòng `module.exports = LESSON` (máy chủ đọc bằng Node).
+
+## Bảng tính mô phỏng & trò chơi nhân vật (engine v5)
+
+Dùng cho MỌI bài về bảng tính (Tin 7 Bài 6, 7, 8, 9…; Tin 8, 9 phần bảng tính) — thay vì
+chỉ hỏi trắc nghiệm, cho HS **thao tác thật** trên lưới giống Excel (hộp địa chỉ, vùng nhập
+dữ liệu, tên hàng/cột, tên trang tính). Chạy trên máy chiếu, máy HS và điện thoại (chạm/kéo).
+
+```js
+const SHEET = { title: "Bảng điểm.xlsx", cols: 7, rows: 11, sheets: ["Sheet1", "Sheet2"],
+  widths: { B: 2.3 },                          // tỉ lệ độ rộng cột (mặc định 1)
+  cells: { C2: "BẢNG ĐIỂM LỚP 7A", B6: "Bùi Lê Đình Anh", D6: "7" },
+  bold: ["C2", "B5:F5"], fill: { "A3:C3": "#fde047" }, color: { A1: "#16a34a" }, size: { A1: 16 },
+  center: ["A3:A8"] };                         // (right/left/italic tương tự)
+{ id: "dia-chi-o", type: "knowledge", sheet: SHEET, questions: [
+  { type: "sheet", question: "Bấm vào ô ghi tên Bùi Lê Đình Anh.", answer: "B6", explanation: "...", level: "nhan-biet" },
+  { type: "sheet", question: "Kéo chọn vùng D7:F9.", answer: "D7:F9", ... },
+  { type: "sheet", question: "Chọn cả hàng 6.", answer: "6", ... },      // "D" = cả cột D
+  { type: "sheet", mode: "type", highlight: "B4:E11", answer: "B4:E11",  // tô sẵn vùng, HS GÕ địa chỉ
+    question: "Vùng đang tô màu có địa chỉ là gì?", ... },
+  { type: "sheet", sheet: { cols: 6, rows: 8 }, answer: "B2:C4", ... },  // lưới riêng cho câu này
+] }
+```
+- `answer`: ô `"B6"`, vùng `"B4:E11"` (viết ngược `E11:B4` vẫn đúng), cả cột `"D"`, cả hàng
+  `"6"`, hoặc mảng nhiều đáp án. Đặt `sheet` ở hoạt động (dùng chung) hoặc ở từng câu (bắt
+  buộc với câu trong `content.challenge`). Dùng được trong mọi hoạt động có `questions`.
+- Lưới tự căn như phần mềm thật: văn bản căn trái; số, ngày tháng kiểu tháng/ngày/năm căn
+  phải (15/12/2020 là văn bản → căn trái); chữ dài tràn sang ô trống bên phải.
+- `sandbox: { ...SHEET, intro: "…" }` ở BẤT KỲ hoạt động nào (hiện ngay dưới Nhiệm vụ) = bảng
+  tính THỬ tự do (không chấm): chọn ô rồi gõ (con trỏ nằm ở vùng nhập dữ liệu — gõ được bằng
+  điện thoại và bộ gõ tiếng Việt), Enter xuống ô dưới, nháy đúp sửa trong ô, chọn vùng + Delete
+  (hoặc nút 🧽) để xóa, nháy đúp tên trang tính để đổi tên. Giữ nội dung khi chuyển câu.
+- Nên chép lưới theo đúng hình trong SGK (Hình 6.1, 6.2…) để HS đối chiếu.
+
+**Trò chơi nhân vật** (`type: "penguin"`): đổi nhân vật theo tên trò chơi trong giáo án —
+`pet: "🐑", homeIcon: "🏡", enemy: "🐺", saveWord: "chú cừu thoát khỏi Sói xám", winText: "…"`.
+Mỗi câu đúng một nhân vật về nhà; sai thì kẻ đuổi theo rung lên. Mặc định vẫn là cánh cụt.
 
 ## Tính năng tương tác nâng cao (engine v2 — mặc định BẬT)
 
@@ -157,7 +218,8 @@ trường dữ liệu để kích hoạt — đây là yêu cầu chuẩn, khôn
   Mỗi câu hỏi có thể thêm `hint` (nút 💡 Gợi ý). `remember` tự thành nút "📌 Em cần nhớ".
 - **Đồng hồ đếm giờ từng hoạt động (⏱️):** đặt `time` (giây) cho mỗi hoạt động; giáo
   viên bấm ▶ để đếm ngược. Hết giờ **báo hiệu** (âm thanh + nhấp nháy), KHÔNG tự
-  chuyển — giáo viên chủ động. `−/+` chỉnh nhanh tại lớp.
+  chuyển — giáo viên chủ động. `−/+` chỉnh nhanh tại lớp. Nút ✕ ẩn bảng đồng hồ. Ở chế độ
+  lớp học, ⏱️ chính là đồng hồ chung của lớp (xem mục engine v5).
 - **Bút vẽ (✏️ / phím P):** vẽ tay khoanh tròn/gạch chân trực tiếp trên màn hình,
   nhiều màu + tẩy + xóa hết. Tự xóa khi chuyển màn.
 - **Đèn pin — spotlight (🔦):** bấm để phủ tối màn hình, chừa một vòng sáng đi
@@ -212,6 +274,7 @@ trường dữ liệu để kích hoạt — đây là yêu cầu chuẩn, khôn
 - [ ] Mỗi hoạt động có `task` (Nhiệm vụ rõ ràng) và `time` (đồng hồ)?
 - [ ] Gợi ý/đáp án/kiến thức ẩn, bấm mới hiện (dạy khám phá)?
 - [ ] Có sơ đồ SVG tự vẽ và/hoặc nút "Xem ảnh SGK" nơi cần trực quan?
+- [ ] Bài về bảng tính: đã dùng câu `sheet` (bấm ô, chọn vùng/hàng/cột, gõ địa chỉ) và `sandbox` để HS thao tác thật?
 - [ ] Hiệu ứng đúng/sai (pháo giấy, huy hiệu) và bút vẽ hoạt động?
 - [ ] Chữ/nút đủ lớn cho máy chiếu, có fullscreen, điều khiển bằng phím?
 - [ ] Chạy offline, không lỗi console JS, `validate-lesson.js` PASS?

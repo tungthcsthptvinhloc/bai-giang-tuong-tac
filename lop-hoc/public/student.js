@@ -21,6 +21,21 @@
   const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
   const aidOf = (a, i) => (a && (a.id || "a" + i)) || null;
   const curAct = () => { const i = window.LessonApp ? window.LessonApp.current() : -1; return { i, a: window.LESSON && window.LESSON.activities[i] }; };
+  // Đồng hồ theo nhịp GV đặt trên THANH TIÊU ĐỀ của bài (thanh cố định, luôn nhìn thấy khi cuộn)
+  function topClock() {
+    const top = document.querySelector(".topbar"); if (!top) return null;
+    let c = top.querySelector(".lh-clock");
+    if (!c) { c = el("div", "lh-clock"); c.hidden = true; const sp = top.querySelector(".spacer"); if (sp) sp.insertAdjacentElement("afterend", c); else top.appendChild(c); }
+    return c;
+  }
+  function paintClock(c, k) {
+    if (!c) return;
+    c.hidden = !k || !(k.running || k.over || k.st === "locked" || k.st === "revealed");
+    if (c.hidden) return;
+    c.className = "lh-clock " + (k.over ? "locked" : k.st) + (k.running && k.left <= 10 ? " hurry" : "");
+    const t = k.st === "revealed" ? "🏁 Đã công bố" : k.st === "locked" || k.over ? "⏰ Hết giờ" : "⏱ " + C.fmtClock(k.left);
+    if (c.textContent !== t) c.textContent = t;
+  }
 
   if (params.has("gv")) return projector();
   student();
@@ -109,15 +124,16 @@
       const { i, a } = curAct(), aid = aidOf(a, i);
       const st = aid ? C.actState(cache.live, aid, now()) : null;
       const modelChanged = !!prev.showModel !== !!cache.live.showModel && a && (a.type === "scenario" || a.type === "vandung");
+      if (aid && st === "revealed" && lastSt && lastSt !== "revealed") setTimeout(() => cheer(aid), 350); // GV vừa bấm Kết thúc
       if ((aid && st !== lastSt && lastSt !== null) || modelChanged || !!prev.follow !== !!cache.live.follow) app.rerender();
       lastSt = st; updateStrip();
     }
-    // Đồng hồ: đếm ngược trên dải thông tin; hết giờ -> vẽ lại (khóa bài)
+    // Đồng hồ: đếm ngược trên THANH TIÊU ĐỀ cố định (luôn nhìn thấy); hết giờ -> vẽ lại (khóa bài)
     setInterval(() => {
       if (stopped) return;
       const { i, a } = curAct(), aid = aidOf(a, i);
       const st = aid ? C.actState(cache.live, aid, now()) : null;
-      if (aid && lastSt !== null && st !== lastSt && window.LessonApp) { lastSt = st; window.LessonApp.rerender(); }
+      if (aid && lastSt !== null && st !== lastSt && window.LessonApp) { if (st === "revealed") setTimeout(() => cheer(aid), 350); lastSt = st; window.LessonApp.rerender(); }
       else lastSt = st;
       updateClock();
     }, 500);
@@ -126,10 +142,10 @@
     // ---- giao diện: dải thông tin, đồng hồ, tạm dừng, kết thúc ---------------------
     let strip, netDot, clockEl, pauseEl;
     function buildStrip() {
-      strip = el("div", "lh-strip", `<span class="lh-net" title="Kết nối máy chủ"></span><span class="lh-group"></span><span class="lh-clock" hidden></span><span class="lh-score"></span><span class="lh-sp"></span><a class="lh-link" href="/?add=1">➕ Thêm bạn</a>`);
+      strip = el("div", "lh-strip", `<span class="lh-net" title="Kết nối máy chủ"></span><span class="lh-group"></span><span class="lh-score"></span><span class="lh-sp"></span><a class="lh-link" href="/?add=1">➕ Thêm bạn</a>`);
       const top = document.querySelector(".topbar");
       if (top) top.insertAdjacentElement("afterend", strip); else document.body.prepend(strip);
-      netDot = strip.querySelector(".lh-net"); clockEl = strip.querySelector(".lh-clock");
+      netDot = strip.querySelector(".lh-net"); clockEl = topClock();
     }
     function setNet(on) { if (netDot) { netDot.classList.toggle("off", !on); netDot.title = on ? "Đã kết nối" : "Mất kết nối — bài làm vẫn được lưu trong máy và tự gửi lại"; } }
     function updateStrip() {
@@ -141,13 +157,10 @@
       strip.querySelector(".lh-score").innerHTML = `✔ ${sc.done}/${sc.total} bài` + (cache.live.showScore !== false ? ` · 🏅 <b>${fmt1(sc.score)}</b>/10` : "") + (pend ? ` · ⏳ đang gửi ${pend}` : "");
     }
     function updateClock() {
+      if (!clockEl || !clockEl.isConnected) clockEl = topClock();
       if (!clockEl) return;
       const { i, a } = curAct(), aid = aidOf(a, i);
-      if (!aid || !cache.live.follow) { clockEl.hidden = true; return; }
-      const k = C.actClock(cache.live, aid, now());
-      clockEl.hidden = !(k.running || k.st === "locked" || k.st === "revealed");
-      clockEl.className = "lh-clock " + k.st + (k.running && k.left <= 10 ? " hurry" : "");
-      clockEl.textContent = k.st === "revealed" ? "🏁 Đã công bố kết quả" : k.st === "locked" ? "⏰ Hết giờ" : "⏱ " + C.fmtClock(k.left);
+      paintClock(clockEl, aid ? C.actClock(cache.live, aid, now()) : null); // cả khi HS tự làm (đồng hồ chung chỉ báo giờ)
     }
     function showPause(on) {
       if (on && !pauseEl) { pauseEl = el("div", "lh-pause", `<div><div class="lh-big">📢</div><h2>Cả lớp tạm dừng</h2><p>Hãy nhìn lên bảng và lắng nghe thầy/cô nhé!</p></div>`); document.body.appendChild(pauseEl); }
@@ -160,6 +173,26 @@
       const sc = myScore();
       overlay(`<div class="lh-big">🎉</div><h2>Tiết học đã kết thúc</h2><p>Nhóm em đã làm <b>${sc.done}/${sc.total}</b> bài` + (cache.live.showScore !== false ? ` · Điểm: <b>${fmt1(C.scoreGroup({ live: {}, answers: { [gid]: cache.answers }, grading: { [gid]: cache.grading } }, gid, items()).score)}/10</b>` : "") + `</p><p>Cảm ơn các em! 👏</p>`);
       LS.del("lh_auth");
+    }
+    // CỔ VŨ khi GV công bố kết quả: nhóm đúng hết -> chúc mừng toàn màn hình + pháo hoa;
+    // đúng một phần / chưa đúng -> lời động viên. Chỉ hình ảnh (âm thanh phát trên màn chiếu).
+    function cheer(aid) {
+      const its = items().items.filter((it) => it.aid === aid); if (!its.length) return;
+      let good = 0, done = 0;
+      its.forEach((it) => { const r = rec2(cache.answers, it.key); if (r) { done++; good += C.judge(it, r).fraction; } });
+      const pct = good / its.length, g = cache.group, nm = esc((g && (g.name || (cache.machines[g.machine] || {}).name)) || "Nhóm em");
+      const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+      let kind, emoji, title, sub;
+      if (!done) { kind = "miss"; emoji = "⏳"; title = "Lần sau nhớ làm kịp giờ nhé!"; sub = "Cùng xem đáp án và giải thích với cả lớp."; }
+      else if (pct >= 0.999) { kind = "win"; emoji = pick(["🏆", "🌟", "🥇", "🎉"]); title = pick(["Xuất sắc!", "Tuyệt vời!", "Chính xác 100%!", "Quá đỉnh!", "Hoàn hảo!"]); sub = `<b>${nm}</b> làm đúng hoàn toàn — cả lớp vỗ tay nào! 👏`; }
+      else if (pct >= 0.5) { kind = "good"; emoji = pick(["👏", "💫", "👍"]); title = pick(["Giỏi lắm!", "Làm tốt lắm!", "Sắp hoàn hảo rồi!"]); sub = `${nm} đúng <b>${Math.round(pct * 100)}%</b> — xem lại phần sai để lần sau đúng hết nhé!`; }
+      else { kind = "try"; emoji = "💪"; title = pick(["Cố lên nào!", "Không sao, mình học tiếp nhé!"]); sub = "Xem kĩ giải thích — lần sau nhóm em sẽ làm đúng!"; }
+      const old = document.querySelector(".lh-cheer"); if (old) old.remove();
+      const ov = el("div", "lh-cheer " + kind, `<div class="lh-cheer-card"><div class="lh-cheer-emoji">${emoji}</div><h2>${title}</h2><p>${sub}</p>${kind === "win" ? '<div class="lh-cheer-stars">⭐ ⭐ ⭐</div>' : ""}</div>`);
+      const n = kind === "win" ? 90 : kind === "good" ? 28 : 0, colors = ["#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#ec4899", "#a855f7", "#facc15"];
+      for (let i = 0; i < n; i++) { const p = el("i", "lh-cf"); p.style.left = Math.random() * 100 + "%"; p.style.background = colors[i % colors.length]; p.style.animationDelay = (Math.random() * 0.9).toFixed(2) + "s"; p.style.animationDuration = (2.2 + Math.random() * 1.8).toFixed(2) + "s"; p.style.setProperty("--rx", (Math.random() * 720 - 360).toFixed(0) + "deg"); ov.appendChild(p); }
+      ov.onclick = () => ov.remove(); document.body.appendChild(ov);
+      setTimeout(() => ov.remove(), kind === "win" ? 4500 : 3200);
     }
     function goneAway(msg) { if (stopped) return; stop(); LS.del("lh_auth"); overlay(`<div class="lh-big">🔁</div><h2>${esc(msg)}</h2><p><a class="lh-btn" href="/">Chọn lại để vào lớp →</a></p>`); }
 
@@ -195,34 +228,60 @@
         if (moved && mine() && (sess.live || {}).teacherIdx !== d.idx && window.DB) DB.set(`sessions/${sid}/live/teacherIdx`, d.idx).catch(() => {});
         draw();
       },
+      // ⏱️ trên bài giảng = ĐỒNG HỒ CHUNG của lớp (cùng bảng 📊 và bảng GV) khi đang nối tiết học của bài này
+      timer: {
+        state() { const c = ctx(); if (!c) return null; return Object.assign(C.actClock(c.live, c.aid, DB.now()), { follow: !!c.live.follow, hasItems: c.hasItems }); },
+        act(action, sec) { const c = ctx(); if (!c) return Promise.resolve(); return C.actControl(DB, sid, c.live, c.aid, action, sec != null ? sec : c.a.time || 60); },
+      },
+      classMode: () => !!(sess && mine()),
+      // "Làm lại hoạt động" (chế độ GV): xóa kết quả hoạt động này của MỌI nhóm + đặt lại đồng hồ
+      resetActivity(aid) {
+        if (!sess || !mine()) return Promise.resolve();
+        const up = { [`live/acts/${aid}`]: null }; Object.keys(sess.groups || {}).forEach((g) => { up[`answers/${g}/${aid}`] = null; });
+        return DB.update("sessions/" + sid, up);
+      },
     };
+    function ctx() {
+      if (!sess || !mine() || !window.DB || !window.LESSON) return null;
+      const a = window.LESSON.activities[nav.idx]; if (!a) return null;
+      const aid = aidOf(a, nav.idx);
+      return { a, aid, live: sess.live || {}, hasItems: items().items.some((it) => it.aid === aid) };
+    }
+    const clockTxt = (k, a) => (k.st === "revealed" ? "🏁" : k.st === "locked" || k.over ? "⏰ 0:00" : "⏱ " + C.fmtClock(k.running ? k.left : k.left || (a && a.time) || 60));
+    let lastAid = null;
     function draw() {
       if (!panel) return;
       const body = panel.querySelector(".lh-pp-body"), head = panel.querySelector(".lh-pp-head span");
       panel.classList.toggle("closed", !open);
+      panel.querySelector(".lh-pp-code").textContent = mine() && sess.meta.code ? "🔑 " + sess.meta.code : "";
       if (!sess) { head.textContent = "📡 Chưa kết nối tiết học"; body.innerHTML = `<p class="lh-pp-hint">Mở <b>/giao-vien</b>, đăng nhập và bắt đầu tiết học với bài này.</p>`; return; }
       if (!mine()) { head.textContent = "📡 Tiết đang mở là bài khác"; body.innerHTML = `<p class="lh-pp-hint">Tiết đang mở: ${esc(sess.meta.lessonTitle)}</p>`; return; }
       const L = window.LESSON, a = L.activities[nav.idx], aid = aidOf(a, nav.idx);
       const groups = Object.entries(sess.groups || {}).map(([id, g]) => ({ id, ...g, nm: C.groupName(sess, id), ord: ((sess.machines || {})[g.machine] || {}).order || 0 })).sort((x, y) => x.ord - y.ord);
       const its = aid ? items().items.filter((it) => it.aid === aid) : [];
-      if (!its.length) { head.textContent = `📡 ${groups.length} nhóm đã vào lớp`; body.innerHTML = `<p class="lh-pp-hint">${a ? "Hoạt động này không có bài tập chấm điểm." : "Chọn một hoạt động để xem kết quả của lớp."}</p>`; return; }
+      if (!its.length) { lastSt = aid ? C.actState(sess.live || {}, aid, DB.now()) : null; lastAid = aid; head.textContent = `📡 ${groups.length} nhóm đã vào lớp`; body.innerHTML = `<p class="lh-pp-hint">${a ? "Hoạt động này không có bài tập chấm điểm." : "Chọn một hoạt động để xem kết quả của lớp."}</p>`; return; }
       const it = its.find((x) => x.iid === "q" + nav.qi || x.iid === "c" + nav.qi) || its[0];
       const live = sess.live || {}, k = C.actClock(live, aid, DB.now()), st = k.st, follow = !!live.follow;
-      lastSt = st;
+      if (st === "revealed" && lastSt && lastSt !== "revealed" && lastAid === aid) honor(a, aid, groups); // vừa bấm Kết thúc
+      lastSt = st; lastAid = aid;
       const qn = its.length > 1 ? ` · Câu ${its.indexOf(it) + 1}/${its.length}` : "";
       const badge = { free: "HS tự làm", open: "Đang làm bài", locked: "Hết giờ", revealed: "Đã công bố" }[st];
       head.innerHTML = `📊 Kết quả lớp${qn} <em class="lh-st ${st}">${badge}</em>`;
       const recs = groups.map((g) => ({ g, r: C.answerOf(sess, g.id, it) }));
       const done = recs.filter((x) => x.r), none = recs.filter((x) => !x.r);
       let html = "";
-      if (follow) {
-        html += `<div class="lh-pp-timer"><span class="lh-pp-clock ${st}${k.running && k.left <= 10 ? " hurry" : ""}">${st === "revealed" ? "🏁" : st === "locked" ? "⏰ 0:00" : k.running ? "⏱ " + C.fmtClock(k.left) : "⏱ " + C.fmtClock(k.left || a.time || 60)}</span>`;
-        if (st === "revealed") html += `<button data-act="reopen" title="Cho làm lại hoạt động này">↺ Mở lại</button>`;
-        else html += (k.running ? `<button data-act="pause">⏸</button>` : st === "open" ? `<button data-act="start" class="prim">▶ Bấm giờ</button>` : "") + (st === "open" ? `<button data-act="add" data-sec="-30">−30s</button><button data-act="add" data-sec="30">+30s</button>` : "") + `<button data-act="end" class="end">🏁 Kết thúc</button>`;
-        html += `</div>`;
-      } else html += `<p class="lh-pp-hint">Bật <b>👣 HS theo nhịp GV</b> ở bảng giáo viên để bấm giờ và công bố kết quả cùng lúc.</p>`;
+      // cùng một đồng hồ với ⏱️ trên bài giảng và bảng GV
+      html += `<div class="lh-pp-timer"><span class="lh-pp-clock ${k.over ? "locked" : st}${k.running && k.left <= 10 ? " hurry" : ""}">${clockTxt(k, a)}</span>`;
+      if (st === "revealed") html += `<button data-act="reopen" title="Cho làm lại hoạt động này">↺ Mở lại</button>`;
+      else html += (k.running ? `<button data-act="pause">⏸</button>` : st !== "locked" && !k.over ? `<button data-act="start" class="prim">▶ Bấm giờ</button>` : "") + (st !== "locked" && !k.over ? `<button data-act="add" data-sec="-30">−30s</button><button data-act="add" data-sec="30">+30s</button>` : `<button data-act="reset" title="Đặt lại đồng hồ">↺</button>`) + (follow ? `<button data-act="end" class="end">🏁 Kết thúc</button>` : "");
+      html += `</div>`;
+      if (!follow) html += `<p class="lh-pp-hint">HS tự làm: đồng hồ hiện trên máy HS, hết giờ chỉ báo. Bật <b>👣 theo nhịp GV</b> để khóa khi hết giờ và công bố kết quả cùng lúc.</p>`;
       const show = st === "revealed";
-      if (it.q) {
+      if (it.q && it.q.type === "sheet") { // bảng tính: các địa chỉ HS chọn nhiều nhất
+        const max = Math.max(1, groups.length), dist = C.choiceDist(done.map((x) => x.r.choice), it.q.answer);
+        html += `<div class="lh-pp-bars">` + dist.map((d) => `<div class="lh-bar ${show && d.right ? "right" : ""}"><b>📍</b><span class="t">${esc(d.label)}</span><span class="b"><i style="width:${d.n / max * 100}%"></i></span><span class="n">${d.n}</span></div>`).join("")
+          + `<div class="lh-bar none"><b>–</b><span class="t">Chưa làm</span><span class="b"><i style="width:${none.length / max * 100}%"></i></span><span class="n">${none.length}</span></div></div>`;
+      } else if (it.q) {
         const q = it.q, opts = q.type === "true-false" ? ["Đúng", "Sai"] : q.options || [];
         const has = (r, k2) => { const c = r.choice; if (q.type === "true-false") return c === (k2 === 0); if (q.type === "multiple-select") return Array.isArray(c) && c.map(Number).includes(k2); return c === k2; };
         const right = (k2) => q.type === "true-false" ? (k2 === 0) === q.answer : q.type === "multiple-select" ? (q.answer || []).includes(k2) : k2 === q.answer;
@@ -240,7 +299,7 @@
     }
     onReady(() => {
       document.body.classList.add("lh-projector");
-      panel = el("div", "lh-proj-panel", `<div class="lh-pp-head"><span>📡 Đang kết nối…</span><button class="lh-pp-qr" title="Hiện mã QR vào lớp">QR</button><button class="lh-pp-tg" title="Thu gọn / mở rộng">▾</button></div><div class="lh-pp-body"></div>`);
+      panel = el("div", "lh-proj-panel", `<div class="lh-pp-head"><span>📡 Đang kết nối…</span><b class="lh-pp-code" title="Mã vào lớp — HS mở web và nhập mã này"></b><button class="lh-pp-qr" title="Hiện mã vào lớp + QR">QR</button><button class="lh-pp-tg" title="Thu gọn / mở rộng">▾</button></div><div class="lh-pp-body"></div>`);
       document.body.appendChild(panel);
       panel.querySelector(".lh-pp-tg").onclick = () => { open = !open; LS.set("lh_panel_open", open); draw(); };
       panel.querySelector(".lh-pp-qr").onclick = showQR;
@@ -263,19 +322,40 @@
       });
       // mỗi 0,5s: chỉ cập nhật chữ đồng hồ; đổi trạng thái (hết giờ) mới vẽ lại cả bảng
       setInterval(() => {
-        if (!sess || !mine() || !open) return;
-        const a = window.LESSON.activities[nav.idx], aid = aidOf(a, nav.idx); if (!aid) return;
-        const k = C.actClock(sess.live || {}, aid, DB.now());
-        if (k.st !== lastSt) return draw();
+        const a = window.LESSON && window.LESSON.activities[nav.idx], aid = aidOf(a, nav.idx), ok = !!(sess && mine() && aid);
+        const k = ok ? C.actClock(sess.live || {}, aid, DB.now()) : null;
+        paintClock(topClock(), k); // cả lớp nhìn đồng hồ trên thanh tiêu đề
+        if (!ok) return;
+        if (k.st !== lastSt || (k.over && panel.querySelector(".lh-pp-clock") && !panel.querySelector(".lh-pp-clock.locked"))) return draw();
+        if (!open) return;
         const c = panel.querySelector(".lh-pp-clock");
-        if (c && k.running) { c.textContent = "⏱ " + C.fmtClock(k.left); c.classList.toggle("hurry", k.left <= 10); }
+        if (c && k.running) { c.textContent = clockTxt(k, a); c.classList.toggle("hurry", k.left <= 10); }
       }, 500);
       const s = el("script"); s.src = "/static/qr.js"; document.head.appendChild(s);
     });
+    // BẢNG VINH DANH khi GV bấm Kết thúc: các nhóm đúng hoàn toàn (pháo giấy + kèn chiến thắng theo nút 🔊)
+    function honor(a, aid, groups) {
+      const its = items().items.filter((x) => x.aid === aid);
+      const res = groups.map((g) => { let good = 0, done = 0; its.forEach((it) => { const r = C.answerOf(sess, g.id, it); if (r) { done++; good += C.judge(it, r).fraction; } }); return { g, done, pct: its.length ? good / its.length : 0 }; });
+      const win = res.filter((x) => x.done && x.pct >= 0.999), near = res.filter((x) => x.done && x.pct >= 0.5 && x.pct < 0.999).sort((x, y) => y.pct - x.pct).slice(0, 8);
+      const old = document.querySelector(".lh-honor"); if (old) old.remove();
+      const badges = win.map((x, i) => `<span class="lh-hb" style="animation-delay:${(0.25 + i * 0.12).toFixed(2)}s">🏅 ${esc(x.g.nm)}</span>`).join("");
+      const ov = el("div", "lh-honor", `<div class="lh-honor-card"><div class="lh-honor-trophy">${win.length ? "🏆" : "💪"}</div><h2>${win.length ? "BẢNG VINH DANH" : "Cùng cố gắng nhé!"}</h2><p class="lh-honor-act">${esc(a.name)}</p>`
+        + (win.length ? `<p class="lh-honor-sub">${win.length} nhóm làm đúng hoàn toàn — xin chúc mừng! 👏</p><div class="lh-hbs">${badges}</div>` : `<p class="lh-honor-sub">Chưa nhóm nào đúng hoàn toàn — cùng xem đáp án và giải thích nhé!</p>`)
+        + (near.length ? `<p class="lh-honor-near">👍 Đáng khen: ${near.map((x) => `${esc(x.g.nm)} (${Math.round(x.pct * 100)}%)`).join(" · ")}</p>` : "") + `<p class="lh-honor-hint">Bấm để đóng</p></div>`);
+      ov.onclick = () => ov.remove(); document.body.appendChild(ov);
+      setTimeout(() => ov.remove(), 8000);
+      const app = window.LessonApp;
+      if (win.length && app) { if (app.fanfare) app.fanfare(); if (app.celebrate) [0, 500, 1100].forEach((t) => setTimeout(app.celebrate, t)); }
+    }
     function showQR() {
       if (!window.QR) return;
-      const u = location.origin + "/";
-      const go = (url) => { const ov = el("div", "lh-qr-overlay", `<div class="lh-qr-box">${QR.svg(url)}<div class="lh-qr-url">${esc(url.replace(/\/$/, ""))}</div><div>Quét mã hoặc gõ địa chỉ trên để vào lớp</div></div>`); ov.onclick = () => ov.remove(); document.body.appendChild(ov); };
+      const code = sess && mine() ? sess.meta.code : null, u = location.origin + "/";
+      const go = (base) => {
+        const url = base + (code ? "?c=" + code : "");
+        const ov = el("div", "lh-qr-overlay", `<div class="lh-qr-box">${code ? `<div class="lh-qr-code"><small>Mã vào lớp</small>${esc(code)}</div>` : ""}${QR.svg(url)}<div class="lh-qr-url">${esc(base.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</div><div>${code ? "Quét mã QR, hoặc mở địa chỉ trên rồi nhập <b>mã vào lớp</b>" : "Quét mã hoặc gõ địa chỉ trên để vào lớp"}</div></div>`);
+        ov.onclick = () => ov.remove(); document.body.appendChild(ov);
+      };
       if (DB.mode === "lan") DB.teacher.status().then((s) => go(((s.info.urls || [])[0] || {}).url || u)); else go(u);
     }
   }

@@ -7,8 +7,9 @@
  *   teacher/config                 { machines, phones }
  *   teacher/classes/{cid}          { name, students: { sid: { name, order } } }
  *   teacher/sessions/{sess}        bản sao meta (để liệt kê lịch sử)
- *   public/active                  id tiết đang mở (HS đọc được)
- *   sessions/{sess}/meta           { lessonId, lessonTitle, classId, className, createdAt, status }
+ *   public/active                  id tiết đang mở (chỉ GV/màn trình chiếu đọc)
+ *   codes/{mã 4 số}                { s: id tiết, at }  (HS nhập mã -> tìm tiết; không liệt kê được)
+ *   sessions/{sess}/meta           { lessonId, lessonTitle, classId, className, createdAt, status, code }
  *   sessions/{sess}/roster         { sid: { name, order } }
  *   sessions/{sess}/machines       { mid: { name, order } }
  *   sessions/{sess}/live           { follow, paused, showModel, showScore, teacherIdx, excluded:{aid:true},
@@ -47,16 +48,46 @@
     (L.activities || []).forEach((a, idx) => {
       const aid = a.id || "a" + idx, base = { aid, activityIdx: idx, activityName: a.name || aid };
       if (!NOT_QUIZ.includes(a.type)) (a.questions || []).forEach((q, qi) => items.push({ ...base, iid: "q" + qi, key: keyOf(aid, "q" + qi), label: q.question, q, type: q.type }));
-      if (WHOLE.includes(a.type)) items.push({ ...base, iid: "main", key: keyOf(aid, "main"), label: a.task || a.name, kind: a.type, type: a.type });
+      if (WHOLE.includes(a.type)) items.push({ ...base, iid: "main", key: keyOf(aid, "main"), label: a.task || a.name, kind: a.type, type: a.type, act: a });
       if (a.type === "summary" && a.content && a.content.challenge) a.content.challenge.forEach((q, qi) => items.push({ ...base, iid: "c" + qi, key: keyOf(aid, "c" + qi), label: q.question, q, type: q.type }));
       if (a.type === "vandung") (a.cases || []).forEach((cs, i) => openQs.push({ ...base, iid: "t" + i, key: keyOf(aid, "t" + i), label: cs.question }));
       if (a.type === "scenario" && a.content && a.content.question) openQs.push({ ...base, iid: "t0", key: keyOf(aid, "t0"), label: a.content.question });
     });
     return { items, openQs };
   }
+  // ---- địa chỉ ô / vùng (câu hỏi bảng tính mô phỏng) — PHẢI khớp normAddr trong app.js ----
+  const colName = (n) => { let s = ""; n++; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
+  const colNum = (s) => [...s].reduce((t, ch) => t * 26 + ch.charCodeAt(0) - 64, 0) - 1;
+  function normAddr(s) {
+    s = String(s == null ? "" : s).toUpperCase().replace(/[\s$]/g, "");
+    let m;
+    if (/^[A-Z]{1,3}$/.test(s)) return s + ":" + s;
+    if (/^\d+$/.test(s)) return +s + ":" + +s;
+    if ((m = s.match(/^([A-Z]{1,3})(\d+)$/))) return m[1] + +m[2];
+    if ((m = s.match(/^([A-Z]{1,3})(\d+):([A-Z]{1,3})(\d+)$/))) {
+      const c1 = Math.min(colNum(m[1]), colNum(m[3])), c2 = Math.max(colNum(m[1]), colNum(m[3])), r1 = Math.min(+m[2], +m[4]), r2 = Math.max(+m[2], +m[4]);
+      return c1 === c2 && r1 === r2 ? colName(c1) + r1 : colName(c1) + r1 + ":" + colName(c2) + r2;
+    }
+    if ((m = s.match(/^([A-Z]{1,3}):([A-Z]{1,3})$/))) { const a = [colNum(m[1]), colNum(m[2])].sort((x, y) => x - y); return colName(a[0]) + ":" + colName(a[1]); }
+    if ((m = s.match(/^(\d+):(\d+)$/))) { const a = [+m[1], +m[2]].sort((x, y) => x - y); return a[0] + ":" + a[1]; }
+    return s;
+  }
+  // Thống kê địa chỉ HS chọn (câu bảng tính) -> [{label, n, right}] — vài lựa chọn nhiều nhất + "Khác"; luôn có dòng đáp án đúng
+  function choiceDist(choices, answer, top) {
+    const cnt = new Map(); (choices || []).forEach((c) => { const k = normAddr(c); if (k) cnt.set(k, (cnt.get(k) || 0) + 1); });
+    const right = (k) => addrMatch(answer, k), ans = normAddr(Array.isArray(answer) ? answer[0] : answer);
+    let list = [...cnt.entries()].sort((a, b) => b[1] - a[1]);
+    const keep = list.slice(0, top || 4), rest = list.slice(top || 4);
+    if (!keep.some(([k]) => right(k))) { const i = rest.findIndex(([k]) => right(k)); keep.push(i >= 0 ? rest.splice(i, 1)[0] : [ans, 0]); }
+    const out = keep.map(([k, n]) => ({ label: k, n, right: right(k) }));
+    const other = rest.reduce((t, [, n]) => t + n, 0); if (other) out.push({ label: "Khác", n: other, right: false });
+    return out;
+  }
+  const addrMatch = (answer, choice) => choice != null && choice !== "" && (Array.isArray(answer) ? answer : [answer]).some((x) => normAddr(x) === normAddr(choice));
   // Chấm 1 câu: trắc nghiệm chấm lại từ LỰA CHỌN (không tin "ok" do máy HS gửi)
   function judgeQuestion(q, choice) {
     if (choice == null) return false;
+    if (q.type === "sheet") return addrMatch(q.answer, choice);
     if (q.type === "true-false") return choice === q.answer;
     if (q.type === "multiple-select") { const c = Array.isArray(choice) ? choice : Object.values(choice); return JSON.stringify(c.map(Number).sort()) === JSON.stringify([...(q.answer || [])].sort()); }
     return typeof choice !== "boolean" && choice !== "" && Number(choice) === q.answer;
@@ -64,7 +95,22 @@
   function judge(it, rec) {
     if (!rec) return null;
     if (it.q) { const ok = judgeQuestion(it.q, rec.choice); return { ok, fraction: ok ? 1 : 0 }; }
-    return { ok: !!rec.ok, fraction: clamp01(rec.fraction) };
+    const w = it.act && judgeWhole(it.act, rec.choice);
+    return w || { ok: !!rec.ok, fraction: clamp01(rec.fraction) }; // bản ghi kiểu cũ: tin kết quả máy HS gửi
+  }
+  // Chấm lại bài ghép đôi / phân loại / sắp xếp / điền khuyết từ BÀI LÀM (kết quả cuối)
+  //   choice: {m:[phải của từng trái]} | {g:[nhóm của từng thẻ]} | {o:[thứ tự bước]} | {v:[chữ điền]}
+  const toArr = (x) => { if (Array.isArray(x)) return x; if (!x || typeof x !== "object") return null; const out = []; Object.keys(x).forEach((k) => { if (/^\d+$/.test(k)) out[+k] = x[k]; }); return out; };
+  const normFill = (s) => String(s == null ? "" : s).trim().toLowerCase().replace(/\s+/g, " ");
+  function judgeWhole(a, ch) {
+    if (!ch || typeof ch !== "object" || Array.isArray(ch)) return null;
+    let good = 0, total = 0, arr;
+    if (a.type === "matching" && (arr = toArr(ch.m))) { total = (a.pairs || []).length; for (let i = 0; i < total; i++) if (arr[i] != null && +arr[i] === i) good++; }
+    else if (a.type === "dragdrop" && (arr = toArr(ch.g))) { const its = a.items || []; total = its.length; its.forEach((it, i) => { if (arr[i] != null && +arr[i] === it.group) good++; }); }
+    else if (a.type === "ordering" && (arr = toArr(ch.o))) { total = (a.steps || []).length; for (let p = 0; p < total; p++) if (arr[p] != null && +arr[p] === p) good++; }
+    else if (a.type === "fillblank" && (arr = toArr(ch.v))) { total = String(a.text || "").split("{{}}").length - 1; for (let i = 0; i < total; i++) if ((a.answers && a.answers[i] || []).map(normFill).includes(normFill(arr[i]))) good++; }
+    else return null;
+    return { ok: total > 0 && good === total, fraction: total ? good / total : 0 };
   }
   // Trạng thái 1 hoạt động: free (HS tự làm, báo đúng/sai ngay) | open | locked | revealed
   function actState(live, aid, now) {
@@ -72,27 +118,37 @@
     const s = (live.acts || {})[aid] || {};
     if (s.state === "revealed") return "revealed";
     if (s.state === "locked") return "locked";
-    if (s.endsAt && (now || Date.now()) >= s.endsAt) return "locked";
+    if (s.endsAt && !s.free && (now || Date.now()) >= s.endsAt) return "locked"; // đồng hồ bấm lúc HS tự làm: chỉ báo, không khóa
     return "open";
   }
-  // Điều khiển 1 hoạt động khi HS theo nhịp GV (dùng chung: màn trình chiếu + bảng GV)
-  //   action: start | pause | add | end | reopen      (add: sec có thể âm)
+  // ĐỒNG HỒ CHUNG của 1 hoạt động — một đồng hồ duy nhất cho ⏱️ trên bài giảng, bảng 📊 và bảng GV.
+  //   action: start | pause | add (sec có thể âm) | reset (về sec giây, dừng) | end (công bố) | reopen
+  //   HS tự làm (chưa theo nhịp): đồng hồ gắn cờ free — hiện trên máy HS, hết giờ chỉ báo, KHÔNG khóa.
   function actControl(DB, sessId, live, aid, action, sec) {
     const p = `sessions/${sessId}/live/acts/${aid}`, cur = ((live || {}).acts || {})[aid] || {}, now = DB.now();
+    const tag = (o) => (live && live.follow ? o : Object.assign(o, { free: true }));
     const running = !!cur.endsAt && cur.endsAt > now;
     const left = running ? Math.ceil((cur.endsAt - now) / 1000) : Math.max(5, +cur.remaining || +sec || 60);
-    if (action === "start") return DB.set(p, { state: "open", endsAt: now + left * 1000, remaining: left });
-    if (action === "pause") return DB.set(p, { state: "open", remaining: left });
-    if (action === "add") return running ? DB.set(p + "/endsAt", Math.max(now + 5000, cur.endsAt + sec * 1000)) : DB.set(p, { state: "open", remaining: Math.max(5, left + sec) });
+    if (action === "start") return DB.set(p, tag({ state: "open", endsAt: now + left * 1000, remaining: left }));
+    if (action === "pause") return DB.set(p, tag({ state: "open", remaining: left }));
+    if (action === "add") return running ? DB.set(p + "/endsAt", Math.max(now + 5000, cur.endsAt + sec * 1000)) : DB.set(p, tag({ state: "open", remaining: Math.max(5, left + sec) }));
+    if (action === "reset") return DB.set(p, cur.state === "revealed" ? { state: "revealed", remaining: Math.max(5, +sec || 60) } : tag({ state: "open", remaining: Math.max(5, +sec || 60) }));
     if (action === "end") return DB.set(p, { state: "revealed", remaining: cur.remaining || null });
     if (action === "reopen") return DB.set(p, { state: "open", remaining: +sec || +cur.remaining || 60 });
     return Promise.resolve();
   }
-  // Thông tin đồng hồ của hoạt động: { st, running, left(giây), hasTimer }
+  // Bật theo nhịp: đồng hồ đang chạy lúc tự làm trở thành đồng hồ theo nhịp; đồng hồ đã hết giờ bị xóa (khỏi khóa oan)
+  function followFixups(live, now) {
+    const up = {};
+    Object.entries((live && live.acts) || {}).forEach(([aid, s]) => { if (s && s.free) up[`acts/${aid}`] = s.endsAt && s.endsAt <= now ? null : Object.assign({}, s, { free: null }); });
+    return up;
+  }
+  // Thông tin đồng hồ: { st, running, left(giây), hasTimer, over (hết giờ lúc HS tự làm) }
   function actClock(live, aid, now) {
     const cur = ((live || {}).acts || {})[aid] || {}, st = actState(live, aid, now);
-    const running = st === "open" && !!cur.endsAt;
-    return { st, running, left: running ? Math.max(0, (cur.endsAt - now) / 1000) : (+cur.remaining || 0), hasTimer: !!(cur.endsAt || cur.remaining) };
+    const ticking = !!cur.endsAt && st !== "revealed" && st !== "locked";
+    const left = ticking ? Math.max(0, (cur.endsAt - now) / 1000) : (+cur.remaining || 0);
+    return { st, running: ticking && left > 0, left, over: ticking && left <= 0, hasTimer: !!(cur.endsAt || cur.remaining) };
   }
   const answerOf = (sess, gid, it) => (((sess.answers || {})[gid] || {})[it.aid] || {})[it.iid] || null;
   // Điểm 1 nhóm. opts.hideOpen: HS xem điểm -> chưa tính các hoạt động đang làm theo nhịp (chưa công bố)
@@ -232,6 +288,6 @@
   function loadManifest() { return fetch("/lessons/index.json", { cache: "no-store" }).then((r) => r.json()).then((m) => m.lessons || []); }
 
   return { NOT_QUIZ, WHOLE, clamp01, round1, esc, norm, fmt1, pad2, fmtDate, fmtTime, fmtClock, rid, splitKey, keyOf,
-    lessonItems, judgeQuestion, judge, actState, actControl, actClock, answerOf, scoreGroup, groupName, sortedEntries, memberNames, machineList,
+    lessonItems, judgeQuestion, judge, judgeWhole, normAddr, addrMatch, choiceDist, actState, actControl, followFixups, actClock, answerOf, scoreGroup, groupName, sortedEntries, memberNames, machineList,
     parseClassBook, classesSheet, sessionWorkbook, loadLesson, loadManifest };
 });

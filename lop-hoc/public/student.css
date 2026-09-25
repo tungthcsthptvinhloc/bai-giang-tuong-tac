@@ -46,7 +46,7 @@
 .lh-btn { display: inline-block; background: #fff; color: #312e81; font-weight: 800; padding: 12px 26px; border-radius: 999px; text-decoration: none; }
 
 /* ---- Đồng hồ theo nhịp GV (trên dải thông tin HS) ---- */
-.lh-clock { font-weight: 900; font-size: 1.15rem; padding: 3px 14px; border-radius: 999px; background: #1e1b4b; color: #fff; font-variant-numeric: tabular-nums; }
+.lh-clock { font-weight: 900; font-size: 1.5rem; padding: 6px 18px; flex: none; white-space: nowrap; border-radius: 999px; background: #1e1b4b; color: #fff; font-variant-numeric: tabular-nums; }
 .lh-clock.hurry { background: #dc2626; animation: lhBlink 1s infinite; }
 .lh-clock.locked { background: #b45309; }
 .lh-clock.revealed { background: #16a34a; }
@@ -116,3 +116,48 @@
   .lh-pause h2 { font-size: 1.7rem; }
   .lh-follow .controls::before { font-size: .9rem; }
 }
+
+/* ---- v5: đồng hồ theo nhịp GV nằm trên THANH TIÊU ĐỀ cố định (máy HS + màn trình chiếu) ---- */
+.topbar .lh-clock { box-shadow: 0 4px 12px rgba(30, 27, 75, .25); }
+@media (max-width: 700px) {
+  .lh-student .topbar { gap: 8px; padding: 10px 12px; }
+  .lh-student .topbar .progress, .lh-student .topbar .progress-label { display: none; }
+  .lh-student .topbar .act-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar .lh-clock { font-size: 1.2rem; padding: 4px 12px; }
+}
+/* Mã vào lớp trên bảng 📊 và màn QR của trang trình chiếu */
+.lh-pp-code { font-size: .95rem; background: #facc15; color: #1e1b4b; padding: 2px 8px; border-radius: 8px; letter-spacing: .08em; }
+.lh-pp-code:empty { display: none; }
+.lh-qr-code { font-size: min(7rem, 16vw); font-weight: 900; letter-spacing: .14em; color: #4c1d95; line-height: 1; margin-bottom: 10px; font-variant-numeric: tabular-nums; }
+.lh-qr-code small { display: block; font-size: 1.3rem; letter-spacing: 0; color: #6b6690; font-weight: 700; }
+.lh-qr-code + svg { width: min(40vh, 70vw) !important; }
+
+/* ---- v5: CỔ VŨ trên máy HS khi GV công bố kết quả ---- */
+.lh-cheer { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px; cursor: pointer; overflow: hidden; background: rgba(15, 12, 40, .55); animation: lhFade .25s ease; }
+.lh-cheer.win { background: radial-gradient(circle at 50% 45%, rgba(250, 204, 21, .55), rgba(22, 101, 52, .82) 70%); }
+.lh-cheer.good { background: radial-gradient(circle at 50% 45%, rgba(125, 211, 252, .5), rgba(30, 64, 175, .78) 70%); }
+.lh-cheer-card { position: relative; z-index: 2; background: #fff; border-radius: 28px; padding: 26px 34px 30px; text-align: center; max-width: 560px; box-shadow: 0 20px 60px rgba(0, 0, 0, .35); animation: lhPop .55s cubic-bezier(.2, 1.6, .4, 1); }
+.lh-cheer-emoji { font-size: 6rem; line-height: 1.1; animation: lhBounce 1s ease-in-out infinite; }
+.lh-cheer h2 { font-size: 2.6rem; margin: 6px 0; color: #1e1b4b; }
+.lh-cheer.win h2 { background: linear-gradient(90deg, #f59e0b, #ef4444, #a855f7); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.lh-cheer p { font-size: 1.3rem; margin: 6px 0 0; color: #374151; }
+.lh-cheer-stars { font-size: 2.2rem; margin-top: 10px; letter-spacing: .2em; animation: lhPulse 1s ease-in-out infinite; }
+.lh-cf { position: absolute; top: -20px; width: 12px; height: 18px; border-radius: 3px; z-index: 1; animation: lhFall linear forwards; }
+@keyframes lhFall { to { transform: translateY(110vh) rotate(var(--rx, 360deg)); } }
+@keyframes lhPop { from { transform: scale(.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes lhBounce { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-14px) scale(1.08); } }
+@keyframes lhPulse { 50% { transform: scale(1.12); } }
+@keyframes lhFade { from { opacity: 0; } }
+
+/* ---- v5: BẢNG VINH DANH trên màn trình chiếu ---- */
+.lh-honor { position: fixed; inset: 0; z-index: 9990; display: flex; align-items: center; justify-content: center; padding: 20px; cursor: pointer; background: radial-gradient(circle at 50% 35%, rgba(250, 204, 21, .45), rgba(15, 12, 40, .88) 72%); animation: lhFade .3s ease; }
+.lh-honor-card { background: #fff; border-radius: 30px; padding: 28px 40px 22px; text-align: center; max-width: min(1000px, 94vw); box-shadow: 0 24px 70px rgba(0, 0, 0, .4); animation: lhPop .6s cubic-bezier(.2, 1.6, .4, 1); }
+.lh-honor-trophy { font-size: 6.5rem; line-height: 1; animation: lhBounce 1.1s ease-in-out infinite; }
+.lh-honor h2 { font-size: 3rem; margin: 8px 0 2px; letter-spacing: .06em; background: linear-gradient(90deg, #f59e0b, #ef4444, #7c3aed); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.lh-honor-act { font-size: 1.2rem; color: #6b7280; margin: 0 0 8px; }
+.lh-honor-sub { font-size: 1.45rem; font-weight: 700; color: #166534; margin: 6px 0 14px; }
+.lh-hbs { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.lh-hb { font-size: 1.6rem; font-weight: 900; padding: 10px 20px; border-radius: 999px; color: #713f12; background: linear-gradient(135deg, #fef08a, #facc15); box-shadow: 0 6px 16px rgba(202, 138, 4, .35); opacity: 0; animation: lhPop .5s cubic-bezier(.2, 1.6, .4, 1) forwards; }
+.lh-honor-near { font-size: 1.15rem; color: #1e3a8a; margin: 16px 0 0; }
+.lh-honor-hint { font-size: .9rem; color: #9ca3af; margin: 14px 0 0; }
+@media (max-width: 640px) { .lh-cheer h2 { font-size: 1.9rem; } .lh-cheer-emoji { font-size: 4.4rem; } .lh-cheer p { font-size: 1.05rem; } }

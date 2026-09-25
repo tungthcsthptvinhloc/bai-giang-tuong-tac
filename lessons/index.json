@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-09-24T11:20:03.082Z",
+ "generatedAt": "2026-09-25T11:20:07.424Z",
  "lessons": [
   {
    "id": "tin6-bai01-thong-tin-va-du-lieu",
@@ -109,6 +109,16 @@
    "unit": "Chủ đề 3 — Đạo đức, pháp luật và văn hoá trong môi trường số",
    "activities": 11,
    "items": 14,
+   "open": 2
+  },
+  {
+   "id": "tin7-bai06-lam-quen-voi-phan-mem-bang-tinh",
+   "title": "Bài 6: Làm quen với phần mềm bảng tính",
+   "grade": "7",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4 — Ứng dụng tin học",
+   "activities": 17,
+   "items": 37,
    "open": 2
   },
   {

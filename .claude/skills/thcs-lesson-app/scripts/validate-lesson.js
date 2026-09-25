@@ -97,6 +97,15 @@ function checkQuestion({ q, activity }, ids, answerPositions, levelCount) {
   } else if (q.type === "true-false") {
     if (typeof q.answer !== "boolean")
       err(`${where}: true-false cần \`answer\` là true/false.`);
+  } else if (q.type === "sheet") {
+    // Bảng tính mô phỏng: answer = địa chỉ ô "B6" | vùng "B4:E11" | cột "D" | hàng "6" (hoặc mảng)
+    const ans = Array.isArray(q.answer) ? q.answer : [q.answer];
+    const ADDR = /^([A-Z]{1,3}\d+(:[A-Z]{1,3}\d+)?|[A-Z]{1,3}:[A-Z]{1,3}|\d+:\d+)$/;
+    const normA = (s) => { s = String(s == null ? "" : s).toUpperCase().replace(/[\s$]/g, ""); return /^[A-Z]{1,3}$/.test(s) ? s + ":" + s : /^\d+$/.test(s) ? s + ":" + s : s; };
+    if (!ans.length || ans.some((x) => !ADDR.test(normA(x))))
+      err(`${where}: sheet cần \`answer\` là địa chỉ hợp lệ (VD "B6", "B4:E11", "D" = cả cột, "6" = cả hàng).`);
+    if (!q.sheet && !activity.sheet) err(`${where}: thiếu lưới \`sheet\` (đặt ở hoạt động hoặc ở câu hỏi).`);
+    if (q.mode === "type" && !q.highlight) err(`${where}: mode "type" cần \`highlight\` (vùng được tô để HS gõ địa chỉ).`);
   }
 }
 

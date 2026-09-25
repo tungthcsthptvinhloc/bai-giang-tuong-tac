@@ -44,6 +44,15 @@
   .wait { text-align: center; padding: 40px 20px; }
   .wait .big { font-size: 4rem; animation: bob 1.6s ease-in-out infinite; }
   @keyframes bob { 50% { transform: translateY(-8px); } }
+  .codebox { text-align: center; padding: 34px 20px; max-width: 560px; margin: 0 auto 16px; }
+  .codebox .big { font-size: 3.4rem; }
+  .codebox h2 { margin: 6px 0; font-size: 1.8rem; }
+  .codeform { display: flex; gap: 12px; justify-content: center; align-items: center; flex-wrap: wrap; margin-top: 16px; }
+  .codeform input { font: inherit; font-size: 3rem; font-weight: 900; width: 5.4em; text-align: center; letter-spacing: .35em; padding: 8px 0 8px .35em; border: 3px solid var(--line); border-radius: 18px; color: var(--pri); font-variant-numeric: tabular-nums; }
+  .codeform input::placeholder { color: #cfc8ee; letter-spacing: .2em; }
+  .codeform input:focus { outline: none; border-color: var(--pri2); box-shadow: 0 0 0 4px #7c3aed22; }
+  .codetag { display: inline-block; background: #efeaff; color: var(--pri); border-radius: 999px; padding: 2px 12px; font-weight: 800; margin-left: 6px; }
+  .linkbtn { background: none; border: none; color: var(--pri); font: inherit; text-decoration: underline; cursor: pointer; padding: 0 4px; }
   .mine { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
   [hidden] { display: none !important; }
   @media (max-width: 640px) { h1 { font-size: 1.45rem; } .grid { grid-template-columns: 1fr 1fr; gap: 8px; } .mgrid { grid-template-columns: repeat(3, 1fr); } .st { padding: 10px; gap: 8px; font-size: .95rem; } .st .no { min-width: 26px; height: 26px; } .btn { padding: 12px 20px; } }
@@ -57,10 +66,15 @@
     <div class="sub" id="subtitle">Đang kết nối…</div>
   </header>
 
-  <div class="card wait" id="waitBox" hidden>
-    <div class="big">⏳</div>
-    <h2>Chưa có tiết học nào đang mở</h2>
-    <p class="sub">Chờ thầy/cô bắt đầu tiết học — trang sẽ tự cập nhật.</p>
+  <div class="card codebox" id="codeBox" hidden>
+    <div class="big">🔑</div>
+    <h2>Nhập mã vào lớp</h2>
+    <p class="sub">Mã gồm <b>4 chữ số</b> do thầy/cô đưa ra (trên màn chiếu).</p>
+    <form class="codeform" id="codeForm" autocomplete="off">
+      <input id="codeIn" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" aria-label="Mã vào lớp">
+      <button class="btn" id="codeBtn" type="submit">Vào lớp →</button>
+    </form>
+    <div id="codeErr" class="msg err" hidden></div>
   </div>
 
   <div class="card" id="mineBox" hidden>
@@ -96,14 +110,19 @@
   "use strict";
   const $ = (s) => document.querySelector(s), C = window.LHCore, esc = C.esc;
   const LS = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }, del(k) { try { localStorage.removeItem(k); } catch (e) {} } };
-  let sid = null, meta = null, roster = {}, machines = {}, claims = {}, uid = null, myGid = null, mode = new URLSearchParams(location.search).has("add") ? "add" : "new";
+  const params = new URLSearchParams(location.search);
+  let sid = null, meta = null, roster = {}, machines = {}, claims = {}, uid = null, myGid = null, code = null, mode = params.has("add") ? "add" : "new";
+  const urlCode = (params.get("c") || "").replace(/\D/g, "").slice(0, 4); // quét QR: /?c=1234 -> tự điền mã
+  if (params.has("c")) history.replaceState(null, "", location.pathname + (mode === "add" ? "?add=1" : ""));
   let machine = null; const selected = new Set(); const unsubs = [];
 
   function showErr(m) { $("#err").textContent = "⚠️ " + m; $("#err").hidden = !m; }
   function draw() {
-    $("#waitBox").hidden = !!sid;
+    $("#codeBox").hidden = !!sid;
     if (!sid || !meta) { $("#title").textContent = "Vào lớp học"; $("#subtitle").textContent = sid ? "Đang tải…" : ""; $("#pickBox").hidden = $("#mineBox").hidden = $("#bar").hidden = true; return; }
-    $("#title").textContent = meta.lessonTitle; $("#subtitle").textContent = "Lớp " + meta.className;
+    $("#title").textContent = meta.lessonTitle;
+    $("#subtitle").innerHTML = `Lớp ${esc(meta.className)} <span class="codetag">🔑 ${esc(code || "")}</span> <button class="linkbtn" id="chgCode" type="button">Đổi mã</button>`;
+    $("#chgCode").onclick = () => showCode("");
     const cm = claims.machines || {}, cs = claims.students || {};
     const mNames = Object.fromEntries(Object.entries(cm).map(([m, g]) => [g, (machines[m] || {}).name || m]));
     const mine = myGid && Object.values(cm).includes(myGid);
@@ -171,18 +190,43 @@
   $("#btnJoin").onclick = join;
   $("#btnAdd").onclick = () => { mode = "add"; selected.clear(); draw(); };
 
+  // ---- MÃ VÀO LỚP: codes/{mã} -> id tiết học đang mở ----
+  function showCode(msg) {
+    unsubs.splice(0).forEach((f) => f()); sid = null; meta = null; code = null; LS.del("lh_code");
+    $("#codeErr").textContent = msg ? "⚠️ " + msg : ""; $("#codeErr").hidden = !msg; $("#codeBtn").disabled = false; $("#codeBtn").textContent = "Vào lớp →";
+    draw(); setTimeout(() => { const i = $("#codeIn"); i.focus(); i.select(); }, 50);
+  }
+  async function tryCode(c, quiet) {
+    c = String(c || "").replace(/\D/g, "");
+    if (c.length !== 4) return showCode("Mã vào lớp gồm 4 chữ số.");
+    $("#codeIn").value = c; $("#codeBtn").disabled = true; $("#codeBtn").textContent = "Đang kiểm tra…";
+    const bad = "Mã không đúng hoặc tiết học đã kết thúc. Hỏi lại thầy/cô mã vào lớp nhé.";
+    try {
+      const v = await DB.get("codes/" + c);
+      if (!v || !v.s) return showCode(quiet ? "" : bad);
+      const m = await DB.get(`sessions/${v.s}/meta`);
+      if (!m || m.status !== "open") return showCode(quiet ? "" : bad);
+      LS.set("lh_code", { code: c, sid: v.s }); openSession(v.s, c);
+    } catch (e) { showCode("Không kết nối được máy chủ lớp học — kiểm tra mạng rồi thử lại."); }
+  }
+  function openSession(id, c) {
+    unsubs.splice(0).forEach((f) => f()); sid = id; code = c; meta = null; roster = {}; machines = {}; claims = {};
+    const auth = LS.get("lh_auth"); myGid = auth && auth.sid === sid ? auth.gid : null;
+    unsubs.push(DB.on(`sessions/${sid}/meta`, (m) => { if (!m || m.status !== "open") return showCode("Tiết học đã kết thúc."); meta = m; draw(); }));
+    unsubs.push(DB.on(`sessions/${sid}/roster`, (r) => { roster = r || {}; draw(); }));
+    unsubs.push(DB.on(`sessions/${sid}/machines`, (r) => { machines = r || {}; draw(); }));
+    unsubs.push(DB.on(`sessions/${sid}/claims`, (r) => { claims = r || {}; draw(); }));
+    draw();
+  }
+  $("#codeForm").onsubmit = (e) => { e.preventDefault(); tryCode($("#codeIn").value); };
+  $("#codeIn").oninput = () => { const i = $("#codeIn"), v = i.value.replace(/\D/g, "").slice(0, 4); if (i.value !== v) i.value = v; $("#codeErr").hidden = true; if (v.length === 4) tryCode(v); };
+
   DB.ready.then(() => DB.student()).then((u) => {
     uid = u; $("#subtitle").textContent = "";
-    DB.on("public/active", (id) => {
-      unsubs.splice(0).forEach((f) => f()); sid = id || null; meta = null; roster = {}; machines = {}; claims = {};
-      const auth = LS.get("lh_auth"); myGid = auth && auth.sid === sid ? auth.gid : null;
-      if (!sid) return draw();
-      unsubs.push(DB.on(`sessions/${sid}/meta`, (m) => { meta = m && m.status === "open" ? m : null; if (!meta) sid = null; draw(); }));
-      unsubs.push(DB.on(`sessions/${sid}/roster`, (r) => { roster = r || {}; draw(); }));
-      unsubs.push(DB.on(`sessions/${sid}/machines`, (r) => { machines = r || {}; draw(); }));
-      unsubs.push(DB.on(`sessions/${sid}/claims`, (r) => { claims = r || {}; draw(); }));
-      draw();
-    });
+    const saved = LS.get("lh_code");
+    if (urlCode) tryCode(urlCode);
+    else if (saved && saved.code) tryCode(saved.code, true); // đã nhập mã trước đó (tải lại trang / thêm bạn)
+    else showCode("");
   }).catch((e) => { $("#subtitle").textContent = "⚠️ Không kết nối được máy chủ lớp học. " + (e.message || "") + " Kiểm tra mạng rồi tải lại trang."; });
 })();
 </script>

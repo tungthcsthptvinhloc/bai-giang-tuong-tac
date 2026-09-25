@@ -26,9 +26,25 @@
  *  - "revealed" : GV bấm Kết thúc — hiện đúng/sai của nhóm + đáp án.
  *  - onNavigate gửi kèm qi (câu đang xem trong hoạt động) cho màn trình chiếu.
  *
+ * TÍNH NĂNG (v5):
+ *  - Máy HS: ghép đôi/phân loại/sắp xếp/điền khuyết LUÔN "làm hết rồi nộp", chấm theo
+ *    KẾT QUẢ CUỐI (không còn "đúng ngay lần đầu"). Tự do: nộp 1 lần, xem kết quả ngay.
+ *    Theo nhịp: bài làm đủ được TỰ LƯU mỗi lần sửa. Có kết quả -> HS thấy chính bài
+ *    của mình với ✓/✗ từng mục + đáp án đúng. Màn trình chiếu 1 máy giữ trò chơi cũ.
+ *  - Câu hỏi dạng BẢNG TÍNH MÔ PHỎNG (question.type "sheet"): lưới giống Excel, hộp địa
+ *    chỉ, vùng nhập dữ liệu; HS bấm ô / kéo chọn vùng / bấm tên hàng, cột (mode "select")
+ *    hoặc gõ địa chỉ vùng được tô (mode "type"). activity.sandbox = bảng tính thử tự do
+ *    (gõ dữ liệu, tự căn trái/phải như phần mềm thật, Delete để xóa).
+ *  - Trò chơi penguin đổi được nhân vật: activity.pet / homeIcon / saveWord.
+ *  - MỘT ĐỒNG HỒ DUY NHẤT: trên trang trình chiếu nối tiết học, ⏱️ điều khiển đồng hồ chung của lớp
+ *    (hook timer: state()/act()) — cùng đồng hồ với bảng 📊 và bảng GV; bảng ⏱️ có nút ✕ ẩn.
+ *  - Chế độ giáo viên (phím T) nằm góc trái; "Làm lại hoạt động" khi nối tiết học -> xóa kết quả
+ *    hoạt động đó của CẢ LỚP (hook classMode()/resetActivity(aid)).
+ *  - LessonApp.celebrate() / fanfare() cho màn cổ vũ, bảng vinh danh (student.js).
+ *
  * Component: intro, knowledge/explore, quiz (multiple-choice/multiple-select/
- * true-false), matching, dragdrop, ordering, fillblank, flashcard, scenario,
- * remember, summary. Thêm loại mới -> thêm 1 renderer.
+ * true-false/sheet), matching, dragdrop, ordering, fillblank, flashcard, scenario,
+ * remember, summary, penguin, vandung. Thêm loại mới -> thêm 1 renderer.
  * ==========================================================================*/
 (function () {
   "use strict";
@@ -57,16 +73,47 @@
   const actStateOf = (a) => (STUDENT ? ask("actState", aid(a._parent || a)) || "free" : "free");
   function judgeLocal(q, choice) {
     if (choice == null) return false;
+    if (q.type === "sheet") return addrMatch(q.answer, choice);
     if (q.type === "true-false") return choice === q.answer;
     if (q.type === "multiple-select") return JSON.stringify([...(choice || [])].map(Number).sort()) === JSON.stringify([...(q.answer || [])].sort());
     return choice === q.answer;
   }
   // Dòng nhắc trạng thái khi làm bài theo nhịp GV
   function deferNote(st, done, kind) {
-    const t = st === "locked" ? (done ? "⏰ Hết giờ! Nhóm em đã " + (kind === "quiz" ? "trả lời" : "nộp bài") + " — chờ thầy/cô công bố kết quả." : "⏰ Hết giờ! Nhóm em chưa " + (kind === "quiz" ? "trả lời câu này" : "nộp bài") + " — tính là chưa hoàn thành.")
+    const t = st === "locked" ? (done ? "⏰ Hết giờ! Nhóm em đã " + (kind !== "whole" ? "trả lời" : "nộp bài") + " — chờ thầy/cô công bố kết quả." : "⏰ Hết giờ! Nhóm em chưa " + (kind !== "whole" ? "trả lời câu này" : "nộp bài") + " — tính là chưa hoàn thành.")
       : kind === "quiz" ? (done ? "✔ Đã ghi nhận. Có thể đổi đáp án đến khi thầy/cô kết thúc." : "👆 Chọn đáp án. Đúng/sai sẽ được công bố khi thầy/cô kết thúc.")
+      : kind === "sheet" ? (done ? "✔ Đã ghi nhận lựa chọn. Có thể chọn lại đến khi thầy/cô kết thúc." : "👆 Thực hiện trên bảng tính. Đúng/sai sẽ được công bố khi thầy/cô kết thúc.")
       : (done ? "✔ Đã nộp. Có thể sửa và nộp lại đến khi thầy/cô kết thúc." : "📝 Làm xong toàn bộ rồi bấm Nộp bài. Kết quả công bố khi thầy/cô kết thúc.");
     return el("div", "defer-note " + st, t);
+  }
+
+  // ---- địa chỉ ô/vùng (bảng tính mô phỏng) ---------------------------------
+  const colName = (n) => { let s = ""; n++; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
+  const colNum = (s) => [...s].reduce((t, ch) => t * 26 + ch.charCodeAt(0) - 64, 0) - 1;
+  // Chuẩn hoá địa chỉ: "b6" -> "B6", "E11:B4" -> "B4:E11", "D" -> "D:D" (cả cột), "6" -> "6:6" (cả hàng)
+  function normAddr(s) {
+    s = String(s == null ? "" : s).toUpperCase().replace(/[\s$]/g, "");
+    let m;
+    if (/^[A-Z]{1,3}$/.test(s)) return s + ":" + s;
+    if (/^\d+$/.test(s)) return +s + ":" + +s;
+    if ((m = s.match(/^([A-Z]{1,3})(\d+)$/))) return m[1] + +m[2];
+    if ((m = s.match(/^([A-Z]{1,3})(\d+):([A-Z]{1,3})(\d+)$/))) {
+      const c1 = Math.min(colNum(m[1]), colNum(m[3])), c2 = Math.max(colNum(m[1]), colNum(m[3])), r1 = Math.min(+m[2], +m[4]), r2 = Math.max(+m[2], +m[4]);
+      return c1 === c2 && r1 === r2 ? colName(c1) + r1 : colName(c1) + r1 + ":" + colName(c2) + r2;
+    }
+    if ((m = s.match(/^([A-Z]{1,3}):([A-Z]{1,3})$/))) { const a = [colNum(m[1]), colNum(m[2])].sort((x, y) => x - y); return colName(a[0]) + ":" + colName(a[1]); }
+    if ((m = s.match(/^(\d+):(\d+)$/))) { const a = [+m[1], +m[2]].sort((x, y) => x - y); return a[0] + ":" + a[1]; }
+    return s;
+  }
+  const addrMatch = (answer, choice) => choice != null && choice !== "" && (Array.isArray(answer) ? answer : [answer]).some((x) => normAddr(x) === normAddr(choice));
+  // Địa chỉ -> hình chữ nhật {c1,r1,c2,r2} (0-based cột, 1-based hàng) trên lưới cols x rows
+  function addrRect(addr, cols, rows) {
+    const s = normAddr(addr); let m;
+    if ((m = s.match(/^([A-Z]+)(\d+)$/))) return { c1: colNum(m[1]), r1: +m[2], c2: colNum(m[1]), r2: +m[2] };
+    if ((m = s.match(/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/))) return { c1: colNum(m[1]), r1: +m[2], c2: colNum(m[3]), r2: +m[4] };
+    if ((m = s.match(/^([A-Z]+):([A-Z]+)$/))) return { c1: colNum(m[1]), r1: 1, c2: colNum(m[2]), r2: rows, cols: true };
+    if ((m = s.match(/^(\d+):(\d+)$/))) return { c1: 0, r1: +m[1], c2: cols - 1, r2: +m[2], rows: true };
+    return null;
   }
 
   // ---- shell -------------------------------------------------------------
@@ -98,7 +145,8 @@
 
     <!-- Bảng đồng hồ -->
     <div class="timer-panel" id="timerPanel" hidden>
-      <strong>⏱️ Đồng hồ hoạt động</strong>
+      <div class="timer-head"><strong>⏱️ Đồng hồ hoạt động</strong><button class="timer-close" id="timerClose" title="Ẩn bảng đồng hồ (đồng hồ vẫn chạy)">✕</button></div>
+      <div class="timer-mode" id="timerMode" hidden></div>
       <div class="timer-big" id="timerBig">1:00</div>
       <div class="timer-row">
         <button data-d="-30">−30s</button><button data-d="-15">−15s</button>
@@ -109,7 +157,11 @@
         <button id="timerPause">⏸ Tạm dừng</button>
         <button id="timerReset">↺ Đặt lại</button>
       </div>
-      <span class="hint">Hết giờ sẽ báo hiệu; giáo viên chủ động bấm tiếp.</span>
+      <div class="timer-row" id="timerFollowRow" hidden>
+        <button class="end" id="timerEnd">🏁 Kết thúc &amp; công bố</button>
+        <button id="timerReopen" hidden>↺ Mở lại cho làm tiếp</button>
+      </div>
+      <span class="hint" id="timerHint">Hết giờ sẽ báo hiệu; giáo viên chủ động bấm tiếp.</span>
     </div>
 
     <!-- Lớp vẽ (bút / bút dạ quang / tẩy) — điều khiển bằng các icon trên thanh dưới -->
@@ -146,6 +198,7 @@
     <div class="confetti" id="confetti"></div>`;
 
   const view = $("#view");
+  ensureEngineCSS(); // CSS thành phần của engine (bài cũ không cần sửa styles/app.css)
   function setScore() { $("#score").textContent = state.score; $("#streak").textContent = (S.streakEnabled && state.streak > 1) ? "🔥 x" + state.streak : ""; }
   function setProgress() {
     const total = L.activities.length;
@@ -240,6 +293,7 @@
     else cardEl.appendChild(el("h1", "title", esc(a.name)));
     const tb = taskBanner(a); if (tb) cardEl.appendChild(tb);
     const sb = sgkButton(a.sgkImage); if (sb) cardEl.appendChild(sb);
+    if (a.sandbox) cardEl.appendChild(sandboxBox(a));
   }
   function appendRemember(items, cardOrView) {
     // "Em cần nhớ" — ẩn, bấm mới hiện
@@ -290,6 +344,7 @@
     const answered = { done: false };
 
     card._key = qKey(a, a._qi); card._a = a;
+    if (q.type === "sheet") return sheetQuestionFree(card, a, q, answered);
     if (q.type === "true-false") {
       const opts = el("div", "options");
       [["Đúng", true], ["Sai", false]].forEach(([label, val], i) => {
@@ -396,6 +451,7 @@
     card.appendChild(head);
     const sb = sgkButton(q.sgkImage); if (sb) card.appendChild(sb);
     if (q.image) { const im = el("div"); im.innerHTML = imageHTML(q.image, q.imageCaption); card.appendChild(im); }
+    if (q.type === "sheet") return sheetQuestionDeferred(card, a, qs, q, key, rec, st);
     const opts = el("div", "options");
     const list = q.type === "true-false" ? [["Đúng", true], ["Sai", false]] : (q.options || []).map((o, i) => [esc(o), i]);
     list.forEach(([label, val], i) => { const b = el("button", "opt", `<span class="key">${KEYS[i]}</span> ${label}`); b.dataset.k = i; if (q.type === "true-false") b.dataset.v = val ? "1" : "0"; opts.appendChild(b); });
@@ -450,10 +506,8 @@
     const key = aid(a) + ":main";
     const pairs = (a.pairs || []).map((p, i) => ({ ...p, i }));
     const answerHTML = `<div class="two-col"><div>${pairs.map(p => `<div class="chip done">${esc(p.left)}</div>`).join("")}</div><div>${pairs.map(p => `<div class="chip done">${esc(p.right)}</div>`).join("")}</div></div>`;
-    const st = actStateOf(a);
-    if (st !== "free") return renderWholeDeferred(c, a, key, st, answerHTML, matchingUI(a, pairs));
-    const done = ask("getAttempt", key);
-    if (done) return showLocked(c, a, done, answerHTML);
+    if (STUDENT) return renderWholeStudent(c, a, key, actStateOf(a), answerHTML, matchingUI(a, pairs));
+    // Màn trình chiếu / mở file: trò chơi báo đúng sai từng cặp (không ghi điểm lớp học)
     c.appendChild(el("p", "subtitle", a.intro || "Chọn một ô bên trái rồi chọn ô tương ứng bên phải."));
     if (a.image) { const im = el("div"); im.innerHTML = imageHTML(a.image, a.imageCaption); c.appendChild(im); }
     const rights = shuffle(pairs.slice());
@@ -461,58 +515,98 @@
     const wrong = a._wrong || (a._wrong = new Set()); // các cặp đã ghép sai ít nhất 1 lần
     let sel = null, matched = 0;
     pairs.forEach((p) => { const ch = el("div", "chip", esc(p.left)); ch.dataset.i = p.i; ch.onclick = () => { if (ch.classList.contains("done")) return; [...left.children].forEach(x => x.classList.remove("selected")); ch.classList.add("selected"); sel = ch; }; left.appendChild(ch); });
-    rights.forEach((p) => { const ch = el("div", "chip", esc(p.right)); ch.dataset.i = p.i; ch.onclick = () => { if (!sel || ch.classList.contains("done")) return; if (sel.dataset.i === ch.dataset.i) { ch.classList.add("done"); sel.classList.add("done"); sel.classList.remove("selected"); sel = null; matched++; celebrate(); if (matched === pairs.length) { state.score += S.basePoints; setScore(); finishMulti(c, a, key, wrong, pairs.length, "✓ Hoàn thành!"); } } else { wrong.add(sel.dataset.i); ch.classList.add("shake"); sound("no"); setTimeout(() => ch.classList.remove("shake"), 400); } }; right.appendChild(ch); });
+    rights.forEach((p) => { const ch = el("div", "chip", esc(p.right)); ch.dataset.i = p.i; ch.onclick = () => { if (!sel || ch.classList.contains("done")) return; if (sel.dataset.i === ch.dataset.i) { ch.classList.add("done"); sel.classList.add("done"); sel.classList.remove("selected"); sel = null; matched++; celebrate(); if (matched === pairs.length) { state.score += S.basePoints; setScore(); finishMulti(c, a, wrong, pairs.length, "✓ Hoàn thành!"); } } else { wrong.add(sel.dataset.i); ch.classList.add("shake"); sound("no"); setTimeout(() => ch.classList.remove("shake"), 400); } }; right.appendChild(ch); });
     grid.append(left, right); c.appendChild(grid); view.appendChild(c);
   }
   function showDone(c, a, msg) { const fb = el("div", "feedback ok"); fb.innerHTML = `${msg}<div class="explain">${esc(a.explanation || "")}</div>${a.doneImage ? imageHTML(a.doneImage, a.doneCaption) : ""}`; c.appendChild(fb); sound("ok"); }
-  // Ghép đôi / phân loại xong: điểm = tỉ lệ mục làm đúng ngay lần đầu
-  function finishMulti(c, a, key, wrong, total, msg) {
+  // Trò chơi trên màn trình chiếu: báo số mục làm đúng ngay lần đầu (chỉ để cả lớp nhận xét)
+  function finishMulti(c, a, wrong, total, msg) {
     const good = total - wrong.size;
-    emit("onAttempt", { key, activityId: aid(a), ok: wrong.size === 0, fraction: total ? good / total : 0, total, choice: [...wrong] });
     showDone(c, a, msg + (wrong.size ? ` (đúng ngay lần đầu ${good}/${total})` : ""));
   }
-  // Bài nhóm đã làm (chế độ lớp học) / GV đã công bố: hiện kết quả + đáp án, không cho làm lại
+  // Bản ghi kiểu cũ (trước v5) không có bài làm chi tiết: chỉ hiện kết quả + đáp án
   function showLocked(c, a, rec, answerHTML, deferred) {
     c.appendChild(el("div", "locked-answer", answerHTML));
     const fb = el("div", "feedback " + (rec && rec.ok ? "ok" : "no")), ex = `<div class="explain">${esc(a.explanation || "")}</div>`;
     if (!rec) fb.innerHTML = `⏳ Nhóm em chưa nộp bài này — tính là chưa hoàn thành.${ex}`;
-    else { const n = rec.total || 0, good = Math.round((rec.fraction || 0) * n); fb.innerHTML = `${rec.ok ? "✅" : "📝"} Nhóm em ${deferred ? "đã nộp" : "đã làm"} bài này${n ? ` — ${deferred ? "đúng" : "đúng ngay lần đầu"} ${good}/${n}` : ""}.${ex}`; }
+    else { const n = rec.total || 0, good = Math.round((rec.fraction || 0) * n); fb.innerHTML = `${rec.ok ? "✅" : "📝"} Nhóm em ${deferred ? "đã nộp" : "đã làm"} bài này${n ? ` — đúng ${good}/${n}` : ""}.${ex}`; }
     c.appendChild(fb); view.appendChild(c);
   }
 
-  // ---- LÀM HẾT RỒI NỘP (theo nhịp GV): không báo đúng/sai từng mục -----------
-  // ui = { init(rec) -> nháp, draw(box, nháp, bậtTắt, vẽLại, đổi), complete(nháp), score(nháp) -> {good,total,choice} }
-  function renderWholeDeferred(c, a, key, st, answerHTML, ui) {
+  // ---- MÁY HỌC SINH: LÀM HẾT RỒI NỘP (mọi chế độ), chấm theo KẾT QUẢ CUỐI -----------
+  //  free   : làm xong bấm "Nộp bài & xem kết quả" (chỉ tính lần nộp đầu) -> xem lại bài ngay.
+  //  open   : theo nhịp GV — bài làm đủ được TỰ LƯU sau mỗi lần sửa (không lo quên nộp lại).
+  //  locked : hết giờ, khóa.   revealed : GV công bố -> xem lại bài của nhóm (✓/✗ từng mục).
+  // ui = { init(choice)->nháp, draw(box,nháp,bậtTắt,vẽLại,đổi), complete(nháp),
+  //        score(nháp)->{good,total,choice}, valid(choice), review(nháp)->phần tử }
+  function renderWholeStudent(c, a, key, st, answerHTML, ui) {
     const rec = ask("getAttempt", key);
-    if (st === "revealed") return showLocked(c, a, rec, answerHTML, true);
+    if (st === "revealed" || (st === "free" && rec)) return showReview(c, a, rec, answerHTML, ui);
     if (!a._draft) a._draft = ui.init(rec && rec.choice);
-    const draft = a._draft, box = el("div"), enabled = st === "open";
-    let note = deferNote(st, !!rec, "whole");
-    const btn = el("button", "btn", rec ? "📤 Nộp lại" : "📤 Nộp bài");
-    const changed = () => { btn.disabled = !enabled || !ui.complete(draft); };
-    const redraw = () => { box.innerHTML = ""; ui.draw(box, draft, enabled, redraw, changed); changed(); };
-    btn.onclick = () => {
+    const draft = a._draft, box = el("div"), enabled = st === "open" || st === "free", follow = st !== "free";
+    let note = follow ? deferNote(st, !!rec, "whole") : el("div", "defer-note", "📝 Làm xong toàn bộ rồi bấm Nộp bài — chỉ tính lần nộp đầu tiên, nộp xong xem kết quả ngay.");
+    const setNote = (html, cls) => { const n2 = el("div", "defer-note " + (cls || st), html); note.replaceWith(n2); note = n2; };
+    const btn = el("button", "btn", follow ? (rec ? "📤 Nộp lại" : "📤 Nộp bài") : "✅ Nộp bài & xem kết quả");
+    let saveT = null, saved = !!rec;
+    const submit = (auto) => {
+      clearTimeout(saveT);
       const r = ui.score(draft);
       emit("onAttempt", { key, activityId: aid(a), ok: r.good === r.total, fraction: r.total ? r.good / r.total : 0, total: r.total, choice: r.choice });
-      const n2 = deferNote(st, true, "whole"); note.replaceWith(n2); note = n2; btn.textContent = "📤 Nộp lại"; sound("ok");
+      if (!follow) { if (r.good === r.total) celebrate(); sound(r.good === r.total ? "ok" : "no"); return render(); }
+      saved = true; btn.textContent = "📤 Nộp lại";
+      setNote(`✔ Đã ${auto ? "tự lưu" : "nộp"} lúc ${new Date().toLocaleTimeString("vi-VN")}. Có thể sửa đến khi thầy/cô kết thúc — mỗi lần sửa đều được tự lưu.`);
+      if (!auto) sound("ok");
     };
+    const refresh = () => { btn.disabled = !enabled || !ui.complete(draft); };
+    const userChanged = () => { // HS vừa thao tác
+      refresh(); if (!follow || !enabled) return;
+      clearTimeout(saveT);
+      if (ui.complete(draft)) saveT = setTimeout(() => submit(true), 700);
+      else if (saved) setNote("⚠️ Còn mục chưa làm — bài đã lưu là bản làm đủ gần nhất. Làm đủ sẽ tự lưu lại.", "locked");
+    };
+    const redraw = () => { box.innerHTML = ""; ui.draw(box, draft, enabled, () => { redraw(); userChanged(); }, userChanged); refresh(); };
+    btn.onclick = () => { if (!follow && !confirm("Nộp bài? Chỉ tính lần nộp đầu tiên.")) return; submit(false); };
     c.appendChild(box); redraw(); c.appendChild(note);
     if (enabled) c.appendChild(wrapEl(btn));
     view.appendChild(c);
   }
+  // Xem lại bài của nhóm: từng mục ✓/✗ (mục sai có ghi đáp án đúng) + nút xem cả đáp án
+  function showReview(c, a, rec, answerHTML, ui) {
+    const ex = a.explanation ? `<div class="explain">${esc(a.explanation)}</div>` : "";
+    if (!rec) {
+      const fb = el("div", "feedback no"); fb.innerHTML = `⏳ Nhóm em chưa nộp bài này — tính là chưa hoàn thành.${ex}`;
+      c.append(fb, el("p", "subtitle", "📖 Đáp án đúng:"), el("div", "locked-answer", answerHTML)); view.appendChild(c); return;
+    }
+    if (!ui.valid(rec.choice)) return showLocked(c, a, rec, answerHTML, true);
+    const d = ui.init(rec.choice), r = ui.score(d), all = r.good === r.total;
+    c.appendChild(el("p", "subtitle", "📋 Bài làm của nhóm em:"));
+    c.appendChild(ui.review(d));
+    const fb = el("div", "feedback " + (all ? "ok" : "no"));
+    fb.innerHTML = `${all ? "🎉 Chính xác hoàn toàn!" : "📝 Nhóm em làm đúng"} <b>${r.good}/${r.total}</b> mục.${ex}`;
+    c.appendChild(fb);
+    if (!all) c.appendChild(revealBox("📖 Xem toàn bộ đáp án đúng", () => el("div", "locked-answer", answerHTML)));
+    view.appendChild(c);
+  }
   const PAIR_COLORS = ["#7c3aed", "#0ea5e9", "#f97316", "#16a34a", "#e11d48", "#ca8a04", "#0891b2", "#9333ea"];
   const badge = (i) => `<span class="pair-badge" style="background:${PAIR_COLORS[i % PAIR_COLORS.length]}">${i + 1}</span>`;
+  const mark = (ok) => `<b class="rv-mark ${ok ? "ok" : "no"}">${ok ? "✓" : "✗"}</b>`;
   function matchingUI(a, pairs) {
     const rorder = a._rorder || (a._rorder = shuffle(pairs.slice()));
     const ui = {
       sel: null,
-      init: (ch) => { const d = {}; ((ch && ch.m) || []).forEach((r, l) => { if (r != null && r >= 0) d[l] = +r; }); return d; },
+      valid: (ch) => !!(ch && ch.m),
+      init: (ch) => { const d = {}; toArr(ch && ch.m).forEach((r, l) => { if (r != null && +r >= 0) d[l] = +r; }); return d; },
       complete: (d) => pairs.every((p) => d[p.i] != null),
       score: (d) => ({ good: pairs.filter((p) => d[p.i] === p.i).length, total: pairs.length, choice: { m: pairs.map((p) => (d[p.i] == null ? -1 : d[p.i])) } }),
+      review(d) {
+        const box = el("div", "rv-list");
+        pairs.forEach((p) => { const r = d[p.i], ok = r === p.i; box.appendChild(el("div", "rv-row " + (ok ? "ok" : "no"), `<span class="rv-l">${esc(p.left)}</span><span class="rv-arrow">⟶</span><span>${r != null && pairs[r] ? esc(pairs[r].right) : "<i>(chưa ghép)</i>"}${ok ? "" : `<small class="rv-fix">Đúng: ${esc(p.right)}</small>`}</span>${mark(ok)}`)); });
+        return box;
+      },
       draw(box, d, en, redraw) {
         box.appendChild(el("p", "subtitle", "Bấm 1 ô bên trái rồi bấm ô tương ứng bên phải (cùng số = một cặp). Bấm lại ô bên phải để bỏ ghép."));
         const grid = el("div", "two-col"), Lc = el("div"), Rc = el("div");
-        pairs.forEach((p) => { const has = d[p.i] != null; const ch = el("div", "chip" + (ui.sel === p.i ? " selected" : "") + (has ? " paired" : ""), (has ? badge(p.i) : "") + esc(p.left)); if (en) ch.onclick = () => { ui.sel = p.i; redraw(); }; Lc.appendChild(ch); });
+        pairs.forEach((p) => { const has = d[p.i] != null; const ch = el("div", "chip" + (ui.sel === p.i ? " selected" : "") + (has ? " paired" : ""), (has ? badge(p.i) : "") + esc(p.left)); if (en) ch.onclick = () => { ui.sel = p.i; box.innerHTML = ""; ui.draw(box, d, en, redraw); }; Lc.appendChild(ch); });
         rorder.forEach((p) => {
           const owner = Object.keys(d).find((k) => d[k] === p.i);
           const ch = el("div", "chip" + (owner != null ? " paired" : ""), (owner != null ? badge(+owner) : "") + esc(p.right));
@@ -530,19 +624,33 @@
   }
   function dragdropUI(a, all) {
     const porder = a._porder || (a._porder = shuffle(all.slice()));
+    const groups = a.groups || [];
     const ui = {
       sel: null,
-      init: (ch) => all.map((it) => { const g = ch && ch.g ? ch.g[it.i] : null; return g == null ? -1 : +g; }),
+      valid: (ch) => !!(ch && ch.g),
+      init: (ch) => { const g = toArr(ch && ch.g); return all.map((it) => (g[it.i] == null ? -1 : +g[it.i])); },
       complete: (d) => d.every((g) => g >= 0),
       score: (d) => ({ good: all.filter((it) => d[it.i] === it.group).length, total: all.length, choice: { g: d.slice() } }),
+      review(d) {
+        const zones = el("div", "two-col");
+        groups.forEach((g, gi) => {
+          const z = el("div", "dropzone", `<h3>${esc(g)}</h3>`);
+          porder.filter((it) => d[it.i] === gi).forEach((it) => { const ok = it.group === gi; z.appendChild(el("div", "chip " + (ok ? "rv-ok" : "rv-no"), `${ok ? "✓" : "✗"} ${esc(it.text)}${ok ? "" : `<small class="rv-fix">→ đúng: ${esc(groups[it.group] || "?")}</small>`}`)); });
+          zones.appendChild(z);
+        });
+        const miss = porder.filter((it) => !(d[it.i] >= 0));
+        if (!miss.length) return zones;
+        const w = el("div"); w.appendChild(el("div", "dropzone pool", `<h3>Chưa xếp</h3>${miss.map((it) => `<div class="chip rv-no">✗ ${esc(it.text)}<small class="rv-fix">→ đúng: ${esc(groups[it.group] || "?")}</small></div>`).join("")}`)); w.appendChild(zones); return w;
+      },
       draw(box, d, en, redraw) {
         box.appendChild(el("p", "subtitle", "Bấm chọn một thẻ rồi bấm vào nhóm. Bấm \"Thẻ chưa xếp\" để đưa thẻ về lại."));
-        const chip = (it) => { const ch = el("div", "chip" + (ui.sel === it.i ? " selected" : ""), esc(it.text)); if (en) ch.onclick = (e) => { e.stopPropagation(); ui.sel = it.i; redraw(); }; return ch; };
+        const again = () => { box.innerHTML = ""; ui.draw(box, d, en, redraw); };
+        const chip = (it) => { const ch = el("div", "chip" + (ui.sel === it.i ? " selected" : ""), esc(it.text)); if (en) ch.onclick = (e) => { e.stopPropagation(); ui.sel = it.i; again(); }; return ch; };
         const pool = el("div", "dropzone pool", "<h3>🗂️ Thẻ chưa xếp</h3>");
         porder.filter((it) => d[it.i] < 0).forEach((it) => pool.appendChild(chip(it)));
         if (en) pool.onclick = () => { if (ui.sel != null) { d[ui.sel] = -1; ui.sel = null; redraw(); } };
         const zones = el("div", "two-col");
-        (a.groups || []).forEach((g, gi) => {
+        groups.forEach((g, gi) => {
           const z = el("div", "dropzone", `<h3>${esc(g)}</h3>`);
           porder.filter((it) => d[it.i] === gi).forEach((it) => z.appendChild(chip(it)));
           if (en) z.onclick = () => { if (ui.sel != null) { d[ui.sel] = gi; ui.sel = null; redraw(); } };
@@ -556,9 +664,15 @@
   function orderingUI(a) {
     const steps = a.steps || [];
     return {
-      init: (ch) => (ch && ch.o && ch.o.length === steps.length ? ch.o.map(Number) : shuffle(steps.map((_, i) => i))),
+      valid: (ch) => !!(ch && toArr(ch.o).length === steps.length),
+      init: (ch) => { const o = toArr(ch && ch.o); return o.length === steps.length ? o.map(Number) : shuffle(steps.map((_, i) => i)); },
       complete: () => true,
       score: (d) => ({ good: d.filter((s, pos) => s === pos).length, total: steps.length, choice: { o: d.slice() } }),
+      review(d) {
+        const box = el("div", "rv-list");
+        d.forEach((s, pos) => { const ok = s === pos; box.appendChild(el("div", "rv-row " + (ok ? "ok" : "no"), `<span class="rv-n">${pos + 1}</span><span>${esc(steps[s])}${ok ? "" : `<small class="rv-fix">Bước này đúng ra ở vị trí ${s + 1}</small>`}</span>${mark(ok)}`)); });
+        return box;
+      },
       draw(box, d, en, redraw) {
         box.appendChild(el("p", "subtitle", "Dùng ▲▼ để sắp đúng thứ tự rồi bấm Nộp bài."));
         const list = el("ul", "order-list");
@@ -574,11 +688,17 @@
     };
   }
   function fillblankUI(a, parts) {
-    const n = parts.length - 1;
+    const n = parts.length - 1, good = (v, i) => (a.answers[i] || []).map(norm).includes(norm(v));
     return {
-      init: (ch) => Array.from({ length: n }, (_, i) => (ch && ch.v && ch.v[i]) || ""),
+      valid: (ch) => !!(ch && ch.v),
+      init: (ch) => { const v = toArr(ch && ch.v); return Array.from({ length: n }, (_, i) => v[i] || ""); },
       complete: (d) => d.every((v) => String(v).trim()),
-      score: (d) => ({ good: d.filter((v, i) => (a.answers[i] || []).map(norm).includes(norm(v))).length, total: n, choice: { v: d.slice() } }),
+      score: (d) => ({ good: d.filter(good).length, total: n, choice: { v: d.slice() } }),
+      review(d) {
+        const p = el("p", "prompt");
+        p.innerHTML = parts.map((seg, i) => esc(seg.replace(/\s+/g, " ")) + (i < n ? (good(d[i], i) ? `<b class="fill-ok"> ${esc(d[i])} ✓</b>` : `<b class="fill-bad"> ${esc(d[i] || "…")} </b><b class="fill-ans">${esc((a.answers[i] || [""])[0])}</b>`) : "")).join("");
+        return p;
+      },
       draw(box, d, en, redraw, changed) {
         const p = el("p", "prompt");
         parts.forEach((seg, i) => { p.appendChild(document.createTextNode(seg.replace(/\s+/g, " "))); if (i < n) { const inp = el("input"); inp.value = d[i]; inp.disabled = !en; inp.oninput = () => { d[i] = inp.value; changed(); }; p.appendChild(inp); } });
@@ -586,6 +706,8 @@
       },
     };
   }
+  // Firebase có thể trả mảng dưới dạng object {0:..,1:..}
+  function toArr(x) { if (Array.isArray(x)) return x; if (!x || typeof x !== "object") return []; const out = []; Object.keys(x).forEach((k) => { if (/^\d+$/.test(k)) out[+k] = x[k]; }); return out; }
 
   // ---- DRAG & DROP (phân loại) ------------------------------------------
   function renderDragDrop(a) {
@@ -593,29 +715,23 @@
     const key = aid(a) + ":main";
     const all = (a.items || []).map((it, i) => ({ ...it, i }));
     const answerHTML = `<div class="two-col">${(a.groups || []).map((g, gi) => `<div class="dropzone"><h3>${esc(g)}</h3>${all.filter(it => it.group === gi).map(it => `<div class="chip done">${esc(it.text)}</div>`).join("")}</div>`).join("")}</div>`;
-    const st = actStateOf(a);
-    if (st !== "free") return renderWholeDeferred(c, a, key, st, answerHTML, dragdropUI(a, all));
-    const done = ask("getAttempt", key);
-    if (done) return showLocked(c, a, done, answerHTML);
+    if (STUDENT) return renderWholeStudent(c, a, key, actStateOf(a), answerHTML, dragdropUI(a, all));
     c.appendChild(el("p", "subtitle", "Chọn một thẻ rồi bấm vào nhóm đúng."));
     const pool = el("div"); const zonesWrap = el("div", "two-col");
     const wrong = a._wrong || (a._wrong = new Set());
     let sel = null, placed = 0; const items = shuffle(all.slice());
-    (a.groups || []).forEach((g, gi) => { const z = el("div", "dropzone"); z.innerHTML = `<h3>${esc(g)}</h3>`; z.onclick = () => { if (!sel) return; const correct = +sel.dataset.g === gi; if (correct) { sel.classList.add("done"); z.appendChild(sel); sel.classList.remove("selected"); sel = null; placed++; celebrate(); if (placed === items.length) finishDD(c, a, key, wrong, items.length); } else { wrong.add(sel.dataset.i); z.classList.add("shake"); sound("no"); setTimeout(() => z.classList.remove("shake"), 400); } }; zonesWrap.appendChild(z); });
+    (a.groups || []).forEach((g, gi) => { const z = el("div", "dropzone"); z.innerHTML = `<h3>${esc(g)}</h3>`; z.onclick = () => { if (!sel) return; const correct = +sel.dataset.g === gi; if (correct) { sel.classList.add("done"); z.appendChild(sel); sel.classList.remove("selected"); sel = null; placed++; celebrate(); if (placed === items.length) finishDD(c, a, wrong, items.length); } else { wrong.add(sel.dataset.i); z.classList.add("shake"); sound("no"); setTimeout(() => z.classList.remove("shake"), 400); } }; zonesWrap.appendChild(z); });
     items.forEach((it) => { const ch = el("div", "chip", esc(it.text)); ch.dataset.g = it.group; ch.dataset.i = it.i; ch.onclick = () => { if (ch.classList.contains("done")) return; [...pool.children].forEach(x => x.classList.remove("selected")); ch.classList.add("selected"); sel = ch; }; pool.appendChild(ch); });
     c.append(pool, zonesWrap); view.appendChild(c);
   }
-  function finishDD(c, a, key, wrong, total) { state.score += S.basePoints; setScore(); finishMulti(c, a, key, wrong, total, "✓ Phân loại xong!"); }
+  function finishDD(c, a, wrong, total) { state.score += S.basePoints; setScore(); finishMulti(c, a, wrong, total, "✓ Phân loại xong!"); }
 
   // ---- ORDERING ----------------------------------------------------------
   function renderOrdering(a) {
     const c = el("div", "card"); activityHead(a, c);
     const key = aid(a) + ":main";
     const answerHTML = `<ol class="lead">${(a.steps || []).map(s => `<li>${esc(s)}</li>`).join("")}</ol>`;
-    const st = actStateOf(a);
-    if (st !== "free") return renderWholeDeferred(c, a, key, st, answerHTML, orderingUI(a));
-    const done = ask("getAttempt", key);
-    if (done) return showLocked(c, a, done, answerHTML);
+    if (STUDENT) return renderWholeStudent(c, a, key, actStateOf(a), answerHTML, orderingUI(a));
     c.appendChild(el("p", "subtitle", "Dùng ▲▼ để sắp đúng thứ tự rồi bấm Kiểm tra."));
     let order = (a.steps || []).map((s, i) => ({ s, i })); order = shuffle(order.slice());
     const list = el("ul", "order-list");
@@ -623,9 +739,7 @@
     draw(); c.appendChild(list);
     const btn = el("button", "btn", "Kiểm tra");
     btn.onclick = () => {
-      const good = order.filter((o, i) => o.i === i).length, ok = good === order.length;
-      // chỉ lần Kiểm tra ĐẦU TIÊN được tính điểm (tỉ lệ bước đúng vị trí); các lần sau để luyện tập
-      if (!a._checked) { a._checked = true; emit("onAttempt", { key, activityId: aid(a), ok, fraction: order.length ? good / order.length : 0, total: order.length, choice: order.map(o => o.i) }); }
+      const ok = order.every((o, i) => o.i === i);
       if (ok) { state.score += S.basePoints; setScore(); btn.disabled = true; celebrate(); } else c.classList.add("shake"), setTimeout(() => c.classList.remove("shake"), 500); const fb = el("div", "feedback " + (ok ? "ok" : "no")); fb.innerHTML = `${ok ? "🎉 Đúng thứ tự!" : "❌ Chưa đúng, thử lại nhé."}<div class="explain">${esc(a.explanation || "")}</div>`; c.appendChild(fb); sound(ok ? "ok" : "no");
     };
     c.appendChild(wrapEl(btn)); view.appendChild(c);
@@ -637,10 +751,7 @@
     const key = aid(a) + ":main";
     const parts = (a.text || "").split("{{}}");
     const answerHTML = `<p class="prompt">${parts.map((seg, i) => esc(seg.replace(/\s+/g, " ")) + (i < parts.length - 1 ? `<b class="fill-ans"> ${esc((a.answers[i] || [""])[0])} </b>` : "")).join("")}</p>`;
-    const st = actStateOf(a);
-    if (st !== "free") return renderWholeDeferred(c, a, key, st, answerHTML, fillblankUI(a, parts));
-    const done = ask("getAttempt", key);
-    if (done) return showLocked(c, a, done, answerHTML);
+    if (STUDENT) return renderWholeStudent(c, a, key, actStateOf(a), answerHTML, fillblankUI(a, parts));
     const p = el("p", "prompt");
     const inputs = [];
     parts.forEach((seg, i) => { p.appendChild(document.createTextNode(seg.replace(/\s+/g, " "))); if (i < parts.length - 1) { const inp = el("input"); inputs.push(inp); p.appendChild(inp); } });
@@ -649,12 +760,326 @@
     btn.onclick = () => {
       let good = 0; inputs.forEach((inp, i) => { const accepts = (a.answers[i] || []).map(norm); const g = accepts.includes(norm(inp.value)); inp.style.borderColor = g ? "var(--correct)" : "var(--wrong)"; if (g) good++; });
       const ok = good === inputs.length;
-      if (!a._checked) { a._checked = true; emit("onAttempt", { key, activityId: aid(a), ok, fraction: inputs.length ? good / inputs.length : 0, total: inputs.length, choice: inputs.map(i => i.value) }); }
       if (ok) { state.score += S.basePoints; setScore(); btn.disabled = true; celebrate(); } const fb = el("div", "feedback " + (ok ? "ok" : "no")); fb.innerHTML = `${ok ? "🎉 Chính xác!" : "❌ Chưa đúng."}<div class="explain">${esc(a.explanation || "")}</div>`; c.appendChild(fb); sound(ok ? "ok" : "no");
     };
     c.appendChild(wrapEl(btn)); view.appendChild(c);
   }
-  const norm = (s) => String(s || "").trim().toLowerCase();
+  const norm = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
+
+  // ---- CÂU HỎI BẢNG TÍNH MÔ PHỎNG (question.type = "sheet") ---------------------
+  //  mode "select" (mặc định): HS bấm ô / kéo chọn vùng / bấm tên cột, hàng -> lựa chọn = địa chỉ.
+  //  mode "type": vùng q.highlight được tô sẵn trên lưới, HS gõ địa chỉ của vùng đó.
+  //  answer: "B6" | "B4:E11" | "D" (cả cột) | "6" (cả hàng) | mảng nhiều đáp án chấp nhận.
+  function sheetParts(card, a, q) {
+    const typeMode = q.mode === "type";
+    const sh = mountSheet(q.sheet || a.sheet || {}, { select: !typeMode, highlight: typeMode ? q.highlight : null });
+    card.appendChild(sh.el);
+    let input = null;
+    if (typeMode) { const row = el("div", "xs-answer", "<label>✍️ Địa chỉ:</label>"); input = el("input"); input.placeholder = "VD: A1:C5"; input.autocomplete = "off"; input.spellcheck = false; row.appendChild(input); card.appendChild(row); }
+    const firstAns = Array.isArray(q.answer) ? q.answer[0] : q.answer;
+    return {
+      sh, input,
+      choice: () => (typeMode ? input.value.trim().toUpperCase() : sh.selection()),
+      set: (ch) => { if (ch == null) return; if (typeMode) input.value = ch; else sh.select(ch); },
+      result(ch) { // khóa lưới; tô lựa chọn (xanh đúng / đỏ sai) và vùng đáp án đúng
+        sh.lock(); if (input) input.disabled = true;
+        const ok = judgeLocal(q, ch);
+        if (!typeMode && ch) sh.mark(ch, ok ? "m-ok" : "m-no");
+        if (!ok && !typeMode) sh.mark(firstAns, "m-ans");
+        if (input) { input.classList.add(ok ? "ok" : "no"); if (!ok) input.insertAdjacentHTML("afterend", ` <b class="fill-ans">Đáp án: ${esc(normAddr(firstAns))}</b>`); }
+        return ok;
+      },
+    };
+  }
+  function sheetQuestionFree(card, a, q, answered) {
+    const P = sheetParts(card, a, q), typeMode = q.mode === "type";
+    const btn = el("button", "btn", "✅ Kiểm tra"); btn.disabled = true;
+    const upd = () => { const ch = P.choice(); btn.disabled = answered.done || !ch; btn.textContent = ch && !typeMode ? "✅ Kiểm tra: " + ch : "✅ Kiểm tra"; };
+    P.sh.onSelect(upd);
+    if (P.input) { P.input.oninput = upd; P.input.onkeydown = (e) => { if (e.key === "Enter" && !btn.disabled) btn.click(); }; }
+    btn.onclick = () => { if (answered.done) return; const ch = P.choice(); if (!ch) return; answered.done = true; btn.disabled = true; afterAnswer(P.result(ch), q, card, ch); };
+    card.appendChild(wrapEl(btn));
+    if (q.hint) card.appendChild(revealBox("💡 Gợi ý", () => el("div", "hint-box", "💡 " + esc(q.hint))));
+    card._answered = answered; card._q = q;
+    const done = ask("getAttempt", card._key);
+    if (done) { answered.done = true; btn.disabled = true; P.set(done.choice); answerFeedback(P.result(done.choice), q, card, true); }
+    else if (state.showAnswers) P.sh.mark(Array.isArray(q.answer) ? q.answer[0] : q.answer, "m-ans");
+  }
+  function sheetQuestionDeferred(card, a, qs, q, key, rec, st) {
+    const P = sheetParts(card, a, q);
+    if (st === "revealed") {
+      if (rec && rec.choice != null) { P.set(rec.choice); answerFeedback(P.result(rec.choice), q, card, true); }
+      else { P.result(null); const fb = el("div", "feedback no"); fb.innerHTML = `⏳ Nhóm em chưa trả lời câu này.<div class="explain">${esc(q.explanation || "")}</div>`; card.appendChild(fb); quizNav(card, a, qs); }
+      return;
+    }
+    if (rec) P.set(rec.choice);
+    let note = deferNote(st, !!rec, "sheet");
+    const send = (ch) => {
+      if (!ch) return;
+      const ok = judgeLocal(q, ch);
+      emit("onAttempt", { key, activityId: aid(a._parent || a), ok, fraction: ok ? 1 : 0, choice: ch });
+      const n2 = deferNote(st, true, "sheet"); note.replaceWith(n2); note = n2;
+      const pill = card.querySelector(".q-pill.cur"); if (pill) pill.classList.add("done");
+    };
+    if (st === "open") {
+      P.sh.onSelect(send); // mỗi lần chọn xong là ghi nhận (chọn lại được đến khi GV kết thúc)
+      if (P.input) { let t = null; P.input.oninput = () => { clearTimeout(t); t = setTimeout(() => send(P.choice()), 700); }; P.input.onchange = () => { clearTimeout(t); send(P.choice()); }; }
+    } else { P.sh.lock(); if (P.input) P.input.disabled = true; }
+    card.appendChild(note);
+    if (q.hint && st === "open") card.appendChild(revealBox("💡 Gợi ý", () => el("div", "hint-box", "💡 " + esc(q.hint))));
+    quizNav(card, a, qs);
+  }
+  // Bảng tính thử tự do (activity.sandbox): gõ dữ liệu, xem tự căn trái/phải, Delete để xóa
+  function sandboxBox(a) {
+    const spec = a.sandbox, box = el("div", "sandbox");
+    box.appendChild(el("p", "subtitle", spec.intro || "🧪 Thử ngay: chọn ô rồi gõ (hoặc nháy đúp) để nhập, Enter để kết thúc; chọn vùng rồi nhấn Delete để xóa."));
+    box.appendChild(mountSheet(spec, { editable: true, store: a._sandbox || (a._sandbox = {}) }).el);
+    return box;
+  }
+
+  // ---- BẢNG TÍNH MÔ PHỎNG (giao diện giống Excel) --------------------------------
+  // spec: { title, cols, rows, cells:{"B2":"Nội dung"}, widths:{B:3} (tỉ lệ), bold/italic/center/right/left:[địa chỉ…],
+  //         fill:{"A3:C3":"#fde047"}, color:{"A1":"#16a34a"}, size:{"A1":16} (cỡ chữ), sheets:["Sheet1","Sheet2"], editable }
+  // opts: { select, editable, highlight, store }  ->  { el, selection(), select(addr), lock(), mark(addr, cls), onSelect(fn) }
+  function cellType(v) {
+    const s = String(v == null ? "" : v).trim();
+    if (!s) return "";
+    if (/^[-+]?(\d{1,3}(,\d{3})+|\d+)(\.\d+)?%?$/.test(s)) return "num";
+    const m = s.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2}|\d{4}))?$/); // kiểu Anh–Mỹ: tháng/ngày/năm
+    if (m) { const mo = +m[1], d = +m[2], y = m[3] ? +m[3] : 2024, feb = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0) ? 29 : 28; if (mo >= 1 && mo <= 12 && d >= 1 && d <= [31, feb, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mo - 1]) return "date"; }
+    return "text";
+  }
+  function mountSheet(spec, opts) {
+    ensureEngineCSS(); spec = spec || {}; opts = opts || {};
+    const cols = Math.max(1, Math.min(26, spec.cols || 8)), rows = Math.max(1, Math.min(60, spec.rows || 12));
+    const editable = !!(opts.editable || spec.editable), selectable = editable || !!opts.select;
+    const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+    const data = opts.store || {};
+    if (!data.__init) { Object.entries(spec.cells || {}).forEach(([k, v]) => { if (v != null && v !== "") data[normAddr(k)] = String(v); }); Object.defineProperty(data, "__init", { value: true }); }
+    const style = {};
+    const each = (list, fn) => (Array.isArray(list) ? list : list ? [list] : []).forEach((ad) => { const R = addrRect(ad, cols, rows); if (!R) return; for (let r = R.r1; r <= Math.min(R.r2, rows); r++) for (let c = R.c1; c <= Math.min(R.c2, cols - 1); c++) fn(style[colName(c) + r] = style[colName(c) + r] || {}); });
+    each(spec.bold, (s) => { s.b = 1; }); each(spec.italic, (s) => { s.i = 1; });
+    each(spec.center, (s) => { s.al = "center"; }); each(spec.right, (s) => { s.al = "right"; }); each(spec.left, (s) => { s.al = "left"; });
+    Object.entries(spec.fill || {}).forEach(([ad, v]) => each(ad, (s) => { s.fill = v; }));
+    Object.entries(spec.color || {}).forEach(([ad, v]) => each(ad, (s) => { s.color = v; }));
+    Object.entries(spec.size || {}).forEach(([ad, v]) => each(ad, (s) => { s.size = v; }));
+    const W = []; let tw = 0.55; for (let c = 0; c < cols; c++) { W[c] = +((spec.widths || {})[colName(c)]) || 1; tw += W[c]; }
+    const root = el("div", "xsheet" + (editable ? " editable" : "") + (selectable ? " selectable" : ""));
+    let body = "";
+    for (let r = 1; r <= rows; r++) { body += `<tr><th data-row="${r}">${r}</th>`; for (let c = 0; c < cols; c++) body += `<td data-c="${c}" data-r="${r}"></td>`; body += "</tr>"; }
+    root.innerHTML = (spec.title ? `<div class="xs-title">📗 ${esc(spec.title)}</div>` : "")
+      + `<div class="xs-bar"><div class="xs-name" title="Hộp địa chỉ: địa chỉ ô hiện thời"></div><span class="xs-fx">fx</span><input class="xs-formula" title="Vùng nhập dữ liệu" ${editable ? "" : "readonly tabindex='-1'"}></div>`
+      + `<div class="xs-gridwrap"><table class="xs-grid"><colgroup><col style="width:${0.55 / tw * 100}%">${W.map((w) => `<col style="width:${w / tw * 100}%">`).join("")}</colgroup>`
+      + `<thead><tr><th class="xs-corner"></th>${W.map((_, c) => `<th data-col="${c}">${colName(c)}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>`
+      + `<div class="xs-foot"><div class="xs-tabs">${(spec.sheets || ["Sheet1"]).map((n, i) => `<span class="xs-tab${i ? "" : " on"}">${esc(n)}</span>`).join("")}</div>`
+      + (editable ? `<button type="button" class="xs-tool" data-tool="edit">✏️ Nhập vào ô</button><button type="button" class="xs-tool" data-tool="del">🧽 Xóa vùng chọn</button>` : "") + `</div><div class="xs-selinfo"></div>`;
+    const grid = root.querySelector(".xs-grid"), nameBox = root.querySelector(".xs-name"), fx = root.querySelector(".xs-formula"), info = root.querySelector(".xs-selinfo");
+    const tds = {}, hcol = [], hrow = [];
+    grid.querySelectorAll("td").forEach((t) => { tds[colName(+t.dataset.c) + t.dataset.r] = t; });
+    grid.querySelectorAll("th[data-col]").forEach((t) => { hcol[+t.dataset.col] = t; });
+    grid.querySelectorAll("th[data-row]").forEach((t) => { hrow[+t.dataset.row] = t; });
+    const td = (c, r) => tds[colName(c) + r];
+    function paintCell(c, r) {
+      const t = td(c, r); if (!t) return;
+      const ad = colName(c) + r, v = data[ad], s = style[ad] || {}, ty = cellType(v);
+      if (!(editing && editing.ad === ad)) t.textContent = v || "";
+      t.classList.toggle("num", !s.al && (ty === "num" || ty === "date"));
+      t.style.textAlign = s.al || ""; t.style.fontWeight = s.b ? "700" : ""; t.style.fontStyle = s.i ? "italic" : "";
+      t.style.backgroundColor = s.fill || ""; t.style.color = s.color || ""; t.style.fontSize = s.size ? (s.size / 11).toFixed(2) + "em" : "";
+      t.classList.toggle("clip", c < cols - 1 && !!data[colName(c + 1) + r]); // chữ tràn sang ô trống bên phải như Excel
+    }
+    const paintAll = () => { for (let r = 1; r <= rows; r++) for (let c = 0; c < cols; c++) paintCell(c, r); };
+    let sel = null, locked = false, drag = false, cb = null, editing = null;
+    const rectOf = (S) => (S.m === "cols" ? { c1: Math.min(S.a.c, S.f.c), c2: Math.max(S.a.c, S.f.c), r1: 1, r2: rows }
+      : S.m === "rows" ? { c1: 0, c2: cols - 1, r1: Math.min(S.a.r, S.f.r), r2: Math.max(S.a.r, S.f.r) }
+      : { c1: Math.min(S.a.c, S.f.c), c2: Math.max(S.a.c, S.f.c), r1: Math.min(S.a.r, S.f.r), r2: Math.max(S.a.r, S.f.r) });
+    const addrOf = (S) => { const R = rectOf(S); return S.m === "cols" ? colName(R.c1) + ":" + colName(R.c2) : S.m === "rows" ? R.r1 + ":" + R.r2 : normAddr(colName(R.c1) + R.r1 + ":" + colName(R.c2) + R.r2); };
+    const activeOf = (S) => (S.m === "cols" ? { c: S.a.c, r: 1 } : S.m === "rows" ? { c: 0, r: S.a.r } : S.a);
+    function paint() {
+      root.querySelectorAll(".sel,.act,.hsel").forEach((x) => x.classList.remove("sel", "act", "hsel"));
+      if (!sel) { nameBox.textContent = ""; if (document.activeElement !== fx) fx.value = ""; info.innerHTML = selectable ? "👆 Bấm vào một ô · kéo chuột để chọn vùng · bấm tên cột / tên hàng để chọn cả cột / hàng." : ""; return; }
+      const R = rectOf(sel), act = activeOf(sel), multi = R.c1 !== R.c2 || R.r1 !== R.r2, aAddr = colName(act.c) + act.r;
+      if (multi) for (let r = R.r1; r <= R.r2; r++) for (let c = R.c1; c <= R.c2; c++) td(c, r).classList.add("sel");
+      td(act.c, act.r).classList.add("act");
+      for (let c = R.c1; c <= R.c2; c++) hcol[c].classList.add("hsel");
+      for (let r = R.r1; r <= R.r2; r++) hrow[r].classList.add("hsel");
+      nameBox.textContent = aAddr;
+      if (document.activeElement !== fx) fx.value = data[aAddr] || "";
+      info.innerHTML = sel.m === "cols" ? `Đang chọn: <b>cột ${R.c1 === R.c2 ? colName(R.c1) : colName(R.c1) + " → " + colName(R.c2)}</b>`
+        : sel.m === "rows" ? `Đang chọn: <b>hàng ${R.r1 === R.r2 ? R.r1 : R.r1 + " → " + R.r2}</b>`
+        : multi ? `Vùng đang chọn: <b>${addrOf(sel)}</b> · ô hiện thời: <b>${aAddr}</b>` : `Ô đang chọn: <b>${aAddr}</b>`;
+    }
+    const hitCell = (x, y) => { const t = document.elementFromPoint(x, y); return t && grid.contains(t) ? t.closest("td,th") : null; };
+    grid.addEventListener("pointerdown", (e) => {
+      if (locked || !selectable || e.button > 0) return;
+      const t = e.target.closest("td,th"); if (!t || t.classList.contains("xs-corner")) return;
+      if (editing) { if (editing.td === t) return; commitEdit(); }
+      e.preventDefault();
+      const ext = e.shiftKey && sel;
+      if (t.dataset.col != null) { const c = +t.dataset.col; sel = ext && sel.m === "cols" ? { ...sel, f: { c, r: 1 } } : { a: { c, r: 1 }, f: { c, r: 1 }, m: "cols" }; }
+      else if (t.dataset.row != null) { const r = +t.dataset.row; sel = ext && sel.m === "rows" ? { ...sel, f: { c: 0, r } } : { a: { c: 0, r }, f: { c: 0, r }, m: "rows" }; }
+      else { const c = +t.dataset.c, r = +t.dataset.r; sel = ext && sel.m === "cells" ? { ...sel, f: { c, r } } : { a: { c, r }, f: { c, r }, m: "cells" }; }
+      drag = true; try { grid.setPointerCapture(e.pointerId); } catch (x) { /* bỏ qua */ }
+      paint();
+    });
+    grid.addEventListener("pointermove", (e) => {
+      if (!drag || !sel) return;
+      const t = hitCell(e.clientX, e.clientY); if (!t) return;
+      const c = t.dataset.col != null ? +t.dataset.col : t.dataset.c != null ? +t.dataset.c : null;
+      const r = t.dataset.row != null ? +t.dataset.row : t.dataset.r != null ? +t.dataset.r : null;
+      if (sel.m === "cols") { if (c != null && c !== sel.f.c) { sel.f = { c, r: 1 }; paint(); } }
+      else if (sel.m === "rows") { if (r != null && r !== sel.f.r) { sel.f = { c: 0, r }; paint(); } }
+      else if (t.dataset.c != null && (c !== sel.f.c || r !== sel.f.r)) { sel.f = { c, r }; paint(); }
+    });
+    const up = () => { if (!drag) return; drag = false; if (editable) focusFx(); if (cb && sel) cb(addrOf(sel)); };
+    grid.addEventListener("pointerup", up); grid.addEventListener("pointercancel", up);
+
+    // ---- nhập / sửa / xóa dữ liệu (bảng tính thử) ----
+    const setVal = (ad, v) => { v = String(v == null ? "" : v); if (v.trim() === "") delete data[ad]; else data[ad] = v; };
+    const repaintRow = (c, r) => { paintCell(c, r); if (c > 0) paintCell(c - 1, r); };
+    function move(dc, dr) { const a0 = activeOf(sel || { a: { c: 0, r: 1 }, m: "cells" }); const c = clamp(a0.c + dc, 0, cols - 1), r = clamp(a0.r + dr, 1, rows); sel = { a: { c, r }, f: { c, r }, m: "cells" }; paint(); }
+    function startEdit(initial) {
+      if (!editable || locked) return;
+      if (!sel) sel = { a: { c: 0, r: 1 }, f: { c: 0, r: 1 }, m: "cells" };
+      const act = activeOf(sel); sel = { a: act, f: act, m: "cells" }; paint();
+      const t = td(act.c, act.r), ad = colName(act.c) + act.r, inp = el("input", "xs-edit");
+      inp.value = initial != null ? initial : data[ad] || ""; t.appendChild(inp); inp.focus();
+      editing = { c: act.c, r: act.r, ad, td: t, input: inp };
+      inp.onkeydown = (e) => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); commitEdit(true); move(0, 1); focusFx(); } else if (e.key === "Escape") cancelEdit(); else if (e.key === "Tab") { e.preventDefault(); commitEdit(true); move(1, 0); focusFx(); } };
+      inp.oninput = () => { fx.value = inp.value; };
+      inp.onblur = () => { if (editing && editing.input === inp) commitEdit(true); };
+    }
+    function commitEdit(fromBlur) { if (!editing) return; const E = editing; editing = null; setVal(E.ad, E.input.value); E.input.remove(); repaintRow(E.c, E.r); paint(); if (!fromBlur) focusFx(); }
+    function cancelEdit() { if (!editing) return; const E = editing; editing = null; E.input.remove(); paintCell(E.c, E.r); paint(); focusFx(); }
+    function clearSel() { if (!sel || locked) return; const R = rectOf(sel); for (let r = R.r1; r <= R.r2; r++) for (let c = R.c1; c <= R.c2; c++) delete data[colName(c) + r]; paintAll(); paint(); }
+    // Chọn ô xong -> con trỏ nằm sẵn ở VÙNG NHẬP DỮ LIỆU (ô nhập thật: gõ được bằng bàn phím ảo
+    // điện thoại và bộ gõ tiếng Việt); gõ đến đâu ô hiện đến đó, Enter xuống ô dưới. Nháy đúp = sửa trong ô.
+    let fxDirty = false, fxOrig = "";
+    function focusFx() {
+      if (!editable || locked || !sel) return;
+      const act = activeOf(sel); fxOrig = data[colName(act.c) + act.r] || ""; fx.value = fxOrig; fxDirty = false;
+      try { fx.focus({ preventScroll: true }); fx.select(); } catch (x) { /* bỏ qua */ }
+    }
+    if (editable) {
+      root.tabIndex = 0;
+      root.addEventListener("keydown", (e) => { // khi khung bảng tính (không phải ô nhập) đang được chọn
+        if (locked || editing || e.target !== root) return;
+        const k = e.key;
+        if (k === "Delete" || k === "Backspace") { e.preventDefault(); e.stopPropagation(); clearSel(); return; }
+        if (k === "Enter" || k === "F2" || /^Arrow/.test(k)) { e.preventDefault(); e.stopPropagation(); if (!sel) move(0, 0); focusFx(); }
+      });
+      grid.addEventListener("dblclick", (e) => { if (e.target.closest("td")) startEdit(); });
+      fx.addEventListener("keydown", (e) => {
+        e.stopPropagation(); if (locked) return;
+        const k = e.key, arrows = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+        const multi = sel && (() => { const R = rectOf(sel); return R.c1 !== R.c2 || R.r1 !== R.r2; })();
+        if (k === "Enter" || k === "Tab") { e.preventDefault(); if (k === "Enter") move(0, e.shiftKey ? -1 : 1); else move(1, 0); focusFx(); return; }
+        if (k === "Escape") { e.preventDefault(); if (sel) { const act = activeOf(sel); setVal(colName(act.c) + act.r, fxOrig); repaintRow(act.c, act.r); } focusFx(); return; }
+        if ((k === "Delete" || k === "Backspace") && multi && !fxDirty) { e.preventDefault(); clearSel(); focusFx(); return; }
+        if (arrows[k] && (!fxDirty || k === "ArrowUp" || k === "ArrowDown")) {
+          e.preventDefault(); const [dc, dr] = arrows[k];
+          if (e.shiftKey && sel && sel.m === "cells") { sel.f = { c: clamp(sel.f.c + dc, 0, cols - 1), r: clamp(sel.f.r + dr, 1, rows) }; paint(); }
+          else { move(dc, dr); focusFx(); }
+        }
+      });
+      fx.addEventListener("focus", () => { if (!sel) { move(0, 0); focusFx(); } });
+      fx.addEventListener("input", () => { if (!sel || locked) return; fxDirty = true; const act = activeOf(sel); if (multi1()) { sel = { a: act, f: act, m: "cells" }; paint(); } setVal(colName(act.c) + act.r, fx.value); repaintRow(act.c, act.r); });
+      const multi1 = () => { const R = rectOf(sel); return R.c1 !== R.c2 || R.r1 !== R.r2; };
+      root.querySelector('[data-tool="edit"]').onclick = () => startEdit();
+      root.querySelector('[data-tool="del"]').onclick = () => { clearSel(); focusFx(); };
+      root.querySelectorAll(".xs-tab").forEach((tab) => { tab.ondblclick = () => { // nháy đúp tên trang tính để đổi tên
+        if (locked) return; tab.contentEditable = "true"; tab.focus(); document.getSelection().selectAllChildren(tab);
+        tab.onkeydown = (e) => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); tab.blur(); } };
+        tab.onblur = () => { tab.contentEditable = "false"; if (!tab.textContent.trim()) tab.textContent = "Sheet1"; };
+      }; });
+    }
+    paintAll(); paint();
+    const api = {
+      el: root,
+      selection: () => (sel ? addrOf(sel) : null),
+      select(ad) {
+        const R = addrRect(ad, cols, rows); if (!R) return;
+        sel = R.cols ? { a: { c: R.c1, r: 1 }, f: { c: R.c2, r: 1 }, m: "cols" } : R.rows ? { a: { c: 0, r: R.r1 }, f: { c: 0, r: R.r2 }, m: "rows" }
+          : { a: { c: clamp(R.c1, 0, cols - 1), r: clamp(R.r1, 1, rows) }, f: { c: clamp(R.c2, 0, cols - 1), r: clamp(R.r2, 1, rows) }, m: "cells" };
+        paint();
+      },
+      lock() { locked = true; drag = false; root.classList.add("locked"); },
+      mark(ad, cls) { const R = addrRect(ad, cols, rows); if (!R) return; for (let r = R.r1; r <= Math.min(R.r2, rows); r++) for (let c = R.c1; c <= Math.min(R.c2, cols - 1); c++) td(c, r).classList.add(cls); },
+      onSelect(fn) { cb = fn; },
+    };
+    if (opts.highlight) api.mark(opts.highlight, "m-hl");
+    return api;
+  }
+
+  // ---- CSS cho các thành phần của engine (tự chèn — bài cũ không cần sửa styles/app.css) ----
+  function ensureEngineCSS() {
+    if (document.getElementById("engineV5css")) return;
+    const st = document.createElement("style"); st.id = "engineV5css";
+    st.textContent = `
+.xsheet{--xs-line:#d5d9e0;--xs-head:#eef1f5;--xs-green:#217346;margin:14px 0;border:1px solid #c5cad3;border-radius:12px;overflow:hidden;background:#fff;color:#1f2937;font-family:Calibri,"Segoe UI",Arial,sans-serif;user-select:none;-webkit-user-select:none;max-width:100%;box-shadow:0 4px 14px rgba(20,33,61,.08)}
+.xsheet:focus{outline:3px solid #86efac;outline-offset:2px}
+.xs-title{background:var(--xs-green);color:#fff;padding:5px 14px;font-size:.9rem;font-weight:700}
+.xs-bar{display:flex;align-items:center;gap:8px;padding:7px 10px;background:#f8f9fb;border-bottom:1px solid #d9dde5}
+.xs-name{min-width:86px;min-height:1.9em;padding:3px 10px;border:1.5px solid #b9bfca;background:#fff;font-weight:800;font-size:1.15rem;border-radius:4px;color:#111}
+.xs-fx{color:#6b7280;font-style:italic;font-weight:700;font-family:Georgia,serif}
+.xs-formula{flex:1;min-width:0;font:inherit;font-size:1.1rem;padding:4px 10px;border:1.5px solid #b9bfca;border-radius:4px;background:#fff;color:#111}
+.xs-formula[readonly]{background:#fafafa}
+.xs-gridwrap{overflow:hidden;touch-action:none}
+.xs-grid{border-collapse:collapse;table-layout:fixed;width:100%;font-size:clamp(12px,1.55vw,19px)}
+.xs-grid th{background:var(--xs-head);color:#4b5563;font-weight:600;border:1px solid var(--xs-line);height:1.95em;font-size:.86em;padding:0;overflow:hidden}
+.xsheet.selectable .xs-grid th{cursor:pointer}
+.xsheet.selectable .xs-grid th[data-col]{cursor:s-resize}
+.xsheet.selectable .xs-grid th[data-row]{cursor:e-resize}
+.xs-grid th.hsel{background:#cfe6d7;color:#0f5132;box-shadow:inset 0 -3px 0 var(--xs-green)}
+.xs-grid th[data-row].hsel{box-shadow:inset -3px 0 0 var(--xs-green)}
+.xs-grid td{border:1px solid var(--xs-line);height:1.95em;padding:0 6px;white-space:nowrap;overflow:visible;position:relative;text-align:left;line-height:1.2}
+.xsheet.selectable .xs-grid td{cursor:cell}
+.xs-grid td.clip{overflow:hidden}
+.xs-grid td.num{text-align:right}
+.xs-grid td.sel{box-shadow:inset 0 0 0 9999px rgba(33,115,70,.16)}
+.xs-grid td.act{outline:3px solid var(--xs-green);outline-offset:-3px;z-index:1}
+.xs-grid td.m-hl{box-shadow:inset 0 0 0 9999px rgba(55,65,81,.30)}
+.xs-grid td.m-ans{box-shadow:inset 0 0 0 9999px rgba(22,163,74,.28)}
+.xs-grid td.m-ok{box-shadow:inset 0 0 0 9999px rgba(22,163,74,.34)}
+.xs-grid td.m-no{box-shadow:inset 0 0 0 9999px rgba(220,38,38,.25)}
+.xs-grid td.m-no.m-ans{box-shadow:inset 0 0 0 9999px rgba(202,138,4,.32)}
+.xsheet.locked .xs-grid td,.xsheet.locked .xs-grid th{cursor:default}
+.xs-edit{position:absolute;inset:0;width:100%;height:100%;border:none;outline:3px solid var(--xs-green);outline-offset:-3px;font:inherit;padding:0 6px;background:#fff;z-index:3;box-sizing:border-box}
+.xs-foot{display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:#f1f3f6;border-top:1px solid #d9dde5;padding:0 8px}
+.xs-tabs{display:flex;gap:2px;flex:1}
+.xs-tab{padding:5px 16px;font-size:.9rem;color:#555;border-bottom:3px solid transparent}
+.xs-tab.on{background:#fff;color:var(--xs-green);font-weight:700;border-bottom-color:var(--xs-green)}
+.xs-tab[contenteditable=true]{outline:2px solid var(--xs-green);user-select:text;-webkit-user-select:text}
+.xs-tool{border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:4px 10px;margin:4px 0;font-size:.9rem;font-weight:700;color:#334155}
+.xs-selinfo{padding:7px 12px;font-size:1rem;color:#334155;background:#fafbfc;border-top:1px solid #e5e7eb;min-height:1.6em}
+.xs-selinfo b{color:var(--xs-green)}
+.xs-answer{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0;font-size:1.3rem;font-weight:700}
+.xs-answer input{font:inherit;font-size:1.4rem;width:9em;padding:8px 14px;border:3px solid #cbd5e1;border-radius:12px;text-transform:uppercase;letter-spacing:1px}
+.xs-answer input.ok{border-color:var(--correct,#16a34a);background:#f0fdf4}
+.xs-answer input.no{border-color:var(--wrong,#dc2626);background:#fef2f2}
+.sandbox{background:#f6fbf7;border:2px dashed #86efac;border-radius:16px;padding:10px 16px;margin:14px 0}
+.sandbox .subtitle{margin:4px 0}
+.rv-list{margin:8px 0}
+.rv-row{display:flex;gap:12px;align-items:center;padding:10px 16px;border-radius:12px;margin:8px 0;font-size:1.2rem;background:#f8fafc;border:2px solid #e2e8f0}
+.rv-row.ok{border-color:#86efac;background:#f0fdf4}.rv-row.no{border-color:#fca5a5;background:#fef2f2}
+.rv-l{font-weight:700}.rv-arrow{color:#94a3b8}
+.rv-n{min-width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:#e2e8f0;font-weight:800}
+.rv-mark{margin-left:auto;font-size:1.4rem}.rv-mark.ok{color:var(--correct,#16a34a)}.rv-mark.no{color:var(--wrong,#dc2626)}
+.rv-fix{display:block;font-size:.85em;font-weight:600;color:var(--correct,#16a34a)}
+.chip.rv-ok{border-color:var(--correct,#16a34a);background:#f0fdf4}.chip.rv-no{border-color:var(--wrong,#dc2626);background:#fef2f2}
+.fill-ok{color:var(--correct,#16a34a)}.fill-bad{color:var(--wrong,#dc2626);text-decoration:line-through}
+.teacher-bar{right:auto;left:20px}
+.timer-panel{top:84px;bottom:auto;z-index:75;width:300px}
+.timer-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.timer-close{border:none;background:#eef2f7;color:#334155;border-radius:10px;width:34px;height:34px;font-size:1.05rem;font-weight:900;cursor:pointer}
+.timer-close:hover{background:#fee2e2;color:#b91c1c}
+.timer-mode{font-size:.85rem;background:#eef6ff;color:#1e3a8a;border-radius:10px;padding:6px 10px;line-height:1.35}
+.timer-panel button:disabled{opacity:.45;cursor:not-allowed}
+.timer-panel button.end{background:#16a34a;color:#fff;border-color:#16a34a;font-weight:800}
+.penguin-enemy{display:inline-block;transition:transform .3s}.penguin-enemy.howl{animation:shake .5s}
+@media (max-width:640px){.teacher-bar{left:8px}.timer-panel{top:70px;left:8px;right:8px;width:auto}.xs-name{min-width:64px;font-size:1rem}.xs-grid{font-size:12px}.rv-row{font-size:1rem}}`;
+    document.head.appendChild(st);
+  }
 
   // ---- FLASHCARD ---------------------------------------------------------
   function renderFlashcard(a) {
@@ -709,18 +1134,23 @@
     const qs = a.questions || []; a._home = a._home || 0;
     const pst = actStateOf(a);
     if (STUDENT) a._home = pst === "open" || pst === "locked" ? 0 : qs.filter((q, i) => { const r = ask("getAttempt", qKey(a, i)); return r && judgeLocal(q, r.choice); }).length;
+    // Nhân vật đổi được: pet (đang chờ), homeIcon (đã an toàn), enemy (kẻ đuổi theo), saveWord (câu chúc)
+    const pet = a.pet || "🐧", homeI = a.homeIcon || "🏠", word = a.saveWord || "chú cánh cụt về nhà";
     const c = el("div", "card penguin-card");
-    c.innerHTML = `<h1 class="title">🐧 ${esc(a.name)}</h1><p class="subtitle">${esc(a.intro || "Mỗi câu trả lời đúng giúp một chú cánh cụt về nhà!")}</p>`;
+    c.innerHTML = `<h1 class="title">${pet} ${esc(a.name)}</h1><p class="subtitle">${esc(a.intro || "Mỗi câu trả lời đúng giúp " + word + "!")}</p>`;
     const tb = taskBanner(a); if (tb) c.appendChild(tb);
-    const row = el("div", "penguin-row");
-    for (let i = 0; i < qs.length; i++) row.appendChild(el("span", "penguin" + (i < a._home ? " home" : ""), i < a._home ? "🏠" : "🐧"));
+    const row = el("div", "penguin-row"); let enemyEl = null;
+    if (a.enemy) { ensureEngineCSS(); enemyEl = el("span", "penguin-enemy", a.enemy); row.appendChild(enemyEl); }
+    const pets = [];
+    for (let i = 0; i < qs.length; i++) { const k = el("span", "penguin" + (i < a._home ? " home" : ""), i < a._home ? homeI : pet); pets.push(k); row.appendChild(k); }
     c.appendChild(row); view.appendChild(c);
     c._penguin = (ok) => {
       if (ok) a._home = Math.min(qs.length, a._home + 1);
-      [...row.children].forEach((k, i) => { const done = i < a._home; k.textContent = done ? "🏠" : "🐧"; k.classList.toggle("home", done); });
+      else if (enemyEl) { enemyEl.classList.remove("howl"); void enemyEl.offsetWidth; enemyEl.classList.add("howl"); }
+      pets.forEach((k, i) => { const done = i < a._home; k.textContent = done ? homeI : pet; k.classList.toggle("home", done); });
       if (a._qi >= qs.length - 1) {
         const done = el("div", "feedback ok");
-        done.innerHTML = `🎉 Đã giúp <b>${a._home}/${qs.length}</b> chú cánh cụt về nhà! ` + (a._home === qs.length ? "Cả đàn về nhà an toàn — xuất sắc!" : "Cùng ôn lại các câu chưa đúng nhé.");
+        done.innerHTML = `🎉 Đã giúp <b>${a._home}/${qs.length}</b> ${esc(word)}! ` + (a._home === qs.length ? esc(a.winText || "Tất cả đều an toàn — xuất sắc!") : "Cùng ôn lại các câu chưa đúng nhé.");
         c.appendChild(done); if (a._home === qs.length) celebrate();
       }
     };
@@ -858,6 +1288,19 @@
   }
   function chime() { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(ctx, f, i * 0.09, 0.20, "sine", 0.16)); setTimeout(() => ctx.close(), 900); } catch (e) {} }
   function buzz() { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); tone(ctx, 196, 0, 0.18, "triangle", 0.14); tone(ctx, 146.83, 0.14, 0.26, "triangle", 0.14); setTimeout(() => ctx.close(), 800); } catch (e) {} }
+  // Kèn chiến thắng + tiếng vỗ tay (tạo bằng Web Audio, không cần file)
+  function fanfare() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [[523.25, 0], [659.25, 0.14], [783.99, 0.28], [1046.5, 0.42]].forEach(([f, t]) => tone(ctx, f, t, 0.22, "triangle", 0.18));
+      [523.25, 659.25, 783.99, 1046.5].forEach((f) => tone(ctx, f, 0.62, 0.9, "triangle", 0.1));
+      const len = ctx.sampleRate * 2.2, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) { const t = i / ctx.sampleRate, clap = (Math.sin(t * 90) > 0.2 ? 1 : 0.25) * Math.random(); d[i] = (Math.random() * 2 - 1) * clap * Math.max(0, 1 - t / 2.2) * 0.35; }
+      const src = ctx.createBufferSource(), g = ctx.createGain(), bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 1800; bp.Q.value = 0.7;
+      src.buffer = buf; src.connect(bp); bp.connect(g); g.connect(ctx.destination); g.gain.value = 0.9; src.start(ctx.currentTime + 0.5);
+      setTimeout(() => ctx.close(), 3200);
+    } catch (e) { /* không có âm thanh */ }
+  }
   function sound(kind) { if (!S.sound) return; kind === "ok" ? chime() : buzz(); }
 
   // ---- TIMER -------------------------------------------------------------
@@ -867,6 +1310,7 @@
     const a = state.view === "activity" ? L.activities[state.idx] : null;
     timer.total = timer.remaining = (a && a.time) || S.defaultTime || 60;
     updateTimerUI(); $("#timerChip").hidden = true; $("#app").classList.remove("time-up");
+    lastShared = null; syncShared();
   }
   function updateTimerUI() { $("#timerBig").textContent = fmt(timer.remaining); $("#timerText").textContent = fmt(timer.remaining); }
   function startTimer() {
@@ -880,11 +1324,36 @@
   function stopTimer() { if (timer.tick) clearInterval(timer.tick); timer.tick = null; timer.running = false; }
   function timeUp() { $("#app").classList.add("time-up"); beep(660, 200); setTimeout(() => beep(520, 260), 240); const chip = $("#timerChip"); chip.classList.add("blink"); setTimeout(() => chip.classList.remove("blink"), 4000); }
   function addTime(d) { timer.remaining = Math.max(0, timer.remaining + d); timer.total = Math.max(timer.total, timer.remaining); updateTimerUI(); $("#app").classList.remove("time-up"); }
-  $("#btnTimer").onclick = () => { const p = $("#timerPanel"); p.hidden = !p.hidden; };
-  $("#timerStart").onclick = startTimer;
-  $("#timerPause").onclick = stopTimer;
-  $("#timerReset").onclick = () => { stopTimer(); timer.remaining = timer.total; updateTimerUI(); $("#timerChip").hidden = true; $("#app").classList.remove("time-up"); };
-  [...document.querySelectorAll("#timerPanel [data-d]")].forEach(b => b.onclick = () => addTime(+b.dataset.d));
+  // ĐỒNG HỒ CHUNG (v5): trang trình chiếu đang nối với tiết học -> hook timer (student.js) trả về đồng hồ
+  // của lớp; ⏱️ điều khiển đúng đồng hồ đó (cùng bảng 📊 và bảng GV). Mở file trực tiếp -> đồng hồ riêng như cũ.
+  const sharedT = () => { const t = HOOK.timer; if (!t || typeof t.state !== "function") return null; try { return t.state(); } catch (e) { return null; } };
+  const tAct = (action, sec) => Promise.resolve(HOOK.timer.act(action, sec)).catch((e) => alert("⚠️ " + (e.message || e)));
+  let lastShared = null;
+  function syncShared() {
+    const k = sharedT(), follow = !!(k && k.follow);
+    $("#timerMode").hidden = !k; $("#timerFollowRow").hidden = !(k && follow && k.hasItems);
+    if (!k) { if (lastShared) updateTimerUI(); lastShared = null; $("#timerHint").textContent = "Hết giờ sẽ báo hiệu; giáo viên chủ động bấm tiếp."; ["#timerStart", "#timerPause", "#timerReset"].forEach((s) => { $(s).disabled = false; }); return; }
+    stopTimer(); $("#timerChip").hidden = true; // chữ đồng hồ trên thanh tiêu đề do student.js vẽ (.lh-clock)
+    $("#timerMode").innerHTML = "🔗 <b>Đồng hồ chung của lớp</b> — hiện trên máy HS, bảng 📊 và bảng điều khiển.";
+    $("#timerHint").textContent = follow ? "Theo nhịp GV: hết giờ máy HS bị khóa; bấm 🏁 để công bố đúng/sai." : "HS tự làm: đồng hồ hiện trên máy HS, hết giờ chỉ báo (không khóa).";
+    const a = state.view === "activity" ? L.activities[state.idx] : null;
+    $("#timerBig").textContent = k.st === "revealed" ? "🏁" : (k.st === "locked" || k.over) ? "0:00" : fmt(Math.ceil(k.hasTimer ? k.left : (a && a.time) || S.defaultTime || 60));
+    $("#timerStart").disabled = k.running || k.st === "revealed" || k.st === "locked" || k.over;
+    $("#timerPause").disabled = !k.running;
+    $("#timerEnd").hidden = k.st === "revealed"; $("#timerReopen").hidden = k.st !== "revealed";
+    if (lastShared && lastShared.running && !k.running && (k.over || k.st === "locked")) timeUp();
+    lastShared = k;
+  }
+  if (HOOK.timer) setInterval(syncShared, 500);
+  const curTime = () => { const a = state.view === "activity" ? L.activities[state.idx] : null; return (a && a.time) || S.defaultTime || 60; };
+  $("#btnTimer").onclick = () => { const p = $("#timerPanel"); p.hidden = !p.hidden; if (!p.hidden) syncShared(); };
+  $("#timerClose").onclick = () => { $("#timerPanel").hidden = true; };
+  $("#timerStart").onclick = () => (sharedT() ? tAct("start", curTime()) : startTimer());
+  $("#timerPause").onclick = () => (sharedT() ? tAct("pause") : stopTimer());
+  $("#timerReset").onclick = () => { if (sharedT()) return tAct("reset", curTime()); stopTimer(); timer.remaining = timer.total; updateTimerUI(); $("#timerChip").hidden = true; $("#app").classList.remove("time-up"); };
+  $("#timerEnd").onclick = () => tAct("end");
+  $("#timerReopen").onclick = () => tAct("reopen", curTime());
+  [...document.querySelectorAll("#timerPanel [data-d]")].forEach(b => b.onclick = () => (sharedT() ? tAct("add", +b.dataset.d) : addTime(+b.dataset.d)));
 
   // ---- BÚT VẼ / BÚT DẠ QUANG / TẨY --------------------------------------
   // pen.mode: null | "pen" | "highlight" | "eraser". Điều khiển bằng icon trên
@@ -929,8 +1398,17 @@
   jump$.innerHTML = "<option>— Nhảy tới hoạt động —</option>" + L.activities.map((a, i) => `<option value="${i}">${i + 1}. ${esc(a.name)}</option>`).join("");
   jump$.onchange = () => { if (jump$.value !== "") jump(+jump$.value); };
   $("#tShowAns").onclick = () => { state.showAnswers = !state.showAnswers; render(); };
-  function clearActivity(a) { ["_qi", "_ci", "_chal", "_wrong", "_checked", "_home", "_draft", "_rorder", "_porder"].forEach((k) => delete a[k]); }
-  $("#tReset").onclick = () => { clearActivity(L.activities[state.idx]); render(); };
+  function clearActivity(a) { ["_qi", "_ci", "_chal", "_wrong", "_checked", "_home", "_draft", "_rorder", "_porder", "_sandbox"].forEach((k) => delete a[k]); }
+  // Làm lại hoạt động: đang nối tiết học -> xóa kết quả hoạt động này của CẢ LỚP (máy HS tự mở lại để làm)
+  $("#tReset").onclick = async () => {
+    const a = state.view === "activity" ? L.activities[state.idx] : null; if (!a) return;
+    if (ask("classMode")) {
+      if (!confirm(`Cho CẢ LỚP làm lại hoạt động “${a.name}”?
+Kết quả hoạt động này của tất cả các nhóm sẽ bị xóa; máy học sinh tự mở lại để làm.`)) return;
+      try { await HOOK.resetActivity(aid(a)); } catch (e) { alert("⚠️ " + (e.message || e)); return; }
+    }
+    clearActivity(a); render();
+  };
   $("#tResetScore").onclick = () => { state.score = 0; state.streak = 0; state.maxStreak = 0; setScore(); };
   function toggleTeacher() { if (STUDENT) return; state.teacher = !state.teacher; tbar.classList.toggle("show", state.teacher); }
 
@@ -940,6 +1418,8 @@
     rerender: () => render(),
     resetActivity(id) { L.activities.forEach((a) => { if (!id || aid(a) === id) clearActivity(a); }); render(); },
     current: () => (state.view === "home" ? -1 : state.idx),
+    celebrate, // pháo giấy (dùng cho màn cổ vũ / vinh danh của lớp học)
+    fanfare: () => { if (S.sound) fanfare(); }, // kèn chiến thắng + vỗ tay (theo nút 🔊)
   };
 
   // ---- controls & keyboard ----------------------------------------------
@@ -966,7 +1446,7 @@
         break;
       }
       case "Enter": { const b = view.querySelector(".card .btn:not(:disabled)"); if (b) b.click(); break; }
-      case "Escape": { const m = $(".magnify-overlay"); if (m) { m.remove(); e.stopPropagation(); } else if (!$("#lightbox").hidden) { $("#lightbox").hidden = true; } break; }
+      case "Escape": { const m = $(".magnify-overlay"); if (m) { m.remove(); e.stopPropagation(); } else if (!$("#lightbox").hidden) { $("#lightbox").hidden = true; } else if (!$("#timerPanel").hidden) { $("#timerPanel").hidden = true; } break; }
     }
   });
 

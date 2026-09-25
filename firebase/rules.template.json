@@ -1,7 +1,8 @@
 {
   "rules": {
     "teacher": { ".read": "__T__", ".write": "__T__" },
-    "public": { ".read": "auth != null", ".write": "__T__" },
+    "public": { ".read": "__T__", ".write": "__T__" },
+    "codes": { "$c": { ".read": "auth != null", ".write": "__T__" } },
     "sessions": {
       "$s": {
         ".read": "__T__",
@@ -32,7 +33,7 @@
             ".read": "auth != null && root.child('sessions/' + $s + '/groups/' + $g + '/uid').val() === auth.uid",
             "$a": {
               "$i": {
-                ".write": "auth != null && newData.exists() && root.child('sessions/' + $s + '/meta/status').val() === 'open' && root.child('sessions/' + $s + '/groups/' + $g + '/uid').val() === auth.uid && ((root.child('sessions/' + $s + '/live/follow').val() !== true && !data.exists()) || (root.child('sessions/' + $s + '/live/follow').val() === true && (!root.child('sessions/' + $s + '/live/acts/' + $a + '/state').exists() || root.child('sessions/' + $s + '/live/acts/' + $a + '/state').val() === 'open') && (!root.child('sessions/' + $s + '/live/acts/' + $a + '/endsAt').exists() || now < root.child('sessions/' + $s + '/live/acts/' + $a + '/endsAt').val() + 3000)))"
+                ".write": "auth != null && newData.exists() && root.child('sessions/' + $s + '/meta/status').val() === 'open' && root.child('sessions/' + $s + '/groups/' + $g + '/uid').val() === auth.uid && ((root.child('sessions/' + $s + '/live/follow').val() !== true && !data.exists()) || (root.child('sessions/' + $s + '/live/follow').val() === true && (!root.child('sessions/' + $s + '/live/acts/' + $a + '/state').exists() || root.child('sessions/' + $s + '/live/acts/' + $a + '/state').val() === 'open') && (!root.child('sessions/' + $s + '/live/acts/' + $a + '/endsAt').exists() || root.child('sessions/' + $s + '/live/acts/' + $a + '/free').val() === true || now < root.child('sessions/' + $s + '/live/acts/' + $a + '/endsAt').val() + 3000)))"
               }
             }
           }

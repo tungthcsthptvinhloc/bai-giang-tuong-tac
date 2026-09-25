@@ -136,6 +136,22 @@ const LESSON = {
       ],
     },
 
+    // (Bài về BẢNG TÍNH) Câu hỏi thao tác trên bảng tính mô phỏng — xem SKILL.md "engine v5"
+    {
+      id: "thao-tac-bang-tinh",
+      name: "Thực hành trên bảng tính mô phỏng",
+      type: "knowledge",
+      task: "Thực hiện trên bảng tính: bấm ô / kéo chọn vùng / chọn hàng, cột theo yêu cầu.",
+      time: 240,
+      sheet: { cols: 6, rows: 10, cells: { B2: "Tiêu đề", B4: "Tên", C4: "Điểm" }, bold: ["B2", "B4:C4"] },
+      sandbox: { cols: 4, rows: 6, intro: "🧪 Gõ thử dữ liệu, quan sát căn trái/phải." }, // tuỳ chọn
+      questions: [
+        { question: "Bấm vào ô ...", type: "sheet", answer: "C4", explanation: "Cột C, hàng 4 → C4.", level: "nhan-biet", activity: "thao-tac-bang-tinh" },
+        { question: "Kéo chọn vùng ...", type: "sheet", answer: "B4:C8", explanation: "...", level: "thong-hieu", activity: "thao-tac-bang-tinh" },
+        { question: "Vùng tô màu có địa chỉ là gì?", type: "sheet", mode: "type", highlight: "B4:C8", answer: "B4:C8", explanation: "...", level: "thong-hieu", activity: "thao-tac-bang-tinh" },
+      ],
+    },
+
     {
       id: "ghep-doi",
       name: "Trò chơi: Ghép đôi",

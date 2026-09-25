@@ -45,9 +45,34 @@
     DB.on("public/active", (id) => {
       if (id === activeId) return;
       activeId = id || null; sess = null; if (unsubSess) unsubSess(); unsubSess = null;
-      if (activeId) unsubSess = DB.on("sessions/" + activeId, (v) => { sess = v; ensureLesson(); schedule(); });
+      if (activeId) unsubSess = DB.on("sessions/" + activeId, (v) => { sess = v; ensureLesson(); ensureCode(); schedule(); });
       schedule();
     });
+  }
+  // ---- MÃ VÀO LỚP (4 chữ số): tự sinh khi bắt đầu tiết; HS mở web và nhập mã để vào ----
+  async function newCode(except) {
+    for (let i = 0; i < 40; i++) {
+      const c = String(1000 + Math.floor(Math.random() * 9000)); if (c === except) continue;
+      const v = await DB.get("codes/" + c).catch(() => null);
+      if (!v || !v.s) return c;
+      const st = await DB.get(`sessions/${v.s}/meta/status`).catch(() => null);
+      if (st !== "open") return c; // mã của tiết đã kết thúc -> dùng lại được
+    }
+    throw new Error("Không tạo được mã vào lớp — hãy thử lại.");
+  }
+  let assigning = false;
+  function ensureCode() { // tiết đang mở mà chưa có mã (tiết tạo từ bản cũ) -> cấp mã
+    if (assigning || !sess || !sess.meta || sess.meta.status !== "open" || sess.meta.code) return;
+    assigning = true; const id = activeId;
+    newCode().then((c) => DB.update("", { [`sessions/${id}/meta/code`]: c, [`teacher/sessions/${id}/code`]: c, [`codes/${c}`]: { s: id, at: DB.now() } })).catch((e) => toast(e.message)).finally(() => { assigning = false; });
+  }
+  const curCode = () => (hasSess() ? sess.meta.code || null : null);
+  // Các thay đổi để đóng tiết đang mở (kèm xóa mã vào lớp của tiết đó)
+  function closeActive(up) {
+    if (!activeId) return up;
+    up[`sessions/${activeId}/meta/status`] = "ended"; up[`teacher/sessions/${activeId}/status`] = "ended";
+    const oc = sess && sess.meta && sess.meta.code; if (oc) up[`codes/${oc}`] = null;
+    return up;
   }
   function ensureLesson() {
     const id = sess && sess.meta && sess.meta.lessonId;
@@ -59,12 +84,15 @@
 
   // ======================== CỘT TRÁI ========================
   function joinUrl() { return DB.mode === "lan" ? (((lanInfo && lanInfo.urls) || [])[0] || {}).url || location.origin + "/" : location.origin + "/"; }
+  const qrUrl = () => joinUrl() + (curCode() ? "?c=" + curCode() : ""); // quét QR là tự điền mã
   function renderSide() {
-    const u = joinUrl();
-    if ($("#joinUrl").dataset.u !== u) { $("#qr").innerHTML = QR.svg(u); $("#joinUrl").textContent = u.replace(/^https?:\/\//, "").replace(/\/$/, ""); $("#joinUrl").dataset.u = u; }
+    const u = joinUrl(), q = qrUrl(), code = curCode();
+    if ($("#joinUrl").dataset.u !== q) { $("#qr").innerHTML = QR.svg(q); $("#joinUrl").textContent = u.replace(/^https?:\/\//, "").replace(/\/$/, ""); $("#joinUrl").dataset.u = q; }
+    $("#joinCode").innerHTML = code ? `<small>Mã vào lớp</small><b>${esc(code)}</b>` : hasSess() ? `<small>Đang tạo mã…</small>` : `<small>Bắt đầu tiết học để có <b>mã vào lớp</b></small>`;
+    $("#joinCode").classList.toggle("on", !!code);
     const urls = (lanInfo && lanInfo.urls) || [];
     $("#otherUrls").innerHTML = DB.mode === "lan" ? (urls.length > 1 ? "Địa chỉ khác: " + urls.slice(1).map((x) => esc(x.url)).join(", ") : urls.length ? "" : "⚠️ Máy chưa kết nối mạng LAN/Wi-Fi") : "";
-    $("#sideHint").innerHTML = DB.mode === "lan" ? `Máy HS / điện thoại phải cùng mạng với máy này.${lanInfo && lanInfo.key ? `<br>Mã giáo viên: <b>${esc(lanInfo.key)}</b> (mở bảng này từ máy khác)` : ""}` : "Học sinh chỉ cần Internet. Mở trang chiếu bài bằng nút 📺 bên cạnh.";
+    $("#sideHint").innerHTML = (code ? `HS mở địa chỉ trên → nhập mã <b>${esc(code)}</b> (hoặc quét QR là tự điền). ` : "") + (DB.mode === "lan" ? `Máy HS / điện thoại phải cùng mạng với máy này.${lanInfo && lanInfo.key ? `<br>Mã giáo viên: <b>${esc(lanInfo.key)}</b> (mở bảng này từ máy khác)` : ""}` : "Học sinh chỉ cần Internet. Mở trang chiếu bài bằng nút 📺 bên cạnh.");
     const m = sess && sess.meta;
     $("#sessInfo").textContent = m ? `Lớp ${m.className} · ${m.lessonTitle}` : "Chưa bắt đầu tiết học";
     document.title = m ? `${m.className} · ${m.lessonTitle} — Bảng GV` : "Bảng điều khiển giáo viên";
@@ -113,17 +141,19 @@
         <label>Số máy tính <input type="number" id="cfgM" min="0" max="99" value="${c.machines}"></label>
         <label>Số điện thoại <input type="number" id="cfgP" min="0" max="99" value="${c.phones}"></label>
         <span class="hint">HS chọn đúng 1 máy khi vào lớp (Máy 01…${C.pad2(c.machines)}${c.phones ? `, Điện thoại 01…${C.pad2(c.phones)}` : ""}); mỗi máy chỉ 1 nhóm.</span></div>
-      <p class="hint">Mỗi câu chỉ tính <b>lần làm đầu tiên</b> khi HS tự làm; khi bật <b>👣 theo nhịp GV</b>, HS được đổi đáp án đến khi thầy/cô bấm <b>🏁 Kết thúc</b>.</p></div>`;
+      <p class="hint">Bấm ▶ Bắt đầu → hệ thống tự sinh <b>mã vào lớp 4 chữ số</b>; HS mở trang web và nhập mã. Khi HS tự làm, mỗi câu chỉ tính <b>lần nộp đầu tiên</b>; khi bật <b>👣 theo nhịp GV</b>, HS được sửa bài đến khi thầy/cô bấm <b>🏁 Kết thúc</b>.</p></div>`;
   }
   async function startSession(classId, lessonId) {
     const cls = (T.classes || {})[classId]; if (!cls) throw new Error("Chưa chọn lớp");
     const Ls = await C.loadLesson(lessonId), c = cfg(), now = DB.now(), d = new Date(now);
     const id = `${d.getFullYear()}${C.pad2(d.getMonth() + 1)}${C.pad2(d.getDate())}-${C.pad2(d.getHours())}${C.pad2(d.getMinutes())}-${C.rid(4)}`;
-    const meta = { lessonId, lessonTitle: (Ls.meta && Ls.meta.title) || lessonId, classId, className: cls.name, createdAt: now, status: "open" };
+    const code = await newCode(curCode());
+    const meta = { lessonId, lessonTitle: (Ls.meta && Ls.meta.title) || lessonId, classId, className: cls.name, createdAt: now, status: "open", code };
     const roster = {}; C.sortedEntries(cls.students).forEach(([sid, x], i) => { roster[sid] = { name: x.name, order: i + 1 }; });
-    const up = { [`sessions/${id}`]: { meta, roster, machines: C.machineList(c.machines, c.phones), live: { follow: false, paused: false, showModel: false, showScore: true, teacherIdx: -1 } }, [`teacher/sessions/${id}`]: meta, "public/active": id };
-    if (activeId) { up[`sessions/${activeId}/meta/status`] = "ended"; up[`teacher/sessions/${activeId}/status`] = "ended"; }
+    const up = closeActive({});
+    Object.assign(up, { [`sessions/${id}`]: { meta, roster, machines: C.machineList(c.machines, c.phones), live: { follow: false, paused: false, showModel: false, showScore: true, teacherIdx: -1 } }, [`teacher/sessions/${id}`]: meta, "public/active": id, [`codes/${code}`]: { s: id, at: now } });
     await DB.update("", up);
+    return code;
   }
 
   // ---- thanh điều khiển tiết đang diễn ra ----
@@ -133,16 +163,19 @@
     const scores = groups.map((g) => C.scoreGroup(sess, g, info).score), avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
     const acts = L ? L.activities : [], ti = typeof live.teacherIdx === "number" ? live.teacherIdx : -1, cur = acts[ti], aid = cur ? cur.id || "a" + ti : null;
     const hasItems = aid && info.items.some((it) => it.aid === aid);
-    let actRow = "";
-    if (live.follow) {
-      const k = aid ? C.actClock(live, aid, DB.now()) : null;
-      actRow = `<div class="follow-row">👣 HS đang ở: <select id="selIdx"><option value="-1">🏠 Trang đầu</option>${acts.map((a, i) => `<option value="${i}" ${i === ti ? "selected" : ""}>${i + 1}. ${esc(a.name)}</option>`).join("")}</select>
-        <button class="btn small ghost" id="idxPrev">◀</button><button class="btn small" id="idxNext">Tiếp ▶</button>
-        ${hasItems ? `<span class="actctl"><span class="clock ${k.st}" id="actClock">${clockText(k, cur)}</span>
-          ${k.st === "revealed" ? `<button class="btn small ghost" data-act="reopen">↺ Mở lại</button>` : `${k.running ? `<button class="btn small ghost" data-act="pause">⏸ Dừng giờ</button>` : k.st === "open" ? `<button class="btn small" data-act="start">▶ Bấm giờ</button>` : ""}
-          ${k.st === "open" ? `<button class="btn small ghost" data-act="add" data-sec="-30">−30s</button><button class="btn small ghost" data-act="add" data-sec="30">+30s</button>` : ""}
-          <button class="btn small ok" data-act="end">🏁 Kết thúc & công bố</button>`}</span>` : `<span class="hint">Hoạt động này không có bài chấm.</span>`}</div>`;
-    }
+    // MỘT đồng hồ chung (cùng ⏱️ trên bài giảng và bảng 📊): HS tự làm -> chỉ báo giờ; theo nhịp -> hết giờ khóa, 🏁 công bố
+    const k = aid ? C.actClock(live, aid, DB.now()) : null, kst = k ? (k.over ? "locked" : k.st) : "";
+    const navHtml = live.follow
+      ? `👣 HS đang ở: <select id="selIdx"><option value="-1">🏠 Trang đầu</option>${acts.map((a, i) => `<option value="${i}" ${i === ti ? "selected" : ""}>${i + 1}. ${esc(a.name)}</option>`).join("")}</select>
+        <button class="btn small ghost" id="idxPrev">◀</button><button class="btn small" id="idxNext">Tiếp ▶</button>`
+      : `📍 Đang chiếu: <b>${cur ? esc(cur.name) : "Trang đầu"}</b>`;
+    const tctl = !k ? "" : `<span class="actctl"><span class="clock ${kst}" id="actClock">${clockText(k, cur)}</span>
+      ${k.st === "revealed" ? `<button class="btn small ghost" data-act="reopen">↺ Mở lại</button>` : `${k.running ? `<button class="btn small ghost" data-act="pause">⏸ Dừng giờ</button>` : kst !== "locked" ? `<button class="btn small" data-act="start">▶ Bấm giờ</button>` : ""}
+      ${kst !== "locked" ? `<button class="btn small ghost" data-act="add" data-sec="-30">−30s</button><button class="btn small ghost" data-act="add" data-sec="30">+30s</button>` : ""}
+      <button class="btn small ghost" data-act="reset" title="Đặt lại đồng hồ về thời gian mặc định">↺</button>
+      ${live.follow && hasItems ? `<button class="btn small ok" data-act="end">🏁 Kết thúc & công bố</button>` : ""}`}
+      ${hasItems ? `<button class="btn small ghost" id="btnRedoAll" title="Xóa kết quả hoạt động này của tất cả nhóm để cả lớp làm lại">🔄 Cả lớp làm lại</button>` : ""}</span>`;
+    const actRow = `<div class="follow-row">${navHtml}${tctl}${!live.follow && k ? `<span class="hint">HS tự làm: đồng hồ hiện trên máy HS, hết giờ chỉ báo (không khóa).</span>` : ""}</div>`;
     return `<div class="card">
       <div class="ctrl">
         <a class="btn" href="/lessons/${encodeURIComponent(sess.meta.lessonId)}/?gv=1" target="_blank">📺 Mở bài giảng để trình chiếu</a>
@@ -158,17 +191,21 @@
       <div class="stats"><span>💻 <b>${groups.length}</b> nhóm</span><span>🧑‍🎓 <b>${joined}/${Object.keys(sess.roster || {}).length}</b> HS đã vào</span>
         <span>🟢 <b>${online}</b> nhóm đang kết nối</span><span>📝 <b>${info.items.filter((it) => !(live.excluded || {})[it.aid]).length}</b> bài tính điểm</span><span>📈 Điểm TB: <b>${fmt1(avg)}</b></span></div></div>`;
   }
-  const clockText = (k, a) => (k.st === "revealed" ? "🏁 Đã công bố" : k.st === "locked" ? "⏰ Hết giờ" : k.running ? "⏱ " + C.fmtClock(k.left) : "⏱ " + C.fmtClock(k.left || (a && a.time) || 60) + " (chưa bấm)");
+  const clockText = (k, a) => (k.st === "revealed" ? "🏁 Đã công bố" : k.st === "locked" || k.over ? "⏰ Hết giờ" : k.running ? "⏱ " + C.fmtClock(k.left) : "⏱ " + C.fmtClock(k.left || (a && a.time) || 60) + " (chưa bấm)");
   function bindHead() {
     if (!hasSess()) {
-      const b = $("#btnStart"); if (b) b.onclick = () => { const classId = $("#selClass").value, lessonId = $("#selLesson").value; LS.set("lh_last", { classId, lessonId }); act(startSession(classId, lessonId), "Đã bắt đầu tiết học — học sinh có thể vào lớp!").then(() => { tab = "groups"; LS.set("lh_tab", tab); }); };
+      const b = $("#btnStart"); if (b) b.onclick = () => { const classId = $("#selClass").value, lessonId = $("#selLesson").value; LS.set("lh_last", { classId, lessonId }); startSession(classId, lessonId).then((code) => { toast("Đã bắt đầu tiết học — mã vào lớp: " + code); tab = "groups"; LS.set("lh_tab", tab); showQR(code); }).catch((e) => alert("⚠️ " + (e.message || e))); };
       const saveCfg = () => act(DB.set("teacher/config", { machines: Math.max(0, Math.min(99, +$("#cfgM").value || 0)), phones: Math.max(0, Math.min(99, +$("#cfgP").value || 0)) }), "Đã lưu số máy của phòng.");
       ["#cfgM", "#cfgP"].forEach((s) => { const x = $(s); if (x) x.onchange = saveCfg; });
       return;
     }
     const live = sess.live || {};
-    document.querySelectorAll("[data-set]").forEach((b) => { b.onclick = () => { const k = b.dataset.set, v = k === "showScore" ? live.showScore === false : !live[k]; act(DB.set(S("live/" + k), v)); }; });
-    $("#btnEnd").onclick = () => { if (confirm("Kết thúc tiết học?\nMáy HS sẽ báo kết thúc. Kết quả vẫn lưu trong 🕘 Lịch sử để xuất Excel.")) act(DB.update("", { [S("meta/status")]: "ended", [`teacher/sessions/${activeId}/status`]: "ended", "public/active": null }), "Đã kết thúc tiết học."); };
+    document.querySelectorAll("[data-set]").forEach((b) => { b.onclick = () => {
+      const k = b.dataset.set, v = k === "showScore" ? live.showScore === false : !live[k];
+      if (k === "follow" && v) return act(DB.update(S("live"), Object.assign({ follow: true }, C.followFixups(live, DB.now())))); // đồng hồ đang chạy lúc tự làm -> thành đồng hồ theo nhịp
+      act(DB.set(S("live/" + k), v));
+    }; });
+    $("#btnEnd").onclick = () => { if (confirm("Kết thúc tiết học?\nMáy HS sẽ báo kết thúc. Kết quả vẫn lưu trong 🕘 Lịch sử để xuất Excel.")) act(DB.update("", closeActive({ "public/active": null })), "Đã kết thúc tiết học."); };
     $("#btnBoard").onclick = showBoard;
     $("#btnExport").onclick = () => exportSession(sess);
     const sel = $("#selIdx");
@@ -176,15 +213,23 @@
       const n = L ? L.activities.length : 0, ti = typeof live.teacherIdx === "number" ? live.teacherIdx : -1;
       const go = (i) => act(DB.set(S("live/teacherIdx"), Math.max(-1, Math.min(n - 1, i))));
       sel.onchange = () => go(+sel.value); $("#idxPrev").onclick = () => go(ti - 1); $("#idxNext").onclick = () => go(ti + 1);
-      document.querySelectorAll("[data-act]").forEach((b) => { b.onclick = () => { const a = L.activities[ti]; act(C.actControl(DB, activeId, live, a.id || "a" + ti, b.dataset.act, b.dataset.act === "add" ? +b.dataset.sec : a.time || 60)); }; });
     }
+    const ti = typeof live.teacherIdx === "number" ? live.teacherIdx : -1, curA = L && L.activities[ti], curAid = curA && (curA.id || "a" + ti);
+    document.querySelectorAll("#headBox [data-act]").forEach((b) => { b.onclick = () => { if (curA) act(C.actControl(DB, activeId, live, curAid, b.dataset.act, b.dataset.act === "add" ? +b.dataset.sec : curA.time || 60)); }; });
+    const redo = $("#btnRedoAll");
+    if (redo) redo.onclick = () => {
+      if (!curA || !confirm(`Cho CẢ LỚP làm lại “${curA.name}”?
+Kết quả hoạt động này của tất cả các nhóm sẽ bị xóa; máy HS tự mở lại để làm.`)) return;
+      const up = { [`live/acts/${curAid}`]: null }; Object.keys(sess.groups || {}).forEach((g) => { up[`answers/${g}/${curAid}`] = null; });
+      act(DB.update(S(""), up), "Đã cho cả lớp làm lại hoạt động này.");
+    };
   }
   // đồng hồ hoạt động trên bảng GV
   setInterval(() => {
     const c = $("#actClock"); if (!c || !hasSess() || !L) return;
     const live = sess.live || {}, ti = live.teacherIdx, a = L.activities[ti]; if (!a) return;
     const k = C.actClock(live, a.id || "a" + ti, DB.now());
-    if (!c.classList.contains(k.st)) return schedule();
+    if (!c.classList.contains(k.over ? "locked" : k.st)) return schedule();
     c.textContent = clockText(k, a);
   }, 500);
   const isOnline = (gid) => { const n = ((sess.groups || {})[gid] || {}).nav; return !!n && DB.now() - (n.at || 0) < 50000; };
@@ -192,7 +237,7 @@
   // ======================== TAB: NHÓM ========================
   function tabGroups(body) {
     const gs = Object.entries(sess.groups || {}).map(([id, g]) => ({ id, ...g, nm: C.groupName(sess, id), ord: ((sess.machines || {})[g.machine] || {}).order || 0, sc: C.scoreGroup(sess, id, info), online: isOnline(id) }));
-    if (!gs.length) { body.innerHTML = `<div class="card empty"><div class="big">📱</div><p>Chưa có nhóm nào vào lớp.<br>Học sinh mở <b>${esc(joinUrl())}</b> hoặc quét mã QR bên trái.</p></div>`; return; }
+    if (!gs.length) { body.innerHTML = `<div class="card empty"><div class="big">📱</div><p>Chưa có nhóm nào vào lớp.<br>Học sinh mở <b>${esc(joinUrl())}</b> rồi nhập mã <b class="bigcode">${esc(curCode() || "…")}</b><br>hoặc quét mã QR bên trái.</p></div>`; return; }
     if (sortBy === "score") gs.sort((a, b) => b.sc.score - a.sc.score); else if (sortBy === "name") gs.sort((a, b) => a.ord - b.ord); else gs.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
     const acts = L ? L.activities.map((a, i) => ({ id: a.id || "a" + i, name: a.name, i })).filter((a) => info.items.some((it) => it.aid === a.id)) : [];
     body.innerHTML = `<div class="toolbar"><span class="muted">Sắp xếp:</span><select id="sortSel"><option value="join">Thứ tự vào lớp</option><option value="name">Số máy</option><option value="score">Điểm cao → thấp</option></select>
@@ -229,7 +274,8 @@
       const recs = gs.map((g) => ({ g, r: C.answerOf(sess, g.id, it) })), done = recs.filter((x) => x.r);
       const avg = done.length ? done.reduce((t, x) => t + C.judge(it, x.r).fraction, 0) / done.length : 0, cls = !done.length ? "" : avg >= 0.8 ? "good" : avg >= 0.5 ? "mid" : "low";
       let det = "";
-      if (it.q && it.q.type !== "true-false") { const q = it.q; det = (q.options || []).map((o, k) => optRow(KEYS[k], o, done.filter((x) => { const c = x.r.choice; return Array.isArray(c) ? c.map(Number).includes(k) : c === k; }).length, gs.length, q.type === "multiple-select" ? (q.answer || []).includes(k) : q.answer === k)).join(""); }
+      if (it.q && it.q.type === "sheet") det = C.choiceDist(done.map((x) => x.r.choice), it.q.answer, 5).map((d) => optRow("📍", d.label, d.n, gs.length, d.right)).join("");
+      else if (it.q && it.q.type !== "true-false") { const q = it.q; det = (q.options || []).map((o, k) => optRow(KEYS[k], o, done.filter((x) => { const c = x.r.choice; return Array.isArray(c) ? c.map(Number).includes(k) : c === k; }).length, gs.length, q.type === "multiple-select" ? (q.answer || []).includes(k) : q.answer === k)).join(""); }
       else if (it.q) det = [["Đúng", true], ["Sai", false]].map(([lb, v], k) => optRow(KEYS[k], lb, done.filter((x) => x.r.choice === v).length, gs.length, it.q.answer === v)).join("");
       else { const full = done.filter((x) => C.judge(it, x.r).ok).length; det = optRow("✓", "Đúng hết", full, gs.length, true) + optRow("~", "Có mục sai (tính theo tỉ lệ)", done.length - full, gs.length, false); }
       det += optRow("–", "Chưa làm", gs.length - done.length, gs.length, false, "none");
@@ -279,8 +325,9 @@
     const acts = L ? L.activities.map((a, i) => ({ id: a.id || "a" + i, name: a.name, i, n: info.items.filter((it) => it.aid === (a.id || "a" + i)).length })).filter((a) => a.n) : [];
     body.innerHTML = `<div class="card"><h3>Cách tính điểm (thang 10, chung cả nhóm)</h3>
       <ul><li>Mỗi câu trắc nghiệm / bài ghép đôi / phân loại / sắp xếp / điền khuyết = <b>1 bài</b>. Trắc nghiệm được chấm lại theo đáp án (không tin máy HS).</li>
-      <li><b>HS tự làm:</b> chỉ tính lần đầu; ghép đôi/phân loại tính tỉ lệ mục đúng ngay lần đầu.</li>
-      <li><b>Theo nhịp GV:</b> tính đáp án cuối cùng lúc GV bấm Kết thúc / hết giờ; bài kéo thả tính tỉ lệ đúng khi nộp; không nộp = chưa làm.</li></ul>
+      <li>Ghép đôi / phân loại / sắp xếp / điền khuyết: HS làm hết rồi nộp; điểm = <b>tỉ lệ mục đúng của bài nộp</b> (chấm lại trên máy GV theo bài làm).</li>
+      <li><b>HS tự làm:</b> chỉ tính lần nộp / lần trả lời đầu tiên; nộp xong HS xem ngay bài của mình đúng/sai từng mục.</li>
+      <li><b>Theo nhịp GV:</b> tính bài làm cuối cùng lúc GV bấm Kết thúc / hết giờ (bài kéo thả làm đủ được tự lưu mỗi lần sửa); không làm = chưa làm.</li></ul>
       <p><b>Điểm = (tổng điểm các bài ÷ số bài được tính) × 10 + điểm thưởng</b>, tối đa 10.</p></div>
       <div class="card"><h3>Hoạt động được tính điểm</h3><p class="hint">Bỏ chọn phần chưa dạy tới để không bị tính 0 điểm.</p>
       ${acts.map((a) => `<label class="chk"><input type="checkbox" data-inc="${esc(a.id)}" ${ex[a.id] ? "" : "checked"}> ${a.i + 1}. ${esc(a.name)} <span class="muted">(${a.n} bài)</span></label>`).join("")}
@@ -368,10 +415,9 @@
       <td class="nowrap"><button class="btn small ghost" data-xl="${esc(x.id)}">⬇️ Excel</button> ${x.id === activeId ? `<span class="pill good">đang diễn ra</span>` : `<button class="btn small ghost" data-resume="${esc(x.id)}">▶ Mở lại</button>`}</td></tr>`).join("")}</tbody></table>`;
     body.querySelectorAll("[data-xl]").forEach((b) => { b.onclick = () => act(DB.get("sessions/" + b.dataset.xl).then((s) => { if (!s) throw new Error("Không còn dữ liệu tiết này"); return exportSession(s); })); });
     body.querySelectorAll("[data-resume]").forEach((b) => { b.onclick = () => {
-      if (!confirm("Mở lại tiết này? (Tiết đang diễn ra — nếu có — sẽ kết thúc; HS vào lại bằng máy/tên cũ.)")) return;
-      const id = b.dataset.resume, up = { [`sessions/${id}/meta/status`]: "open", [`teacher/sessions/${id}/status`]: "open", "public/active": id };
-      if (activeId) { up[`sessions/${activeId}/meta/status`] = "ended"; up[`teacher/sessions/${activeId}/status`] = "ended"; }
-      act(DB.update("", up), "Đã mở lại tiết học.").then(() => { tab = "groups"; });
+      if (!confirm("Mở lại tiết này? (Tiết đang diễn ra — nếu có — sẽ kết thúc; HS nhập MÃ MỚI rồi vào lại bằng máy/tên cũ.)")) return;
+      const id = b.dataset.resume;
+      act(newCode(curCode()).then((code) => DB.update("", Object.assign(closeActive({}), { [`sessions/${id}/meta/status`]: "open", [`sessions/${id}/meta/code`]: code, [`teacher/sessions/${id}/status`]: "open", [`teacher/sessions/${id}/code`]: code, [`codes/${code}`]: { s: id, at: DB.now() }, "public/active": id }))), "Đã mở lại tiết học — có mã vào lớp mới.").then(() => { tab = "groups"; });
     }; });
   }
   async function exportSession(s) {
@@ -384,8 +430,9 @@
   function openOverlay(kind, html) { overlayKind = kind; const ov = $("#overlay"); ov.innerHTML = `<button class="ov-close" title="Đóng (Esc)">✕</button>` + html; ov.hidden = false; ov.querySelector(".ov-close").onclick = closeOverlay; }
   function closeOverlay() { overlayKind = null; $("#overlay").hidden = true; }
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeOverlay(); });
-  function showQR() {
-    const u = joinUrl(), m = sess && sess.meta;
+  function showQR(fresh) {
+    const u = joinUrl(), m = hasSess() && sess.meta, code = fresh || curCode();
+    if (code) return openOverlay("qr", `<div class="bigqr"><div class="bigcode-box"><small>Mã vào lớp</small><b>${esc(code)}</b></div>${QR.svg(joinUrl() + "?c=" + code)}<div class="url">${esc(u.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</div><div>${m ? `Lớp <b>${esc(m.className)}</b> · ${esc(m.lessonTitle)}<br>` : ""}Mở địa chỉ trên → nhập <b>mã vào lớp</b> (quét QR là tự điền mã) → chọn máy và tên các bạn ngồi cùng máy</div></div>`);
     openOverlay("qr", `<div class="bigqr">${QR.svg(u)}<div class="url">${esc(u.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</div><div>${m ? `Lớp <b>${esc(m.className)}</b> · ${esc(m.lessonTitle)}<br>` : ""}Quét mã hoặc gõ địa chỉ trên, chọn máy và tên các bạn ngồi cùng máy</div></div>`);
   }
   function showBoard() {

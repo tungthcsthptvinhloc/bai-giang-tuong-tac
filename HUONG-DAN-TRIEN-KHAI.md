@@ -122,9 +122,14 @@ node tools/make-rules.js
 Luật này đảm bảo:
 - Chỉ tài khoản giáo viên đọc/sửa danh sách lớp, kết quả, điểm thưởng.
 - Máy HS chỉ đọc/ghi **bài của nhóm mình**; mỗi máy/mỗi HS chỉ vào **1 nhóm**.
+- HS phải biết **mã vào lớp 4 chữ số** mới tìm được tiết học; không ai liệt kê được danh sách mã hay tiết đang mở.
 - Khi HS tự làm thì chỉ lần làm đầu được ghi. Khi theo nhịp GV thì HS sửa được đến khi GV kết thúc; **hết giờ bị chặn ngay trên máy chủ**, không thể nộp muộn.
 
 > Mỗi lần đổi `teacherEmail` phải chạy lại `make-rules.js` và dán lại luật.
+
+> ⚠️ **Bản cập nhật "mã vào lớp" và "một đồng hồ duy nhất" (tháng 9/2026) có thay đổi luật.** Nếu thầy/cô đã Publish luật trước bản
+> này, hãy làm lại mục 2.5 (chạy `node tools/make-rules.js` → dán → **Publish**) **trước khi push** bản mới
+> lên GitHub. Chưa dán luật mới thì HS nhập mã sẽ báo "Mã không đúng…".
 
 ---
 
@@ -240,16 +245,17 @@ git add -A && git commit -m "Cập nhật bài giảng" && git push
 ## Phần 6 — Dạy một tiết (giống nhau ở cả hai chế độ)
 
 1. Bảng GV → chọn **Lớp** + **Bài giảng**; kiểm tra ô **🖥️ Phòng máy** (số máy tính, số điện thoại) → **▶ Bắt đầu**.
-2. **🖥️ Chiếu mã QR** → HS vào địa chỉ / quét QR → **① chọn đúng máy mình ngồi** (máy đã có nhóm bị mờ) → **② chọn tên các bạn cùng máy** → Vào học.
+2. Bấm Bắt đầu là hệ thống **tự sinh mã vào lớp 4 chữ số** và chiếu mã + QR (chiếu lại: **🖥️ Chiếu mã QR**) → HS mở địa chỉ web, **nhập mã** (quét QR thì mã tự điền) → **① chọn đúng máy mình ngồi** (máy đã có nhóm bị mờ) → **② chọn tên các bạn cùng máy** → Vào học.
 3. **📺 Mở bài giảng để trình chiếu** → giảng như bình thường. Góc phải có bảng **📊 Kết quả lớp**.
 4. Hai cách tổ chức:
-   - **HS tự làm** (mặc định): HS tự chuyển hoạt động, đúng/sai hiện ngay, mỗi câu chỉ tính lần đầu.
+   - **HS tự làm** (mặc định): HS tự chuyển hoạt động, đúng/sai hiện ngay, mỗi câu chỉ tính lần đầu. Bài ghép đôi/phân loại/sắp xếp/điền khuyết: làm hết rồi nộp, chấm theo kết quả cuối, nộp xong xem ✓/✗ từng mục.
    - **👣 HS theo nhịp GV** (bật trên bảng GV):
      - Máy HS tự chuyển theo slide GV đang chiếu.
-     - HS làm bài nhưng **chưa biết đúng/sai**. Trắc nghiệm được đổi đáp án; ghép đôi/kéo thả/sắp xếp/điền khuyết làm hết rồi **Nộp** (nộp lại được).
-     - GV bấm **▶ Bấm giờ** (mặc định bằng `time` của hoạt động; chỉnh ±30s): đồng hồ hiện trên **máy HS** và màn chiếu. **Hết giờ thì máy HS bị khóa**; nhóm chưa làm/chưa nộp tính là *chưa hoàn thành*.
+     - HS làm bài nhưng **chưa biết đúng/sai**. Trắc nghiệm được đổi đáp án; ghép đôi/kéo thả/sắp xếp/điền khuyết làm hết rồi **Nộp**, sau đó mỗi lần sửa được **tự lưu**.
+     - **Một đồng hồ duy nhất**: ⏱️ trên bài giảng, bảng 📊 và bảng GV cùng điều khiển một đồng hồ (lúc HS tự làm đồng hồ chỉ báo giờ trên máy HS, không khóa).
+     - GV bấm **▶ Bấm giờ** (mặc định bằng `time` của hoạt động; chỉnh ±30s): đồng hồ hiện trên **thanh tiêu đề cố định** của máy HS và màn chiếu. **Hết giờ thì máy HS bị khóa**; nhóm chưa làm/chưa nộp tính là *chưa hoàn thành*.
      - Trong lúc làm, bảng 📊 trên màn chiếu hiện **số máy chọn A/B/C/D/Chưa làm** (chưa lộ đáp án).
-     - GV bấm **🏁 Kết thúc** (trên màn chiếu hoặc bảng GV): máy HS hiện đúng/sai của nhóm mình. Màn chiếu tô đáp án đúng và liệt kê các máy **✅ Đúng · ❌ Sai · ⏳ Chưa làm**. **↺ Mở lại** nếu muốn cho làm tiếp.
+     - GV bấm **🏁 Kết thúc** (trên màn chiếu hoặc bảng GV): máy HS hiện đúng/sai của nhóm mình. Máy nhóm đúng hiện màn chúc mừng + pháo giấy; màn chiếu hiện **🏆 Bảng vinh danh** (kèn + vỗ tay khi bật 🔊), tô đáp án đúng và liệt kê các máy **✅ Đúng · ❌ Sai · ⏳ Chưa làm**. **↺ Mở lại** nếu muốn cho làm tiếp.
 5. Cuối giờ: **⬇️ Xuất Excel** → **⏹ Kết thúc tiết**. Tiết cũ xem/xuất lại ở tab 🕘 Lịch sử.
 
 **File Excel danh sách lớp** (nhập/xuất): 1 sheet có cột **Lớp | STT | Họ và tên** (tự nhóm theo cột Lớp), hoặc mỗi lớp 1 sheet (tên sheet = tên lớp). Nhận cả cột *Họ đệm* + *Tên* riêng; cột ngày sinh, giới tính… được bỏ qua. Bấm **📤 Xuất Excel** khi chưa có lớp nào để lấy **file mẫu**.
@@ -265,6 +271,7 @@ git add -A && git commit -m "Cập nhật bài giảng" && git push
 | Online: "Sai email hoặc mật khẩu" | Kiểm tra tài khoản ở Firebase → Authentication → Users. |
 | Online: "Cấu hình Firebase chưa đúng" | Xem lại `config/online.json` (apiKey, databaseURL) → commit + push lại. Kiểm tra đã bật Email/Password. |
 | Online: HS báo không vào được / nút Vào học không phản hồi | Chưa bật **Anonymous** (2.2), hoặc chưa **Publish** luật (2.5). |
+| HS nhập mã báo "Mã không đúng hoặc tiết học đã kết thúc" | Kiểm tra mã đang hiện trên bảng GV (mỗi tiết/mỗi lần Mở lại là mã mới). Online: chưa Publish luật bản mới (xem lưu ý cuối mục 2.5). |
 | Online: bảng GV báo "Không đọc được dữ liệu giáo viên" | `teacherEmail` trong luật khác email đăng nhập → sửa `config/online.json`, chạy lại `make-rules.js`, dán lại luật. |
 | Bài mới không hiện trong danh sách | Chạy `node tools/update-lessons.js` và đọc lỗi (thường là thiếu/trùng `id` hoạt động). Online: nhớ push. |
 | Đồng hồ HS lệch | Hệ thống dùng giờ máy chủ nên không lệch theo đồng hồ từng máy; nếu HS mất mạng lâu, tải lại trang. |
