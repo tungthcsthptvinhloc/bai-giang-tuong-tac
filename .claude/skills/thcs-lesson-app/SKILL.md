@@ -73,7 +73,7 @@ menu hoạt động, chế độ giáo viên, bảng màu, phím tắt. Xem `ref
 ### Bước 5 — Lập trình
 Dựng app từ scaffold trong `assets/app-starter/` (đã có sẵn engine trò chơi tái
 sử dụng: Quiz/Kahoot, TrueFalse, Matching, DragDrop, Ordering, FlashCard,
-MemoryGame, Wheel, WordPuzzle, ImageQuiz, Scenario, **Bảng tính mô phỏng**). **Tách dữ liệu khỏi code**:
+MemoryGame, Wheel, WordPuzzle, ImageQuiz, Scenario, **Bảng tính mô phỏng**, **Hộp quà may mắn**, **Sơ đồ tư duy mô phỏng**, Phiếu tự đánh giá, **Ô chữ**, **Hộp thư mô phỏng**, câu trả lời ngắn). **Tách dữ liệu khỏi code**:
 toàn bộ nội dung bài học nằm trong `data/lesson.js` để giáo viên chỉnh dễ dàng;
 không viết lại engine nếu component đã có. Xem `references/gamification.md` cho
 điểm/streak/hiệu ứng và `references/question-design.md` cho chất lượng câu hỏi.
@@ -200,10 +200,94 @@ const SHEET = { title: "Bảng điểm.xlsx", cols: 7, rows: 11, sheets: ["Sheet
   điện thoại và bộ gõ tiếng Việt), Enter xuống ô dưới, nháy đúp sửa trong ô, chọn vùng + Delete
   (hoặc nút 🧽) để xóa, nháy đúp tên trang tính để đổi tên. Giữ nội dung khi chuyển câu.
 - Nên chép lưới theo đúng hình trong SGK (Hình 6.1, 6.2…) để HS đối chiếu.
+- **Lưới TÍNH ĐƯỢC CÔNG THỨC**: ô có giá trị bắt đầu bằng “=” (trong `cells` hoặc HS gõ) hiện KẾT QUẢ, vùng
+  nhập dữ liệu hiện công thức; hỗ trợ + − * / ^, ngoặc, SUM/AVERAGE/MAX/MIN/COUNT (dấu `,` hoặc `;`); sửa dữ liệu
+  → tự cập nhật; lỗi #LỖI! #DIV/0! #VALUE! #VÒNG!. **Ctrl+C / Ctrl+V** (nút 📋 📥 trên điện thoại) sao chép công thức,
+  địa chỉ tự dời giữ vị trí tương đối ($ giữ cố định).
+- **Câu gõ công thức** (`mode: "formula"`): `{ type: "sheet", mode: "formula", target: "E4" | "E4:E6", answer: "=C4*D4" }`
+  — HS chỉ nhập được vào ô `target` (tô vàng); `answer` là công thức của ô đầu, các ô sau tự suy ra khi sao chép.
+  Chấm bằng cách thử đổi các ô số (FX.judge, dùng chung app.js và core.js): công thức tương đương (=D4*C4,
+  =C4*C3^2 …) được tính đúng, công thức chỉ có số (=25*10) bị tính sai. Dùng cho Tin 7 Bài 7, 8, 9 (hàm), Tin 8, 9.
+  Câu công thức trong `content.challenge` phải có `sheet` riêng.
+
+**Đáp án bằng HÌNH** (`optionImages`): câu trắc nghiệm hỏi nhận biết biểu tượng/giao diện
+(VD biểu tượng PhET) — `options` vẫn ghi chữ (cho bảng GV/Excel), HS chỉ thấy hình:
+`{ type: "multiple-choice", image: "assets/…/man-hinh.png", options: ["Xe đạp", "Vòi nước", …],
+optionImages: ["assets/phet/xe-dap.png", …], answer: 1, … }`. Lấy hình từ giáo án/SGK.
+
+**Nút mở phần mềm/trang web** (`links`): `links: [{ label: "Mở PhET: …", url: "https://…", note: "(cần Internet)" }]`
+ở bất kỳ hoạt động nào — hiện nút 🔗 dưới Nhiệm vụ, mở tab mới. Dùng cho bài thực hành với phần mềm
+ngoài (PhET, GeoGebra…). Không nhúng iframe trừ khi GV yêu cầu.
+
+**Trò chơi “Hộp quà may mắn”** (`type: "giftbox"`): lưới hộp quà, mỗi hộp là 1 câu hỏi (mọi kiểu câu),
+đúng thì hộp mở ra quà. `questions: […]`, `prizes: ["👏 …", …]` (quà tinh thần, GV sửa được),
+`groups: [{ name: "Gói 1", from: 0, to: 2 }]` (nhãn gói câu), `boxIcon` tuỳ chọn. Chấm điểm như quiz
+(khóa `aid:q0…`), chạy được chế độ lớp học/theo nhịp. Dùng khi giáo án có trò chơi chọn ô/hộp/gói câu hỏi.
+
+**Tương tác nhỏ tự viết** trong `content.blocks` `{ kind: "html" }`: có thể dùng thuộc tính `oninput`/`onclick`
+nội tuyến (thẻ `<script>` KHÔNG chạy) — VD thanh trượt đổi kích thước hình SVG và cập nhật số đo
+(ngôi sao tỉ lệ vàng, Tin 9 Bài 6). Sinh chuỗi HTML bằng hàm JS ở đầu `data/lesson.js`.
 
 **Trò chơi nhân vật** (`type: "penguin"`): đổi nhân vật theo tên trò chơi trong giáo án —
 `pet: "🐑", homeIcon: "🏡", enemy: "🐺", saveWord: "chú cừu thoát khỏi Sói xám", winText: "…"`.
 Mỗi câu đúng một nhân vật về nhà; sai thì kẻ đuổi theo rung lên. Mặc định vẫn là cánh cụt.
+
+## Sơ đồ tư duy mô phỏng & phiếu tự đánh giá (engine v5)
+
+Dùng cho MỌI bài về sơ đồ tư duy / trình bày thông tin (Tin 9 Bài 7, 8…; Tin 6 bài sơ đồ tư duy) — thay vì
+chỉ nhìn ảnh, HS **mở tệp đính kèm, thêm nhánh, đính kèm tệp** ngay trong bài (máy chiếu, máy HS, điện thoại).
+
+```js
+{ id: "hinh-7-1", type: "knowledge", mindmap: {
+    title: "Hình 7.1 — …", layout: "right",        // "right": gốc bên trái như SGK; mặc định "both": nhánh 2 bên
+    intro: "Bấm các nút 📎 để mở tệp đính kèm.",
+    root: { text: "Triển lãm\ntin học", children: [
+      { text: "1642\nBlaise Pascal", box: true,    // box: khung xám như ô chi tiết trong SGK
+        files: [{ kind: "img", name: "Ảnh Pascaline", html: SVG_HOAC_IMG, note: "…" }] },
+      { text: "Dự kiến thu chi", files: [{ kind: "sheet", name: "Bảng tính", sheet: SHEET_SPEC }] },
+    ] } } }
+{ id: "thuc-hanh", type: "knowledge", mindmap: { key: "bvmt", editable: true, root: {...},
+    submit: "Sơ đồ “…” (Thực hành)" } }      // key chung -> hoạt động sau làm tiếp đúng sơ đồ đó
+```
+- `files[].kind`: `doc` 📄 (nội dung ở `note`) · `img` 🖼️ (`src` ảnh hoặc `html` SVG tự vẽ) · `video` 🎬 · `sheet` 📊
+  (`sheet` = spec bảng tính mô phỏng, tính được công thức) · `link` 🔗 (`url` mở tab mới; không có url thì chỉ mô tả).
+  KHÔNG bịa địa chỉ video/trang web — để trống `url` và mô tả bằng `note`.
+- `editable`: chọn nhánh → gõ ở ô ✏️ (Tab = nhánh con, Enter = nhánh cùng cấp), 📎 Đính kèm (ảnh chọn được từ máy),
+  🗑️ Xóa nhánh, 🔄 Làm lại. Tự lưu trên máy (localStorage theo `key`).
+- `submit`: máy HS có nút **📨 Gửi sơ đồ cho thầy/cô** (gửi dạng dàn ý, xem ở tab ✍️ Tự luận, khóa `aid:mm`);
+  màn trình chiếu nối tiết học có nút **📥 Xem sơ đồ các nhóm đã gửi** (dựng lại sơ đồ từng nhóm để lên trình bày).
+- Dùng được trong mọi loại hoạt động có khung Nhiệm vụ (knowledge, vandung, quiz…).
+
+**Phiếu tự đánh giá** (`type: "checklist"`) — cho phiếu học tập “Làm được / Chưa làm được”, tự đánh giá kĩ năng:
+`columns: ["✅ Làm được", "⏳ Chưa làm được"], sections: [{ title: "🧠 SƠ ĐỒ TƯ DUY", items: ["…", …] }],
+note: "câu hỏi mở (không bắt buộc)", modelAnswer: ["dự kiến sản phẩm…"], remember: [...]`. Máy HS tick rồi gửi
+(khóa `aid:t0`, GV đọc ở tab Tự luận); màn chiếu nối tiết học có **📊 Thống kê phiếu của cả lớp** từng mục.
+Mục (`items`) không chứa `"; "` hay xuống dòng (validator kiểm tra).
+
+## Câu trả lời ngắn, ô chữ & hộp thư mô phỏng (engine v5)
+
+**Câu trả lời ngắn** (`type: "short"`) — HS gõ một từ/cụm từ: `{ type: "short", question, answer: ["TAIKHOAN", "tài khoản"], … }`.
+Chấm không phân biệt hoa/thường, dấu tiếng Việt, khoảng trắng (normShort — giống hệt trong app.js và core.js). Dùng được
+mọi nơi có `questions`; bảng GV/màn chiếu thống kê các câu trả lời hay gặp.
+
+**Trò chơi ô chữ** (`type: "crossword"`) — cho mọi trò “Giải ô chữ” trong SGK/giáo án:
+```js
+{ id: "o-chu", type: "crossword", intro: "…", questions: [
+  { type: "short", question: "Hàng 1: …(?)…", answer: ["TAIKHOAN", "tài khoản"], key: 0, show: [3] }, // key = vị trí chữ ở cột từ khoá; show = chữ gợi ý có sẵn (như SGK)
+  …,
+  { type: "short", keyword: true, question: "Từ khoá hàng dọc là gì?", answer: ["THUDIENTU", "thư điện tử"] } ] }
+```
+Chép đúng lưới SGK (vị trí cột từ khoá, chữ gợi ý). Validator kiểm tra: chữ ở cột từ khoá ghép lại phải bằng từ khoá.
+Màn chiếu: bấm số hàng để chọn câu, đúng thì hàng lật chữ; chế độ GV “Hiện/ẩn đáp án” lật cả ô chữ. Máy HS: mỗi hàng là 1 bài chấm.
+
+**Hộp thư điện tử mô phỏng** (`activity.mail`) — giao diện giống Gmail cho bài thư điện tử (Tin 6 Bài 8…):
+`mail: { key: "gmail", me: { name, address }, login: true, signup: true, inbox: [{ from, addr, subject, body, time, files: [{ name }], spam?, trap?: "🎁 Nhận quà ngay", star? }], files: ["Anh.jpg", …], check: { to?: "…", attach?: true }, submit: "nhãn gửi GV" }`.
+- Có: tạo tài khoản (kiểm tra tên người dùng, mật khẩu 8 kí tự + chữ + số + biểu tượng), đăng nhập 2 bước, hộp thư đến/đã gửi/nháp/
+  thư rác/thùng rác, gắn sao, tìm kiếm, đọc – trả lời – chuyển tiếp – báo cáo thư rác – xoá, soạn thư (người nhận, chủ đề, nội dung,
+  📎 tệp), đăng xuất. Gửi thư: báo lỗi địa chỉ sai dạng, hỏi khi thiếu chủ đề / nhắc tới tệp mà quên đính kèm; hiện “Tự kiểm tra thư”.
+- `trap`: nút liên kết lừa đảo trong thư → bấm vào hiện cảnh báo. `body` dùng `{ten}` = tên chủ hộp thư.
+- Nhiều hoạt động dùng chung `key` = cùng một hộp thư (tạo tài khoản → đăng nhập → soạn thư). Tự lưu trên máy; KHÔNG lưu mật khẩu.
+- `submit`: thư HS gửi được chuyển cho GV (tab ✍️ Tự luận, khóa `aid:mail`); màn chiếu có **📥 Xem thư các nhóm đã gửi**.
 
 ## Tính năng tương tác nâng cao (engine v2 — mặc định BẬT)
 
@@ -275,6 +359,8 @@ trường dữ liệu để kích hoạt — đây là yêu cầu chuẩn, khôn
 - [ ] Gợi ý/đáp án/kiến thức ẩn, bấm mới hiện (dạy khám phá)?
 - [ ] Có sơ đồ SVG tự vẽ và/hoặc nút "Xem ảnh SGK" nơi cần trực quan?
 - [ ] Bài về bảng tính: đã dùng câu `sheet` (bấm ô, chọn vùng/hàng/cột, gõ địa chỉ) và `sandbox` để HS thao tác thật?
+- [ ] Bài về sơ đồ tư duy / trình bày thông tin: đã dùng `mindmap` (xem tệp đính kèm, HS tự tạo sơ đồ + gửi GV)? Phiếu “Làm được / Chưa làm được” dùng `checklist`?
+- [ ] SGK/giáo án có “Giải ô chữ” → `crossword` chép đúng lưới? Bài thư điện tử / phần mềm trực tuyến HS chưa có tài khoản → mô phỏng (`mail`) thay vì bắt tạo tài khoản thật?
 - [ ] Hiệu ứng đúng/sai (pháo giấy, huy hiệu) và bút vẽ hoạt động?
 - [ ] Chữ/nút đủ lớn cho máy chiếu, có fullscreen, điều khiển bằng phím?
 - [ ] Chạy offline, không lỗi console JS, `validate-lesson.js` PASS?

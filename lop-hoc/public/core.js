@@ -47,11 +47,14 @@
     const items = [], openQs = [];
     (L.activities || []).forEach((a, idx) => {
       const aid = a.id || "a" + idx, base = { aid, activityIdx: idx, activityName: a.name || aid };
-      if (!NOT_QUIZ.includes(a.type)) (a.questions || []).forEach((q, qi) => items.push({ ...base, iid: "q" + qi, key: keyOf(aid, "q" + qi), label: q.question, q, type: q.type }));
+      if (!NOT_QUIZ.includes(a.type)) (a.questions || []).forEach((q, qi) => items.push({ ...base, iid: "q" + qi, key: keyOf(aid, "q" + qi), label: q.question, q: q.type === "sheet" && !q.sheet && a.sheet ? Object.assign({}, q, { sheet: a.sheet }) : q, type: q.type }));
       if (WHOLE.includes(a.type)) items.push({ ...base, iid: "main", key: keyOf(aid, "main"), label: a.task || a.name, kind: a.type, type: a.type, act: a });
       if (a.type === "summary" && a.content && a.content.challenge) a.content.challenge.forEach((q, qi) => items.push({ ...base, iid: "c" + qi, key: keyOf(aid, "c" + qi), label: q.question, q, type: q.type }));
       if (a.type === "vandung") (a.cases || []).forEach((cs, i) => openQs.push({ ...base, iid: "t" + i, key: keyOf(aid, "t" + i), label: cs.question }));
       if (a.type === "scenario" && a.content && a.content.question) openQs.push({ ...base, iid: "t0", key: keyOf(aid, "t0"), label: a.content.question });
+      if (a.type === "checklist") openQs.push({ ...base, iid: "t0", key: keyOf(aid, "t0"), label: "📋 Phiếu tự đánh giá (tick Làm được / Chưa làm được)" });
+      if (a.mail && a.mail.submit) openQs.push({ ...base, iid: "mail", key: keyOf(aid, "mail"), label: "📧 " + a.mail.submit });
+      if (a.mindmap && a.mindmap.submit) openQs.push({ ...base, iid: "mm", key: keyOf(aid, "mm"), label: "🧠 " + a.mindmap.submit });
     });
     return { items, openQs };
   }
@@ -73,9 +76,12 @@
     return s;
   }
   // Thống kê địa chỉ HS chọn (câu bảng tính) -> [{label, n, right}] — vài lựa chọn nhiều nhất + "Khác"; luôn có dòng đáp án đúng
-  function choiceDist(choices, answer, top) {
-    const cnt = new Map(); (choices || []).forEach((c) => { const k = normAddr(c); if (k) cnt.set(k, (cnt.get(k) || 0) + 1); });
-    const right = (k) => addrMatch(answer, k), ans = normAddr(Array.isArray(answer) ? answer[0] : answer);
+  // Câu trả lời ngắn (type "short"): bỏ dấu, hoa/thường, khoảng trắng — PHẢI khớp normShort trong app.js
+  const normShort = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[đĐ]/g, "D").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  function choiceDist(choices, answer, top, rightFn, normFn) {
+    const nf = normFn || normAddr;
+    const cnt = new Map(); (choices || []).forEach((c) => { const k = nf(c); if (k) cnt.set(k, (cnt.get(k) || 0) + 1); });
+    const right = rightFn || ((k) => addrMatch(answer, k)), ans = nf(Array.isArray(answer) ? answer[0] : answer);
     let list = [...cnt.entries()].sort((a, b) => b[1] - a[1]);
     const keep = list.slice(0, top || 4), rest = list.slice(top || 4);
     if (!keep.some(([k]) => right(k))) { const i = rest.findIndex(([k]) => right(k)); keep.push(i >= 0 ? rest.splice(i, 1)[0] : [ans, 0]); }
@@ -84,10 +90,127 @@
     return out;
   }
   const addrMatch = (answer, choice) => choice != null && choice !== "" && (Array.isArray(answer) ? answer : [answer]).some((x) => normAddr(x) === normAddr(choice));
+  // ===== FORMULA LIB — CÔNG THỨC BẢNG TÍNH (giữ GIỐNG HỆT trong app.js và lop-hoc/public/core.js) =====
+  //  FX.evalCell(data, addr) -> số | "" | chữ | "#LỖI!"…   data = { "C4": "25", "E4": "=C4*D4" }
+  //  FX.shift("=C4*D4", 1, 0) -> "=C5*D5" (sao chép công thức: giữ vị trí tương đối)
+  //  FX.judge(answer, choice, spec, target) -> { ok, fraction } — chấm câu "gõ công thức" bằng cách thử đổi dữ liệu
+  const FX = (function () {
+    const colN = (s) => [...String(s).toUpperCase()].reduce((t, ch) => t * 26 + ch.charCodeAt(0) - 64, 0) - 1;
+    const colS = (n) => { let s = ""; n++; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
+    const ERR = (e) => { throw { fxErr: e }; };
+    function lex(src) {
+      const s = String(src), out = []; let i = 0, m;
+      while (i < s.length) {
+        const rest = s.slice(i);
+        if (/^\s/.test(rest)) { i++; continue; }
+        if ((m = /^([A-Za-z]{2,})\s*\(/.exec(rest)) && !/^[A-Za-z]{1,3}\d/.test(rest)) { out.push({ t: "fn", v: m[1].toUpperCase() }); i += m[0].length - 1; continue; }
+        if ((m = /^\$?([A-Za-z]{1,3})\$?(\d+)(?::\$?([A-Za-z]{1,3})\$?(\d+))?/.exec(rest))) { out.push(m[3] ? { t: "rng", c1: colN(m[1]), r1: +m[2], c2: colN(m[3]), r2: +m[4] } : { t: "ref", c: colN(m[1]), r: +m[2] }); i += m[0].length; continue; }
+        if ((m = /^(\d+(?:\.\d+)?|\.\d+)/.exec(rest))) { out.push({ t: "num", v: parseFloat(m[1]) }); i += m[1].length; continue; }
+        if ("+-*/^(),;".includes(s[i])) { out.push({ t: s[i] === ";" ? "," : s[i] }); i++; continue; }
+        ERR("#LỖI!");
+      }
+      return out;
+    }
+    function parse(src) {
+      const tk = lex(src); let p = 0;
+      const peek = () => tk[p] && tk[p].t, eat = (t) => { if (peek() !== t) ERR("#LỖI!"); return tk[p++]; };
+      function expr() { let a = term(); while (peek() === "+" || peek() === "-") { const op = tk[p++].t; a = { k: "bin", op, a, b: term() }; } return a; }
+      function term() { let a = power(); while (peek() === "*" || peek() === "/") { const op = tk[p++].t; a = { k: "bin", op, a, b: power() }; } return a; }
+      function power() { let a = unary(); while (peek() === "^") { p++; a = { k: "bin", op: "^", a, b: unary() }; } return a; }
+      function unary() { if (peek() === "-") { p++; return { k: "neg", a: unary() }; } if (peek() === "+") { p++; return unary(); } return prim(); }
+      function prim() {
+        const x = tk[p];
+        if (!x) ERR("#LỖI!");
+        if (x.t === "num") { p++; return { k: "num", v: x.v }; }
+        if (x.t === "ref") { p++; return { k: "ref", c: x.c, r: x.r }; }
+        if (x.t === "(") { p++; const e = expr(); eat(")"); return e; }
+        if (x.t === "fn") { p++; eat("("); const args = []; if (peek() !== ")") { do { if (peek() === "rng") { const r = tk[p++]; args.push({ k: "rng", ...r }); } else args.push(expr()); } while (peek() === "," && ++p); } eat(")"); return { k: "fn", name: x.v, args }; }
+        ERR("#LỖI!");
+      }
+      const e = expr(); if (p !== tk.length) ERR("#LỖI!"); return e;
+    }
+    function evalAst(n, get) {
+      if (n.k === "num") return n.v;
+      if (n.k === "ref") { const v = get(n.c, n.r); if (v === "" || v == null) return 0; if (typeof v === "number") return v; if (String(v).charAt(0) === "#") ERR(v); ERR("#VALUE!"); }
+      if (n.k === "neg") return -evalAst(n.a, get);
+      if (n.k === "bin") {
+        const a = evalAst(n.a, get), b = evalAst(n.b, get);
+        if (n.op === "+") return a + b; if (n.op === "-") return a - b; if (n.op === "*") return a * b;
+        if (n.op === "/") { if (b === 0) ERR("#DIV/0!"); return a / b; }
+        return Math.pow(a, b);
+      }
+      if (n.k === "fn") {
+        const nums = [];
+        n.args.forEach((x) => {
+          if (x.k === "rng") { for (let r = Math.min(x.r1, x.r2); r <= Math.max(x.r1, x.r2); r++) for (let c = Math.min(x.c1, x.c2); c <= Math.max(x.c1, x.c2); c++) { const v = get(c, r); if (typeof v === "number") nums.push(v); else if (typeof v === "string" && v.charAt(0) === "#") ERR(v); } }
+          else nums.push(evalAst(x, get));
+        });
+        const sum = nums.reduce((t, v) => t + v, 0);
+        if (n.name === "SUM") return sum;
+        if (n.name === "AVERAGE") { if (!nums.length) ERR("#DIV/0!"); return sum / nums.length; }
+        if (n.name === "MAX") return nums.length ? Math.max(...nums) : 0;
+        if (n.name === "MIN") return nums.length ? Math.min(...nums) : 0;
+        if (n.name === "COUNT") return nums.length;
+        ERR("#NAME?");
+      }
+      ERR("#LỖI!");
+    }
+    const isNum = (s) => /^[-+]?(\d+(\.\d*)?|\.\d+)$/.test(String(s).trim());
+    // Giá trị hiển thị của 1 ô (tính công thức, phát hiện tham chiếu vòng)
+    function evalCell(data, addr, seen) {
+      const raw = data[addr]; if (raw == null || raw === "") return "";
+      const s = String(raw);
+      if (s.charAt(0) !== "=") return isNum(s) ? parseFloat(s) : s;
+      seen = seen || {}; if (seen[addr]) return "#VÒNG!";
+      seen[addr] = 1;
+      try { const v = evalAst(parse(s.slice(1)), (c, r) => evalCell(data, colS(c) + r, seen)); delete seen[addr]; return isFinite(v) ? v : "#NUM!"; }
+      catch (e) { delete seen[addr]; if (e && e.fxErr) return e.fxErr; throw e; }
+    }
+    const fmt = (v) => (typeof v === "number" ? String(Math.round(v * 1e9) / 1e9) : v);
+    // Sao chép công thức: dời các địa chỉ theo (dr hàng, dc cột); địa chỉ có $ giữ nguyên
+    function shift(src, dr, dc) {
+      let bad = false;
+      const out = String(src).replace(/(^|[^A-Za-z$\d])(\$?)([A-Za-z]{1,3})(\$?)(\d+)(?![\d(A-Za-z])/g, (m, pre, dC, col, dR, row) => {
+        const c = dC ? colN(col) : colN(col) + dc, r = dR ? +row : +row + dr;
+        if (c < 0 || r < 1) { bad = true; return m; }
+        return pre + dC + colS(c) + dR + r;
+      });
+      return bad ? "#REF!" : out;
+    }
+    // Chấm "gõ công thức": đúng nếu cho CÙNG kết quả với đáp án trên dữ liệu gốc và khi thử đổi các ô số
+    function judge(answer, choice, spec, target) {
+      const cells = {}; Object.entries((spec && spec.cells) || {}).forEach(([k, v]) => { cells[String(k).toUpperCase()] = String(v); });
+      const m = /^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/.exec(String(target || "").toUpperCase().replace(/\s/g, ""));
+      if (!m) return { ok: false, fraction: 0 };
+      const c1 = colN(m[1]), r1 = +m[2], c2 = m[3] ? colN(m[3]) : c1, r2 = m[4] ? +m[4] : r1, list = [];
+      for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) list.push({ ad: colS(c) + r, dr: r - r1, dc: c - c1 });
+      const got = String(choice == null ? "" : choice).split("|");
+      const vars = Object.keys(cells).filter((k) => isNum(cells[k]) && !list.some((x) => x.ad === k));
+      let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return 2 + (seed % 96); };
+      const trials = [null, 1, 2, 3].map((t) => { const d = Object.assign({}, cells); if (t) vars.forEach((k) => { d[k] = String(rnd()); }); return d; });
+      let good = 0;
+      list.forEach((x, i) => {
+        const f = String(got[i] || "").trim(), ref = shift(answer, x.dr, x.dc);
+        if (f.charAt(0) !== "=") return;
+        const same = trials.every((d) => {
+          const ds = Object.assign({}, d), dr = Object.assign({}, d);
+          list.forEach((y, j) => { ds[y.ad] = String(got[j] || "").trim(); dr[y.ad] = shift(answer, y.dr, y.dc); });
+          const a = evalCell(ds, x.ad), b = evalCell(dr, x.ad);
+          return typeof a === "number" && typeof b === "number" && Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(b));
+        });
+        if (same) good++;
+      });
+      return { ok: list.length > 0 && good === list.length, fraction: list.length ? good / list.length : 0 };
+    }
+    return { colN, colS, parse, evalCell, fmt, shift, judge, isNum };
+  })();
+  // ===== HẾT FORMULA LIB =====
+
   // Chấm 1 câu: trắc nghiệm chấm lại từ LỰA CHỌN (không tin "ok" do máy HS gửi)
   function judgeQuestion(q, choice) {
     if (choice == null) return false;
-    if (q.type === "sheet") return addrMatch(q.answer, choice);
+    if (q.type === "sheet") return q.mode === "formula" ? FX.judge(q.answer, choice, q.sheet || {}, q.target).ok : addrMatch(q.answer, choice);
+    if (q.type === "short") return !!normShort(choice) && (Array.isArray(q.answer) ? q.answer : [q.answer]).some((x) => normShort(x) === normShort(choice));
     if (q.type === "true-false") return choice === q.answer;
     if (q.type === "multiple-select") { const c = Array.isArray(choice) ? choice : Object.values(choice); return JSON.stringify(c.map(Number).sort()) === JSON.stringify([...(q.answer || [])].sort()); }
     return typeof choice !== "boolean" && choice !== "" && Number(choice) === q.answer;
@@ -288,6 +411,6 @@
   function loadManifest() { return fetch("/lessons/index.json", { cache: "no-store" }).then((r) => r.json()).then((m) => m.lessons || []); }
 
   return { NOT_QUIZ, WHOLE, clamp01, round1, esc, norm, fmt1, pad2, fmtDate, fmtTime, fmtClock, rid, splitKey, keyOf,
-    lessonItems, judgeQuestion, judge, judgeWhole, normAddr, addrMatch, choiceDist, actState, actControl, followFixups, actClock, answerOf, scoreGroup, groupName, sortedEntries, memberNames, machineList,
+    FX, lessonItems, judgeQuestion, judge, judgeWhole, normAddr, addrMatch, normShort, choiceDist, actState, actControl, followFixups, actClock, answerOf, scoreGroup, groupName, sortedEntries, memberNames, machineList,
     parseClassBook, classesSheet, sessionWorkbook, loadLesson, loadManifest };
 });

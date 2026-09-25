@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-09-25T11:20:07.424Z",
+ "generatedAt": "2026-09-25T16:20:15.726Z",
  "lessons": [
   {
    "id": "tin6-bai01-thong-tin-va-du-lieu",
@@ -62,6 +62,26 @@
    "open": 2
   },
   {
+   "id": "tin6-bai07-tim-kiem-thong-tin-tren-internet",
+   "title": "Bài 7: Tìm kiếm thông tin trên Internet",
+   "grade": "6",
+   "subject": "Tin học",
+   "unit": "Chủ đề 3 — Tổ chức lưu trữ, tìm kiếm và trao đổi thông tin",
+   "activities": 13,
+   "items": 20,
+   "open": 6
+  },
+  {
+   "id": "tin6-bai08-thu-dien-tu",
+   "title": "Bài 8: Thư điện tử",
+   "grade": "6",
+   "subject": "Tin học",
+   "unit": "Chủ đề 3 — Tổ chức lưu trữ, tìm kiếm và trao đổi thông tin",
+   "activities": 19,
+   "items": 42,
+   "open": 5
+  },
+  {
    "id": "tin7-bai01-thiet-bi-vao-ra",
    "title": "Bài 1: Thiết bị vào – ra",
    "grade": "7",
@@ -122,6 +142,16 @@
    "open": 2
   },
   {
+   "id": "tin7-bai07-tinh-toan-tu-dong-tren-bang-tinh",
+   "title": "Bài 7: Tính toán tự động trên bảng tính",
+   "grade": "7",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4 — Ứng dụng tin học",
+   "activities": 15,
+   "items": 25,
+   "open": 1
+  },
+  {
    "id": "tin9-bai01-the-gioi-ki-thuat-so",
    "title": "Bài 1: Thế giới kĩ thuật số",
    "grade": "9",
@@ -170,6 +200,26 @@
    "activities": 9,
    "items": 11,
    "open": 2
+  },
+  {
+   "id": "tin9-bai06-thuc-hanh-khai-thac-phan-mem-mo-phong",
+   "title": "Bài 6: Thực hành — Khai thác phần mềm mô phỏng",
+   "grade": "9",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4 — Ứng dụng tin học",
+   "activities": 12,
+   "items": 29,
+   "open": 6
+  },
+  {
+   "id": "tin9-bai07-trinh-bay-thong-tin-trong-trao-doi-va-hop-tac",
+   "title": "Bài 7: Trình bày thông tin trong trao đổi và hợp tác",
+   "grade": "9",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4 — Ứng dụng tin học",
+   "activities": 14,
+   "items": 24,
+   "open": 8
   }
  ]
 }

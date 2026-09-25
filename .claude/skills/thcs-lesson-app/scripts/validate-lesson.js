@@ -97,6 +97,11 @@ function checkQuestion({ q, activity }, ids, answerPositions, levelCount) {
   } else if (q.type === "true-false") {
     if (typeof q.answer !== "boolean")
       err(`${where}: true-false cần \`answer\` là true/false.`);
+  } else if (q.type === "sheet" && q.mode === "formula") {
+    // Gõ công thức: answer = công thức cho ô đầu của target ("=C4*D4"); target = "E4" hoặc "E4:E6"
+    if (!/^=/.test(String(q.answer || ""))) err(`${where}: sheet mode "formula" cần \`answer\` là công thức bắt đầu bằng "=".`);
+    if (!/^[A-Za-z]{1,3}\d+(:[A-Za-z]{1,3}\d+)?$/.test(String(q.target || "").replace(/\s/g, ""))) err(`${where}: sheet mode "formula" cần \`target\` là ô/vùng HS nhập công thức (VD "E4" hoặc "E4:E6").`);
+    if (!q.sheet && !activity.sheet) err(`${where}: thiếu lưới \`sheet\` (đặt ở hoạt động hoặc ở câu hỏi).`);
   } else if (q.type === "sheet") {
     // Bảng tính mô phỏng: answer = địa chỉ ô "B6" | vùng "B4:E11" | cột "D" | hàng "6" (hoặc mảng)
     const ans = Array.isArray(q.answer) ? q.answer : [q.answer];
@@ -106,7 +111,34 @@ function checkQuestion({ q, activity }, ids, answerPositions, levelCount) {
       err(`${where}: sheet cần \`answer\` là địa chỉ hợp lệ (VD "B6", "B4:E11", "D" = cả cột, "6" = cả hàng).`);
     if (!q.sheet && !activity.sheet) err(`${where}: thiếu lưới \`sheet\` (đặt ở hoạt động hoặc ở câu hỏi).`);
     if (q.mode === "type" && !q.highlight) err(`${where}: mode "type" cần \`highlight\` (vùng được tô để HS gõ địa chỉ).`);
+  } else if (q.type === "short") {
+    const ans = Array.isArray(q.answer) ? q.answer : [q.answer];
+    if (!ans.length || ans.some((x) => !normShort(x))) err(`${where}: short cần \`answer\` là chữ (hoặc mảng các cách viết được chấp nhận).`);
   }
+}
+
+// Ô chữ (type "crossword"): chữ ở cột từ khoá của các hàng ghép lại phải đúng bằng từ khoá
+const normShort = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[đĐ]/g, "D").toUpperCase().replace(/[^A-Z0-9]/g, "");
+function checkCrosswordsMail(L) {
+  (L.activities || []).forEach((a) => {
+    if (a.type === "crossword") {
+      const where = `HĐ "${a.id}" (crossword)`, qs = a.questions || [], rows = qs.filter((q) => !q.keyword), kw = qs.find((q) => q.keyword);
+      if (qs.some((q) => q.type !== "short")) err(`${where}: mọi câu phải là \`type: "short"\`.`);
+      let letters = "";
+      rows.forEach((q, i) => {
+        const w = normShort(Array.isArray(q.answer) ? q.answer[0] : q.answer), k = q.key || 0;
+        if (k < 0 || k >= w.length) err(`${where}: hàng ${i + 1} có \`key\` = ${k} nằm ngoài từ "${w}".`); else letters += w[k];
+        (q.show || []).forEach((j) => { if (j < 0 || j >= w.length) err(`${where}: hàng ${i + 1} có \`show\` ${j} nằm ngoài từ "${w}".`); });
+      });
+      if (kw) { const kwW = normShort(Array.isArray(kw.answer) ? kw.answer[0] : kw.answer); if (kwW !== letters) err(`${where}: từ khoá "${kwW}" không khớp các chữ ở cột từ khoá "${letters}".`); }
+      else warn(`${where}: không có câu \`keyword: true\` (từ khoá hàng dọc).`);
+    }
+    if (a.mail) {
+      const where = `HĐ "${a.id}" mail`, m = a.mail, RE = /^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$/;
+      if (!m.me || !RE.test(m.me.address || "")) err(`${where}: cần \`me: { name, address }\` với địa chỉ hợp lệ.`);
+      (m.inbox || []).forEach((x, i) => { if (!x.from || !x.subject) err(`${where}: thư ${i + 1} thiếu \`from\` hoặc \`subject\`.`); if (x.addr && !RE.test(x.addr)) err(`${where}: thư ${i + 1} có \`addr\` không hợp lệ.`); });
+    }
+  });
 }
 
 function checkAnswerDistribution(answerPositions) {
@@ -123,6 +155,34 @@ function checkLevelCoverage(levelCount) {
   const missing = LEVELS.filter((l) => !levelCount[l]);
   if (missing.length)
     warn(`Chưa phủ đủ 4 mức độ. Thiếu: ${missing.join(", ")}.`);
+}
+
+// Sơ đồ tư duy mô phỏng (activity.mindmap) + phiếu tự đánh giá (type "checklist")
+const MM_KINDS = ["doc", "img", "video", "sheet", "link"];
+function checkMindmapsChecklists(L) {
+  (L.activities || []).forEach((a) => {
+    if (a.mindmap) {
+      const m = a.mindmap, where = `HĐ "${a.id}" mindmap`;
+      if (!m.root || typeof m.root.text !== "string") err(`${where}: cần \`root: { text, children: [...] }\`.`);
+      else (function walk(n, path) {
+        if (typeof n.text !== "string") err(`${where}: nhánh ${path} thiếu \`text\`.`);
+        (n.files || []).forEach((f, i) => { if (!MM_KINDS.includes(f.kind)) err(`${where}: nhánh ${path} tệp ${i + 1} có kind "${f.kind}" (chỉ nhận ${MM_KINDS.join("/")}).`); if (!f.name) warn(`${where}: nhánh ${path} tệp ${i + 1} thiếu \`name\`.`); });
+        (n.children || []).forEach((c, i) => walk(c, path + "." + (i + 1)));
+      })(m.root, "gốc");
+      if (m.layout && !["both", "right"].includes(m.layout)) err(`${where}: layout chỉ nhận "both" hoặc "right".`);
+      if (m.submit && !m.editable) warn(`${where}: có \`submit\` nhưng không \`editable\` — HS không sửa được sơ đồ trước khi gửi.`);
+    }
+    if (a.type === "checklist") {
+      const where = `HĐ "${a.id}" (checklist)`;
+      if (!Array.isArray(a.sections) || !a.sections.length) err(`${where}: cần \`sections: [{ title, items: [...] }]\`.`);
+      else a.sections.forEach((s, i) => {
+        if (!s.title) err(`${where}: mục ${i + 1} thiếu \`title\`.`);
+        if (!Array.isArray(s.items) || !s.items.length) err(`${where}: mục ${i + 1} thiếu \`items\`.`);
+        else s.items.forEach((t) => { if (/;\s/.test(t) || /\n/.test(t)) err(`${where}: "${t}" không được chứa "; " hay xuống dòng (dùng để gửi phiếu).`); });
+      });
+      if (a.columns && a.columns.length !== 2) warn(`${where}: nên có đúng 2 cột (Làm được / Chưa làm được).`);
+    }
+  });
 }
 
 function checkPlaceholders(L) {
@@ -154,6 +214,8 @@ function main() {
   questions.forEach((item) => checkQuestion(item, ids, answerPositions, levelCount));
   checkAnswerDistribution(answerPositions);
   checkLevelCoverage(levelCount);
+  checkMindmapsChecklists(L);
+  checkCrosswordsMail(L);
   checkPlaceholders(L);
 
   console.log(`\nĐã kiểm tra: ${L.activities.length} hoạt động, ${questions.length} câu hỏi.`);

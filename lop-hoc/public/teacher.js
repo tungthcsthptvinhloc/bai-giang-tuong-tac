@@ -274,7 +274,7 @@ Kết quả hoạt động này của tất cả các nhóm sẽ bị xóa; máy
       const recs = gs.map((g) => ({ g, r: C.answerOf(sess, g.id, it) })), done = recs.filter((x) => x.r);
       const avg = done.length ? done.reduce((t, x) => t + C.judge(it, x.r).fraction, 0) / done.length : 0, cls = !done.length ? "" : avg >= 0.8 ? "good" : avg >= 0.5 ? "mid" : "low";
       let det = "";
-      if (it.q && it.q.type === "sheet") det = C.choiceDist(done.map((x) => x.r.choice), it.q.answer, 5).map((d) => optRow("📍", d.label, d.n, gs.length, d.right)).join("");
+      if (it.q && (it.q.type === "sheet" || it.q.type === "short")) det = C.choiceDist(done.map((x) => x.r.choice), it.q.answer, 5, it.q.mode === "formula" || it.q.type === "short" ? (k) => C.judgeQuestion(it.q, k) : null, it.q.type === "short" ? C.normShort : null).map((d) => optRow(it.q.type === "short" ? "✍️" : "📍", d.label, d.n, gs.length, d.right)).join("");
       else if (it.q && it.q.type !== "true-false") { const q = it.q; det = (q.options || []).map((o, k) => optRow(KEYS[k], o, done.filter((x) => { const c = x.r.choice; return Array.isArray(c) ? c.map(Number).includes(k) : c === k; }).length, gs.length, q.type === "multiple-select" ? (q.answer || []).includes(k) : q.answer === k)).join(""); }
       else if (it.q) det = [["Đúng", true], ["Sai", false]].map(([lb, v], k) => optRow(KEYS[k], lb, done.filter((x) => x.r.choice === v).length, gs.length, it.q.answer === v)).join("");
       else { const full = done.filter((x) => C.judge(it, x.r).ok).length; det = optRow("✓", "Đúng hết", full, gs.length, true) + optRow("~", "Có mục sai (tính theo tỉ lệ)", done.length - full, gs.length, false); }
