@@ -103,6 +103,7 @@
       while (i < s.length) {
         const rest = s.slice(i);
         if (/^\s/.test(rest)) { i++; continue; }
+        if ((m = /^["“”]([^"“”]*)["“”]/.exec(rest))) { out.push({ t: "str", v: m[1] }); i += m[0].length; continue; } // chữ "Hà Nội"
         if ((m = /^([A-Za-z]{2,})\s*\(/.exec(rest)) && !/^[A-Za-z]{1,3}\d/.test(rest)) { out.push({ t: "fn", v: m[1].toUpperCase() }); i += m[0].length - 1; continue; }
         if ((m = /^\$?([A-Za-z]{1,3})\$?(\d+)(?::\$?([A-Za-z]{1,3})\$?(\d+))?/.exec(rest))) { out.push(m[3] ? { t: "rng", c1: colN(m[1]), r1: +m[2], c2: colN(m[3]), r2: +m[4] } : { t: "ref", c: colN(m[1]), r: +m[2] }); i += m[0].length; continue; }
         if ((m = /^(\d+(?:\.\d+)?|\.\d+)/.exec(rest))) { out.push({ t: "num", v: parseFloat(m[1]) }); i += m[1].length; continue; }
@@ -122,6 +123,7 @@
         const x = tk[p];
         if (!x) ERR("#LỖI!");
         if (x.t === "num") { p++; return { k: "num", v: x.v }; }
+        if (x.t === "str") { p++; return { k: "str", v: x.v }; }
         if (x.t === "ref") { p++; return { k: "ref", c: x.c, r: x.r }; }
         if (x.t === "(") { p++; const e = expr(); eat(")"); return e; }
         if (x.t === "fn") { p++; eat("("); const args = []; if (peek() !== ")") { do { if (peek() === "rng") { const r = tk[p++]; args.push({ k: "rng", ...r }); } else args.push(expr()); } while (peek() === "," && ++p); } eat(")"); return { k: "fn", name: x.v, args }; }
@@ -131,6 +133,7 @@
     }
     function evalAst(n, get) {
       if (n.k === "num") return n.v;
+      if (n.k === "str") ERR("#VALUE!"); // chữ trong phép toán
       if (n.k === "ref") { const v = get(n.c, n.r); if (v === "" || v == null) return 0; if (typeof v === "number") return v; if (String(v).charAt(0) === "#") ERR(v); ERR("#VALUE!"); }
       if (n.k === "neg") return -evalAst(n.a, get);
       if (n.k === "bin") {
@@ -143,7 +146,7 @@
         const nums = [];
         n.args.forEach((x) => {
           if (x.k === "rng") { for (let r = Math.min(x.r1, x.r2); r <= Math.max(x.r1, x.r2); r++) for (let c = Math.min(x.c1, x.c2); c <= Math.max(x.c1, x.c2); c++) { const v = get(c, r); if (typeof v === "number") nums.push(v); else if (typeof v === "string" && v.charAt(0) === "#") ERR(v); } }
-          else nums.push(evalAst(x, get));
+          else if (x.k !== "str") nums.push(evalAst(x, get)); // theo SGK: hàm bỏ qua dữ liệu chữ (Excel thật: chữ gõ trực tiếp -> #VALUE!)
         });
         const sum = nums.reduce((t, v) => t + v, 0);
         if (n.name === "SUM") return sum;

@@ -202,7 +202,9 @@ const SHEET = { title: "Bảng điểm.xlsx", cols: 7, rows: 11, sheets: ["Sheet
 - Nên chép lưới theo đúng hình trong SGK (Hình 6.1, 6.2…) để HS đối chiếu.
 - **Lưới TÍNH ĐƯỢC CÔNG THỨC**: ô có giá trị bắt đầu bằng “=” (trong `cells` hoặc HS gõ) hiện KẾT QUẢ, vùng
   nhập dữ liệu hiện công thức; hỗ trợ + − * / ^, ngoặc, SUM/AVERAGE/MAX/MIN/COUNT (dấu `,` hoặc `;`); sửa dữ liệu
-  → tự cập nhật; lỗi #LỖI! #DIV/0! #VALUE! #VÒNG!. **Ctrl+C / Ctrl+V** (nút 📋 📥 trên điện thoại) sao chép công thức,
+  → tự cập nhật; lỗi #LỖI! #DIV/0! #VALUE! #VÒNG! #NAME? (sai tên hàm). Hàm bỏ qua ô trống/ô chữ; chữ gõ trực tiếp làm
+  tham số (“Hà Nội”) cũng được BỎ QUA theo lưu ý SGK Tin 7 Bài 8 (GV đã chọn; ghi chú “Mở rộng”: Excel thật báo #VALUE!);
+  chữ trong phép toán (="a"+1) → #VALUE!. Hàm có nhiều tham số vùng: =MAX(D4:D8;D11:D16). **Ctrl+C / Ctrl+V** (nút 📋 📥 trên điện thoại) sao chép công thức,
   địa chỉ tự dời giữ vị trí tương đối ($ giữ cố định).
 - **Câu gõ công thức** (`mode: "formula"`): `{ type: "sheet", mode: "formula", target: "E4" | "E4:E6", answer: "=C4*D4" }`
   — HS chỉ nhập được vào ô `target` (tô vàng); `answer` là công thức của ô đầu, các ô sau tự suy ra khi sao chép.

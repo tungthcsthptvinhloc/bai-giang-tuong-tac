@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-09-25T16:20:15.726Z",
+ "generatedAt": "2026-09-25T16:44:30.952Z",
  "lessons": [
   {
    "id": "tin6-bai01-thong-tin-va-du-lieu",
@@ -150,6 +150,16 @@
    "activities": 15,
    "items": 25,
    "open": 1
+  },
+  {
+   "id": "tin7-bai08-cong-cu-ho-tro-tinh-toan",
+   "title": "Bài 8: Công cụ hỗ trợ tính toán",
+   "grade": "7",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4 — Ứng dụng tin học",
+   "activities": 15,
+   "items": 49,
+   "open": 2
   },
   {
    "id": "tin9-bai01-the-gioi-ki-thuat-so",
