@@ -44,8 +44,9 @@
  *  - Phương án trả lời bằng HÌNH: question.optionImages (options vẫn giữ chữ cho bảng GV/Excel).
  *  - activity.links = [{label,url,note}]: nút mở phần mềm/trang web (tab mới).
  *  - Trò chơi "Hộp quà may mắn" (type "giftbox"): lưới hộp quà, mỗi hộp 1 câu hỏi, đúng thì mở quà.
- *  - Bảng tính mô phỏng TÍNH CÔNG THỨC (=C4*D4, + - * / ^, ngoặc, SUM/AVERAGE/MAX/MIN/COUNT): ô hiện kết quả,
- *    sửa dữ liệu -> tự cập nhật; Ctrl+C / Ctrl+V (nút 📋 📥) sao chép công thức tự dời địa chỉ.
+ *  - Bảng tính mô phỏng TÍNH CÔNG THỨC (=C4*D4, + - * / ^, ngoặc, SUM/AVERAGE/MAX/MIN/COUNT/COUNTIF/COUNTIFS/SUMIF):
+ *    ô hiện kết quả, sửa dữ liệu -> tự cập nhật; Ctrl+C / Ctrl+V (nút 📋 📥) và NÚT KÉO ĐIỀN (ô vuông góc vùng chọn)
+ *    sao chép công thức tự dời địa chỉ. Dấu ; cũng được dùng ngăn cách tham số như Excel tiếng Việt.
  *    Câu hỏi sheet mode "formula": HS gõ công thức vào ô q.target, chấm bằng cách thử đổi dữ liệu (FX.judge).
  *
  * Component: intro, knowledge/explore, quiz (multiple-choice/multiple-select/
@@ -136,6 +137,7 @@
     const colN = (s) => [...String(s).toUpperCase()].reduce((t, ch) => t * 26 + ch.charCodeAt(0) - 64, 0) - 1;
     const colS = (n) => { let s = ""; n++; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
     const ERR = (e) => { throw { fxErr: e }; };
+    const isNum = (s) => /^[-+]?(\d+(\.\d*)?|\.\d+)$/.test(String(s).trim());
     function lex(src) {
       const s = String(src), out = []; let i = 0, m;
       while (i < s.length) {
@@ -143,6 +145,7 @@
         if (/^\s/.test(rest)) { i++; continue; }
         if ((m = /^["“”]([^"“”]*)["“”]/.exec(rest))) { out.push({ t: "str", v: m[1] }); i += m[0].length; continue; } // chữ "Hà Nội"
         if ((m = /^([A-Za-z]{2,})\s*\(/.exec(rest)) && !/^[A-Za-z]{1,3}\d/.test(rest)) { out.push({ t: "fn", v: m[1].toUpperCase() }); i += m[0].length - 1; continue; }
+        if ((m = /^\$?([A-Za-z]{1,3}):\$?([A-Za-z]{1,3})(?![\dA-Za-z(])/.exec(rest))) { out.push({ t: "rng", c1: colN(m[1]), r1: 1, c2: colN(m[2]), r2: 1000 }); i += m[0].length; continue; } // cả cột B:B
         if ((m = /^\$?([A-Za-z]{1,3})\$?(\d+)(?::\$?([A-Za-z]{1,3})\$?(\d+))?/.exec(rest))) { out.push(m[3] ? { t: "rng", c1: colN(m[1]), r1: +m[2], c2: colN(m[3]), r2: +m[4] } : { t: "ref", c: colN(m[1]), r: +m[2] }); i += m[0].length; continue; }
         if ((m = /^(\d+(?:\.\d+)?|\.\d+)/.exec(rest))) { out.push({ t: "num", v: parseFloat(m[1]) }); i += m[1].length; continue; }
         if ("+-*/^(),;".includes(s[i])) { out.push({ t: s[i] === ";" ? "," : s[i] }); i++; continue; }
@@ -169,6 +172,59 @@
       }
       const e = expr(); if (p !== tk.length) ERR("#LỖI!"); return e;
     }
+    // Điều kiện của COUNTIF: ">100", "Yes", "Y*" (* ? là kí tự đại diện), 30, ô D2… — chữ không phân biệt hoa/thường
+    function critFn(cr) {
+      if (typeof cr === "number") return (v) => typeof v === "number" && v === cr;
+      let s = String(cr), op = "="; const m = /^(<=|>=|<>|<|>|=)/.exec(s); if (m) { op = m[1]; s = s.slice(op.length); }
+      const low = (x) => String(x).normalize("NFC").toLowerCase();
+      if (s.trim() !== "" && isNum(s)) {
+        const k = parseFloat(s);
+        if (op === "<>") return (v) => typeof v !== "number" || v !== k;
+        return (v) => typeof v === "number" && (op === "=" ? v === k : op === ">" ? v > k : op === "<" ? v < k : op === ">=" ? v >= k : v <= k);
+      }
+      if (op === "=" || op === "<>") {
+        const re = new RegExp("^" + low(s).replace(/~([*?~])|([*?])|[.+^${}()|[\]\\\/-]/g, (x, lit, w) => (lit ? "\\" + lit : w ? (w === "*" ? "[\\s\\S]*" : "[\\s\\S]") : "\\" + x)) + "$");
+        const hit = (v) => (s === "" ? v === "" || v == null : typeof v === "string" && v !== "" && re.test(low(v)));
+        return op === "=" ? hit : (v) => !hit(v);
+      }
+      return (v) => { if (typeof v !== "string" || v === "" || v.charAt(0) === "#") return false; const c = low(v).localeCompare(low(s), "vi"); return op === ">" ? c > 0 : op === "<" ? c < 0 : op === ">=" ? c >= 0 : c <= 0; };
+    }
+    // =COUNTIF(range, criteria) · =COUNTIFS(range1, criteria1, range2, criteria2, …) (mở rộng)
+    function countIf(n, get) {
+      const a = n.args; if (!a.length || a.length % 2 || (n.name === "COUNTIF" && a.length !== 2)) ERR("#LỖI!");
+      let size = null; const tests = [];
+      for (let i = 0; i < a.length; i += 2) {
+        const R = a[i].k === "rng" ? a[i] : a[i].k === "ref" ? { c1: a[i].c, c2: a[i].c, r1: a[i].r, r2: a[i].r } : ERR("#VALUE!");
+        const w = Math.abs(R.c2 - R.c1) + 1, h = Math.abs(R.r2 - R.r1) + 1;
+        if (size && (size.w !== w || size.h !== h)) ERR("#VALUE!"); size = { w, h };
+        const x = a[i + 1]; let cr;
+        if (x.k === "str") cr = x.v;
+        else if (x.k === "ref") { cr = get(x.c, x.r); if (cr === "" || cr == null) cr = 0; else if (typeof cr === "string" && cr.charAt(0) === "#") ERR(cr); }
+        else if (x.k === "rng") ERR("#VALUE!");
+        else cr = evalAst(x, get);
+        tests.push({ c1: Math.min(R.c1, R.c2), r1: Math.min(R.r1, R.r2), f: critFn(cr) });
+      }
+      let cnt = 0;
+      for (let dr = 0; dr < size.h; dr++) for (let dc = 0; dc < size.w; dc++) if (tests.every((t) => t.f(get(t.c1 + dc, t.r1 + dr)))) cnt++;
+      return cnt;
+    }
+    // =SUMIF(range, criteria, [sum_range]) — sum_range bắt đầu ở ô đầu của vùng và có cùng kích thước với range (như Excel)
+    function sumIf(n, get) {
+      const a = n.args; if (a.length < 2 || a.length > 3) ERR("#LỖI!");
+      const box = (x) => (x.k === "rng" ? { c1: Math.min(x.c1, x.c2), r1: Math.min(x.r1, x.r2), c2: Math.max(x.c1, x.c2), r2: Math.max(x.r1, x.r2) } : x.k === "ref" ? { c1: x.c, r1: x.r, c2: x.c, r2: x.r } : ERR("#VALUE!"));
+      const R = box(a[0]), S = a[2] ? box(a[2]) : R, x = a[1]; let cr;
+      if (x.k === "str") cr = x.v;
+      else if (x.k === "ref") { cr = get(x.c, x.r); if (cr === "" || cr == null) cr = 0; else if (typeof cr === "string" && cr.charAt(0) === "#") ERR(cr); }
+      else if (x.k === "rng") ERR("#VALUE!");
+      else cr = evalAst(x, get);
+      const f = critFn(cr); let sum = 0;
+      for (let dr = 0; dr <= R.r2 - R.r1; dr++) for (let dc = 0; dc <= R.c2 - R.c1; dc++) {
+        if (!f(get(R.c1 + dc, R.r1 + dr))) continue;
+        const v = get(S.c1 + dc, S.r1 + dr);
+        if (typeof v === "number") sum += v; else if (typeof v === "string" && v.charAt(0) === "#") ERR(v);
+      }
+      return sum;
+    }
     function evalAst(n, get) {
       if (n.k === "num") return n.v;
       if (n.k === "str") ERR("#VALUE!"); // chữ trong phép toán
@@ -181,6 +237,8 @@
         return Math.pow(a, b);
       }
       if (n.k === "fn") {
+        if (n.name === "COUNTIF" || n.name === "COUNTIFS") return countIf(n, get);
+        if (n.name === "SUMIF") return sumIf(n, get);
         const nums = [];
         n.args.forEach((x) => {
           if (x.k === "rng") { for (let r = Math.min(x.r1, x.r2); r <= Math.max(x.r1, x.r2); r++) for (let c = Math.min(x.c1, x.c2); c <= Math.max(x.c1, x.c2); c++) { const v = get(c, r); if (typeof v === "number") nums.push(v); else if (typeof v === "string" && v.charAt(0) === "#") ERR(v); } }
@@ -196,7 +254,6 @@
       }
       ERR("#LỖI!");
     }
-    const isNum = (s) => /^[-+]?(\d+(\.\d*)?|\.\d+)$/.test(String(s).trim());
     // Giá trị hiển thị của 1 ô (tính công thức, phát hiện tham chiếu vòng)
     function evalCell(data, addr, seen) {
       const raw = data[addr]; if (raw == null || raw === "") return "";
@@ -211,11 +268,11 @@
     // Sao chép công thức: dời các địa chỉ theo (dr hàng, dc cột); địa chỉ có $ giữ nguyên
     function shift(src, dr, dc) {
       let bad = false;
-      const out = String(src).replace(/(^|[^A-Za-z$\d])(\$?)([A-Za-z]{1,3})(\$?)(\d+)(?![\d(A-Za-z])/g, (m, pre, dC, col, dR, row) => {
+      const out = String(src).split(/(["“”][^"“”]*["“”])/).map((part, i) => (i % 2 ? part : part.replace(/(^|[^A-Za-z$\d])(\$?)([A-Za-z]{1,3})(\$?)(\d+)(?![\d(A-Za-z])/g, (m, pre, dC, col, dR, row) => {
         const c = dC ? colN(col) : colN(col) + dc, r = dR ? +row : +row + dr;
         if (c < 0 || r < 1) { bad = true; return m; }
         return pre + dC + colS(c) + dR + r;
-      });
+      }))).join(""); // chữ trong ngoặc kép ("HS01", ">100") giữ nguyên
       return bad ? "#REF!" : out;
     }
     // Chấm "gõ công thức": đúng nếu cho CÙNG kết quả với đáp án trên dữ liệu gốc và khi thử đổi các ô số
@@ -228,11 +285,29 @@
       const got = String(choice == null ? "" : choice).split("|");
       const vars = Object.keys(cells).filter((k) => isNum(cells[k]) && !list.some((x) => x.ad === k));
       let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return 2 + (seed % 96); };
-      const trials = [null, 1, 2, 3].map((t) => { const d = Object.assign({}, cells); if (t) vars.forEach((k) => { d[k] = String(rnd()); }); return d; });
+      // Lượt thử cuối: ô chữ / ô trống trong lưới cũng thành số (dữ liệu được cập nhật) -> công thức bỏ sót ô sẽ lộ ra
+      let maxR = +(spec && spec.rows) || 0, maxC = +(spec && spec.cols) || 0;
+      Object.keys(cells).forEach((k) => { const mm = /^([A-Z]+)(\d+)$/.exec(k); if (mm) { maxR = Math.max(maxR, +mm[2]); maxC = Math.max(maxC, colN(mm[1]) + 1); } });
+      const blanks = [];
+      for (let r = 1; r <= Math.min(maxR, 200); r++) for (let c = 0; c < Math.min(maxC, 60); c++) { const ad = colS(c) + r, v = cells[ad]; if ((v == null || (!isNum(v) && String(v).charAt(0) !== "=")) && !list.some((x) => x.ad === ad)) blanks.push(ad); }
+      const trials = [null, 1, 2, 3, 4].map((t) => { const d = Object.assign({}, cells); if (t) vars.forEach((k) => { d[k] = String(rnd()); }); if (t === 4) blanks.forEach((k) => { d[k] = String(rnd()); }); return d; });
+      // Câu đếm theo chữ (COUNTIF…): spec.vary = vùng dữ liệu chữ được xáo lại -> công thức chọn sai vùng sẽ lộ ra
+      const pool = [], vcells = [];
+      [].concat((spec && spec.vary) || []).forEach((ad) => {
+        const mm = /^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/.exec(String(ad).toUpperCase().replace(/[$\s]/g, "")); if (!mm) return;
+        const a1 = colN(mm[1]), b1 = +mm[2], a2 = mm[3] ? colN(mm[3]) : a1, b2 = mm[4] ? +mm[4] : b1;
+        for (let r = Math.min(b1, b2); r <= Math.max(b1, b2); r++) for (let c = Math.min(a1, a2); c <= Math.max(a1, a2); c++) {
+          const k = colS(c) + r; if (list.some((x) => x.ad === k)) continue;
+          vcells.push(k); if (cells[k] != null && pool.indexOf(cells[k]) < 0) pool.push(cells[k]);
+        }
+      });
+      if (pool.length) [1, 2, 3].forEach(() => { const d = Object.assign({}, cells); vcells.forEach((k) => { d[k] = pool[rnd() % pool.length]; }); trials.push(d); });
       let good = 0;
       list.forEach((x, i) => {
         const f = String(got[i] || "").trim(), ref = shift(answer, x.dr, x.dc);
         if (f.charAt(0) !== "=") return;
+        const hasRef = (s) => /(^|[^A-Za-z])\$?[A-Za-z]{1,3}\$?\d/.test(s);
+        if (!hasRef(f) && hasRef(ref)) return; // gõ thẳng kết quả (=35) -> sai
         const same = trials.every((d) => {
           const ds = Object.assign({}, d), dr = Object.assign({}, d);
           list.forEach((y, j) => { ds[y.ad] = String(got[j] || "").trim(); dr[y.ad] = shift(answer, y.dr, y.dc); });
@@ -432,9 +507,11 @@
     const tb = taskBanner(a); if (tb) cardEl.appendChild(tb);
     const sb = sgkButton(a.sgkImage); if (sb) cardEl.appendChild(sb);
     if (a.links && a.links.length) cardEl.appendChild(linksBox(a.links));
+    if (a.html) { const hv = el("div", "kn-blocks"); hv.innerHTML = a.html; cardEl.appendChild(hv); } // hình minh hoạ hiện luôn cho trò chơi (ghép đôi, phân loại…)
     if (a.sandbox) cardEl.appendChild(sandboxBox(a));
     if (a.mindmap) cardEl.appendChild(mindmapBox(a));
     if (a.mail) cardEl.appendChild(mailBox(a));
+    if (a.password) cardEl.appendChild(passwordBox(a));
   }
   function appendRemember(items, cardOrView) {
     // "Em cần nhớ" — ẩn, bấm mới hiện
@@ -452,6 +529,7 @@
     activityHead(a, c);
     const ct = a.content || {};
     if (ct.prompt) c.appendChild(el("p", "prompt", esc(ct.prompt)));
+    if (ct.html) { const hv = el("div", "kn-blocks"); hv.innerHTML = ct.html; c.appendChild(hv); } // HTML hiện luôn (hội thoại, sơ đồ mở đầu) — nội dung tin cậy do GV soạn
     if (ct.image) { const im = el("div"); im.innerHTML = imageHTML(ct.image, ct.imageCaption); c.appendChild(im); } // ảnh minh hoạ hiển thị trực tiếp
     // Nội dung kiến thức: ẩn, bấm mới hiện (nếu có blocks)
     if (ct.blocks && ct.blocks.length) {
@@ -478,7 +556,7 @@
     const q = qs[a._qi];
     const wrap = el("div");
     wrap.innerHTML = `<p class="subtitle">Câu ${a._qi + 1}/${qs.length} · ${levelLabel(q.level)}</p>
-      <p class="prompt">${esc(q.question)}</p>`;
+      <p class="prompt">${esc(a.type === "chat" ? q.prompt || "💬 Em sẽ trả lời thế nào?" : q.question)}</p>`;
     card.appendChild(wrap);
     const sb = sgkButton(q.sgkImage); if (sb) card.appendChild(sb);
     if (q.image) { const im = el("div"); im.innerHTML = imageHTML(q.image, q.imageCaption); card.appendChild(im); }
@@ -569,6 +647,7 @@
     sound(ok ? "ok" : "no");
     if (card._penguin) card._penguin(ok); // cập nhật đàn cánh cụt (trò chơi penguin)
     if (card._cw) card._cw(); // lật hàng ô chữ
+    if (card._chat) card._chat(ok, choice); // khung chat: thêm tin nhắn trả lời
   }
   function answerFeedback(ok, q, card, replay) {
     const fb = el("div", "feedback " + (ok ? "ok" : "no"));
@@ -594,7 +673,7 @@
       qs.forEach((_, k) => { const b = el("button", "q-pill" + (k === a._qi ? " cur" : "") + (ask("getAttempt", qKey(a, k)) ? " done" : ""), String(k + 1)); b.onclick = () => { a._qi = k; render(); }; pills.appendChild(b); });
       head.appendChild(pills);
     }
-    head.appendChild(el("p", "prompt", esc(q.question)));
+    head.appendChild(el("p", "prompt", esc(a.type === "chat" ? q.prompt || "💬 Em sẽ trả lời thế nào?" : q.question)));
     card.appendChild(head);
     const sb = sgkButton(q.sgkImage); if (sb) card.appendChild(sb);
     if (q.image) { const im = el("div"); im.innerHTML = imageHTML(q.image, q.imageCaption); card.appendChild(im); }
@@ -623,6 +702,7 @@
         emit("onAttempt", { key, activityId: aid(a._parent || a), ok, fraction: ok ? 1 : 0, choice });
         const n2 = deferNote(st, true, "quiz"); note.replaceWith(n2); note = n2;
         const pill = card.querySelector(".q-pill.cur"); if (pill) pill.classList.add("done");
+        if (card._chatPick) card._chatPick(choice);
       };
     });
     else kids.forEach((b) => b.classList.add("locked"));
@@ -835,6 +915,9 @@
       },
     };
   }
+  // Đoạn chữ của câu điền khuyết: gộp khoảng trắng, "\n" = xuống dòng
+  const fillSegHTML = (seg) => String(seg).split("\n").map((t) => esc(t.replace(/[ \t\r]+/g, " "))).join("<br>");
+  const fillSegNodes = (p, seg) => String(seg).split("\n").forEach((t, k) => { if (k) p.appendChild(document.createElement("br")); p.appendChild(document.createTextNode(t.replace(/[ \t\r]+/g, " "))); });
   function fillblankUI(a, parts) {
     const n = parts.length - 1, good = (v, i) => (a.answers[i] || []).map(norm).includes(norm(v));
     return {
@@ -844,12 +927,12 @@
       score: (d) => ({ good: d.filter(good).length, total: n, choice: { v: d.slice() } }),
       review(d) {
         const p = el("p", "prompt");
-        p.innerHTML = parts.map((seg, i) => esc(seg.replace(/\s+/g, " ")) + (i < n ? (good(d[i], i) ? `<b class="fill-ok"> ${esc(d[i])} ✓</b>` : `<b class="fill-bad"> ${esc(d[i] || "…")} </b><b class="fill-ans">${esc((a.answers[i] || [""])[0])}</b>`) : "")).join("");
+        p.innerHTML = parts.map((seg, i) => fillSegHTML(seg) + (i < n ? (good(d[i], i) ? `<b class="fill-ok"> ${esc(d[i])} ✓</b>` : `<b class="fill-bad"> ${esc(d[i] || "…")} </b><b class="fill-ans">${esc((a.answers[i] || [""])[0])}</b>`) : "")).join("");
         return p;
       },
       draw(box, d, en, redraw, changed) {
         const p = el("p", "prompt");
-        parts.forEach((seg, i) => { p.appendChild(document.createTextNode(seg.replace(/\s+/g, " "))); if (i < n) { const inp = el("input"); inp.value = d[i]; inp.disabled = !en; inp.oninput = () => { d[i] = inp.value; changed(); }; p.appendChild(inp); } });
+        parts.forEach((seg, i) => { fillSegNodes(p, seg); if (i < n) { const inp = el("input"); inp.value = d[i]; inp.disabled = !en; inp.oninput = () => { d[i] = inp.value; changed(); }; p.appendChild(inp); } });
         box.appendChild(p);
       },
     };
@@ -898,11 +981,11 @@
     const c = el("div", "card fill"); activityHead(a, c);
     const key = aid(a) + ":main";
     const parts = (a.text || "").split("{{}}");
-    const answerHTML = `<p class="prompt">${parts.map((seg, i) => esc(seg.replace(/\s+/g, " ")) + (i < parts.length - 1 ? `<b class="fill-ans"> ${esc((a.answers[i] || [""])[0])} </b>` : "")).join("")}</p>`;
+    const answerHTML = `<p class="prompt">${parts.map((seg, i) => fillSegHTML(seg) + (i < parts.length - 1 ? `<b class="fill-ans"> ${esc((a.answers[i] || [""])[0])} </b>` : "")).join("")}</p>`;
     if (STUDENT) return renderWholeStudent(c, a, key, actStateOf(a), answerHTML, fillblankUI(a, parts));
     const p = el("p", "prompt");
     const inputs = [];
-    parts.forEach((seg, i) => { p.appendChild(document.createTextNode(seg.replace(/\s+/g, " "))); if (i < parts.length - 1) { const inp = el("input"); inputs.push(inp); p.appendChild(inp); } });
+    parts.forEach((seg, i) => { fillSegNodes(p, seg); if (i < parts.length - 1) { const inp = el("input"); inputs.push(inp); p.appendChild(inp); } });
     c.appendChild(p);
     const btn = el("button", "btn", "Kiểm tra");
     btn.onclick = () => {
@@ -912,7 +995,7 @@
     };
     c.appendChild(wrapEl(btn)); view.appendChild(c);
   }
-  const norm = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const norm = (s) => String(s || "").normalize("NFC").trim().toLowerCase().replace(/\s+/g, " ");
 
   // ---- CÂU HỎI BẢNG TÍNH MÔ PHỎNG (question.type = "sheet") ---------------------
   //  mode "select" (mặc định): HS bấm ô / kéo chọn vùng / bấm tên cột, hàng -> lựa chọn = địa chỉ.
@@ -928,7 +1011,7 @@
     const sh = mountSheet(spec, { editable: true, only: targets.map((t) => t.ad), store, onChange: () => { if (P.onChange) P.onChange(); } });
     sh.mark(q.target, "m-target");
     card.appendChild(sh.el);
-    card.appendChild(el("p", "xs-hint", `✍️ Chọn ô <b>${esc(normAddr(q.target).split(":")[0])}</b> (tô vàng) rồi gõ công thức, bắt đầu bằng dấu <b>=</b>, nhấn Enter.` + (targets.length > 1 ? ` Sau đó sao chép công thức (<b>Ctrl+C</b> → chọn ${esc(targets[1].ad)}:${esc(targets[targets.length - 1].ad)} → <b>Ctrl+V</b>, hoặc nút 📋 / 📥).` : "")));
+    card.appendChild(el("p", "xs-hint", `✍️ Chọn ô <b>${esc(normAddr(q.target).split(":")[0])}</b> (tô vàng) rồi gõ công thức, bắt đầu bằng dấu <b>=</b>, nhấn Enter.` + (targets.length > 1 ? ` Sau đó sao chép công thức: kéo <b>nút điền ■</b> ở góc dưới phải ô đến ${esc(targets[targets.length - 1].ad)} (hoặc <b>Ctrl+C</b> → chọn ${esc(targets[1].ad)}:${esc(targets[targets.length - 1].ad)} → <b>Ctrl+V</b>, nút 📋 / 📥).` : "")));
     Object.assign(P, {
       sh,
       choice: () => { const v = targets.map((t) => String(store[t.ad] || "").trim()); return v.every((x) => x) ? v.join("|") : ""; },
@@ -1118,6 +1201,7 @@
     const style = {};
     const each = (list, fn) => (Array.isArray(list) ? list : list ? [list] : []).forEach((ad) => { const R = addrRect(ad, cols, rows); if (!R) return; for (let r = R.r1; r <= Math.min(R.r2, rows); r++) for (let c = R.c1; c <= Math.min(R.c2, cols - 1); c++) fn(style[colName(c) + r] = style[colName(c) + r] || {}); });
     each(spec.bold, (s) => { s.b = 1; }); each(spec.italic, (s) => { s.i = 1; });
+    each(spec.comma, (s) => { s.cm = 1; }); // số có dấu phẩy ngăn cách hàng nghìn (8,000) như Excel
     each(spec.center, (s) => { s.al = "center"; }); each(spec.right, (s) => { s.al = "right"; }); each(spec.left, (s) => { s.al = "left"; });
     Object.entries(spec.fill || {}).forEach(([ad, v]) => each(ad, (s) => { s.fill = v; }));
     Object.entries(spec.color || {}).forEach(([ad, v]) => each(ad, (s) => { s.color = v; }));
@@ -1143,7 +1227,7 @@
       const ad = colName(c) + r, raw = data[ad], s = style[ad] || {};
       const v = String(raw == null ? "" : raw).charAt(0) === "=" ? String(FX.fmt(FX.evalCell(data, ad))) : raw; // công thức -> hiện KẾT QUẢ
       const ty = cellType(v), err = String(v || "").charAt(0) === "#";
-      if (!(editing && editing.ad === ad)) t.textContent = v || "";
+      if (!(editing && editing.ad === ad)) t.textContent = s.cm && ty === "num" && isFinite(+v) ? (+v).toLocaleString("en-US", { maximumFractionDigits: 9 }) : v || "";
       t.classList.toggle("num", !s.al && (ty === "num" || ty === "date"));
       t.classList.toggle("err", err);
       t.style.textAlign = s.al || ""; t.style.fontWeight = s.b ? "700" : ""; t.style.fontStyle = s.i ? "italic" : "";
@@ -1152,6 +1236,108 @@
     }
     const paintAll = () => { for (let r = 1; r <= rows; r++) for (let c = 0; c < cols; c++) paintCell(c, r); };
     let sel = null, locked = false, drag = false, cb = null, editing = null;
+    let fxDirty = false, fxOrig = "";
+
+    // ---- XÁC THỰC DỮ LIỆU ĐẶT SẴN (spec.validate) — như Data Validation của Excel ----------------
+    //  validate: { "B3:B10": { list: "F2:F10" | ["Ở", "Ăn", …], dropdown?: false },
+    //              "D3:D10": { type: "whole"|"decimal"|"date"|"textlen", op: ">"|">="|"<"|"<="|"="|"<>"|"between"|"notbetween", min, max,
+    //                          input?: { title, msg }, error?: { style: "stop"|"warning"|"information", title, msg } } }
+    //  Ô trống luôn hợp lệ (Ignore blank). Dán (📥) không bị kiểm tra — giống Excel.
+    const VRULES = Object.entries(spec.validate || {}).map(([ad, rule]) => ({ R: addrRect(ad, cols, rows), rule })).filter((x) => x.R && x.rule);
+    const ruleOf = (c, r) => VRULES.find((x) => c >= x.R.c1 && c <= x.R.c2 && r >= x.R.r1 && r <= x.R.r2) || null;
+    const vNorm = (s) => String(s == null ? "" : s).normalize("NFC").trim().toLowerCase();
+    function vItems(rule) {
+      if (Array.isArray(rule.list)) return rule.list.map(String);
+      const R = addrRect(String(rule.list || "").replace(/\$/g, ""), cols, rows), out = []; if (!R) return out;
+      for (let r = R.r1; r <= Math.min(R.r2, rows); r++) for (let c = R.c1; c <= Math.min(R.c2, cols - 1); c++) { const ad = colName(c) + r, raw = data[ad]; if (raw == null || raw === "") continue; out.push(String(String(raw).charAt(0) === "=" ? FX.fmt(FX.evalCell(data, ad)) : raw)); }
+      return out;
+    }
+    const vDate = (s) => { const m = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/.exec(String(s).trim()); if (!m) return NaN; const mo = +m[1], d = +m[2], y = m[3].length === 2 ? 2000 + +m[3] : +m[3], t = new Date(y, mo - 1, d); return t.getMonth() === mo - 1 && t.getDate() === d ? t.getTime() : NaN; };
+    function vCheck(rule, raw, ad) {
+      const s = String(raw == null ? "" : raw).trim(); if (!s) return true;
+      let v = s; if (s.charAt(0) === "=") { const tmp = Object.assign({}, data); tmp[ad] = s; v = FX.evalCell(tmp, ad); }
+      if (rule.list) return vItems(rule).some((x) => vNorm(x) === vNorm(v));
+      let n;
+      if (rule.type === "whole" || rule.type === "decimal") { n = typeof v === "number" ? v : FX.isNum(v) ? parseFloat(v) : NaN; if (isNaN(n) || (rule.type === "whole" && !Number.isInteger(n))) return false; }
+      else if (rule.type === "date") { n = vDate(v); if (isNaN(n)) return false; }
+      else if (rule.type === "textlen") n = String(v).length;
+      else return true;
+      const cv = (x) => (x == null ? null : rule.type === "date" ? vDate(x) : +x), a = cv(rule.min), b = cv(rule.max);
+      const op = rule.op || (a != null && b != null ? "between" : a != null ? ">=" : b != null ? "<=" : "");
+      const lim = (x, y) => (x != null ? x : y);
+      if (op === ">") return n > a; if (op === ">=") return n >= a; if (op === "<") return n < lim(b, a); if (op === "<=") return n <= lim(b, a);
+      if (op === "=") return n === a; if (op === "<>") return n !== a;
+      if (op === "between") return n >= a && n <= b; if (op === "notbetween") return n < a || n > b;
+      return true;
+    }
+    const V_OPS = { ">": "lớn hơn", ">=": "lớn hơn hoặc bằng", "<": "nhỏ hơn", "<=": "nhỏ hơn hoặc bằng", "=": "bằng", "<>": "khác", between: "từ", notbetween: "ngoài khoảng" };
+    function vDescribe(rule) {
+      if (rule.list) return "danh sách (List) " + (Array.isArray(rule.list) ? rule.list.join(", ") : "=" + String(rule.list).replace(/\$/g, "").replace(/([A-Z]+)(\d+)/g, "$$1$$2"));
+      const name = { whole: "số nguyên (Whole number)", decimal: "số thập phân (Decimal)", date: "ngày tháng (Date)", textlen: "độ dài văn bản (Text length)" }[rule.type] || rule.type;
+      const op = rule.op || (rule.min != null && rule.max != null ? "between" : rule.min != null ? ">=" : rule.max != null ? "<=" : "");
+      const lim = op === "<" || op === "<=" ? (rule.max != null ? rule.max : rule.min) : rule.min;
+      return name + (op === "between" || op === "notbetween" ? ` ${V_OPS[op]} ${rule.min} đến ${rule.max}` : op ? ` ${V_OPS[op]} ${lim}` : "");
+    }
+    let vAlerting = false, vOpen = null;
+    const vTip = el("div", "xs-vtip"), vDrop = el("button", "xs-vdrop", "▾"), vList = el("div", "xs-vlist");
+    vTip.hidden = vDrop.hidden = vList.hidden = true; vDrop.type = "button"; vDrop.title = "Chọn từ danh sách";
+    if (VRULES.length) { root.classList.add("has-v"); root.append(vTip, vDrop, vList); }
+    function placeV() {
+      if (!VRULES.length) return;
+      vTip.hidden = vDrop.hidden = true;
+      const act = sel && activeOf(sel), vr = act && sel.m === "cells" ? ruleOf(act.c, act.r) : null, ad = act ? colName(act.c) + act.r : "";
+      if (vOpen !== ad) { vList.hidden = true; vOpen = null; }
+      if (!vr) return;
+      const t = td(act.c, act.r), tr = t.getBoundingClientRect(), rr = root.getBoundingClientRect(), x = tr.left - rr.left, y = tr.top - rr.top;
+      const sp = el("span", "xs-vinfo", " · ✅ Xác thực: " + esc(vDescribe(vr.rule))); info.appendChild(sp);
+      const inp = vr.rule.input;
+      if (inp && (inp.title || inp.msg)) { vTip.innerHTML = (inp.title ? `<b>${esc(inp.title)}</b>` : "") + esc(inp.msg || ""); vTip.style.left = (x + tr.width * 0.35) + "px"; vTip.style.top = (y + tr.height + 4) + "px"; vTip.hidden = false; }
+      if (vr.rule.list && vr.rule.dropdown !== false && editable && !locked) {
+        vDrop.style.left = (x + tr.width) + "px"; vDrop.style.top = y + "px"; vDrop.style.height = tr.height + "px"; vDrop.hidden = false;
+        vList.style.left = x + "px"; vList.style.top = (y + tr.height) + "px"; vList.style.minWidth = tr.width + "px";
+      }
+    }
+    vDrop.addEventListener("pointerdown", (e) => e.preventDefault()); // giữ con trỏ ở vùng nhập
+    vDrop.onclick = () => {
+      if (locked || !sel) return;
+      const act = activeOf(sel), ad = colName(act.c) + act.r, vr = ruleOf(act.c, act.r); if (!vr) return;
+      if (!vList.hidden) { vList.hidden = true; vOpen = null; return; }
+      vList.innerHTML = vItems(vr.rule).map((t2, i) => `<button type="button" data-i="${i}">${esc(t2)}</button>`).join("") || "<i>(danh sách trống)</i>";
+      vList.querySelectorAll("button").forEach((b) => {
+        b.addEventListener("pointerdown", (e) => e.preventDefault());
+        b.onclick = () => { if (!canEdit(ad)) return; setVal(ad, vItems(vr.rule)[+b.dataset.i]); fxDirty = false; vList.hidden = true; vOpen = null; paintAll(); paint(); changed(); focusFx(); };
+      });
+      vList.hidden = false; vOpen = ad;
+    };
+    function vAlert(rule, onRetry, onCancel, onAccept) {
+      ensureEngineCSS(); vAlerting = true;
+      const er = rule.error || {}, st = ["warning", "information"].includes(er.style) ? er.style : "stop";
+      const ov = el("div", "xs-valert-ov"), box = el("div", "xs-valert");
+      const msg = er.msg || "Giá trị này không khớp với các giới hạn xác thực dữ liệu đã đặt cho ô.";
+      const btns = st === "stop" ? [["retry", "Retry"], ["cancel", "Cancel"], ["help", "Help"]] : st === "warning" ? [["yes", "Yes"], ["no", "No"], ["cancel", "Cancel"]] : [["ok", "OK"], ["cancel", "Cancel"]];
+      box.innerHTML = `<div class="xs-va-head"><span>${esc(er.title || "Bảng tính")}</span><button type="button" data-a="cancel" title="Đóng">✕</button></div>`
+        + `<div class="xs-va-body"><span class="xs-va-ico ${st}">${st === "stop" ? "✖" : st === "warning" ? "!" : "i"}</span><div>${esc(msg).replace(/\n/g, "<br>")}${st === "warning" ? "<br><b>Continue?</b>" : ""}</div></div>`
+        + `<div class="xs-va-btns">${btns.map(([a, t2]) => `<button type="button" data-a="${a}">${t2}</button>`).join("")}</div>`
+        + `<div class="xs-va-help" hidden>💡 Trên Excel thật, nút Help mở trang trợ giúp. Hãy bấm Retry rồi nhập lại dữ liệu đúng yêu cầu.</div>`;
+      ov.appendChild(box); document.body.appendChild(ov); sound("no");
+      const done = (fn) => { ov.remove(); document.removeEventListener("keydown", onKey, true); vAlerting = false; if (fn) fn(); };
+      const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); done(onCancel); } else if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); done(st === "stop" ? onRetry : onAccept); } };
+      document.addEventListener("keydown", onKey, true);
+      box.querySelectorAll("[data-a]").forEach((b) => { b.onclick = () => { const a = b.dataset.a; if (a === "help") { box.querySelector(".xs-va-help").hidden = false; return; } done(a === "retry" || a === "no" ? onRetry : a === "yes" || a === "ok" ? onAccept : onCancel); }; });
+      setTimeout(() => { const f = box.querySelector(".xs-va-btns button"); if (f) f.focus(); }, 0);
+    }
+    // Rời ô đang gõ ở vùng nhập dữ liệu: true = hợp lệ, được rời; false = đang hiện thông báo lỗi
+    function vGuard(after) {
+      if (!VRULES.length || !sel || !fxDirty || vAlerting) return true;
+      const act = activeOf(sel), ad = colName(act.c) + act.r, vr = ruleOf(act.c, act.r);
+      if (!vr || vCheck(vr.rule, data[ad], ad)) return true;
+      const orig = fxOrig, back = () => { sel = { a: act, f: act, m: "cells" }; paint(); };
+      vAlert(vr.rule,
+        () => { back(); try { fx.focus({ preventScroll: true }); fx.select(); } catch (x) { /* bỏ qua */ } },
+        () => { setVal(ad, orig); fxDirty = false; paintAll(); back(); focusFx(); },
+        () => { fxDirty = false; changed(); if (after) after(); });
+      return false;
+    }
     const rectOf = (S) => (S.m === "cols" ? { c1: Math.min(S.a.c, S.f.c), c2: Math.max(S.a.c, S.f.c), r1: 1, r2: rows }
       : S.m === "rows" ? { c1: 0, c2: cols - 1, r1: Math.min(S.a.r, S.f.r), r2: Math.max(S.a.r, S.f.r) }
       : { c1: Math.min(S.a.c, S.f.c), c2: Math.max(S.a.c, S.f.c), r1: Math.min(S.a.r, S.f.r), r2: Math.max(S.a.r, S.f.r) });
@@ -1159,7 +1345,7 @@
     const activeOf = (S) => (S.m === "cols" ? { c: S.a.c, r: 1 } : S.m === "rows" ? { c: 0, r: S.a.r } : S.a);
     function paint() {
       root.querySelectorAll(".sel,.act,.hsel").forEach((x) => x.classList.remove("sel", "act", "hsel"));
-      if (!sel) { nameBox.textContent = ""; if (document.activeElement !== fx) fx.value = ""; info.innerHTML = selectable ? "👆 Bấm vào một ô · kéo chuột để chọn vùng · bấm tên cột / tên hàng để chọn cả cột / hàng." : ""; return; }
+      if (!sel) { nameBox.textContent = ""; if (document.activeElement !== fx) fx.value = ""; info.innerHTML = selectable ? "👆 Bấm vào một ô · kéo chuột để chọn vùng · bấm tên cột / tên hàng để chọn cả cột / hàng." : ""; placeV(); return; }
       const R = rectOf(sel), act = activeOf(sel), multi = R.c1 !== R.c2 || R.r1 !== R.r2, aAddr = colName(act.c) + act.r;
       if (multi) for (let r = R.r1; r <= R.r2; r++) for (let c = R.c1; c <= R.c2; c++) td(c, r).classList.add("sel");
       td(act.c, act.r).classList.add("act");
@@ -1170,12 +1356,77 @@
       info.innerHTML = sel.m === "cols" ? `Đang chọn: <b>cột ${R.c1 === R.c2 ? colName(R.c1) : colName(R.c1) + " → " + colName(R.c2)}</b>`
         : sel.m === "rows" ? `Đang chọn: <b>hàng ${R.r1 === R.r2 ? R.r1 : R.r1 + " → " + R.r2}</b>`
         : multi ? `Vùng đang chọn: <b>${addrOf(sel)}</b> · ô hiện thời: <b>${aAddr}</b>` : `Ô đang chọn: <b>${aAddr}</b>`;
+      placeV(); placeFill();
     }
+    // ---- NÚT KÉO ĐIỀN (fill handle): kéo ô vuông nhỏ ở góc dưới phải vùng chọn để sao chép như Excel ----
+    //  Công thức tự dời địa chỉ (địa chỉ có $ giữ nguyên); 2 số trở lên -> cấp số cộng; "HS01" -> HS02, HS03…
+    const gwrap = root.querySelector(".xs-gridwrap"), fillH = el("div", "xs-fillh");
+    fillH.title = "Kéo để sao chép sang các ô liền kề (fill handle)"; fillH.hidden = true;
+    let filling = null;
+    if (editable) { gwrap.appendChild(fillH); if (window.ResizeObserver) new ResizeObserver(() => placeFill()).observe(grid); }
+    function placeFill() {
+      if (!editable) return;
+      fillH.hidden = true;
+      if (!sel || sel.m !== "cells" || locked) return;
+      const R = rectOf(sel), t = td(R.c2, R.r2); if (!t) return;
+      const g = gwrap.getBoundingClientRect(), b = t.getBoundingClientRect(); if (!g.width) return;
+      fillH.style.left = Math.min(b.right - g.left, g.width - 7) + "px"; fillH.style.top = Math.min(b.bottom - g.top, g.height - 7) + "px";
+      fillH.hidden = false;
+    }
+    function fillTarget(x, y) {
+      const t = hitCell(x, y); if (!t || t.dataset.c == null) return filling.to;
+      const c = +t.dataset.c, r = +t.dataset.r, R = filling.R;
+      const dv = r > R.r2 ? r - R.r2 : r < R.r1 ? R.r1 - r : 0, dh = c > R.c2 ? c - R.c2 : c < R.c1 ? R.c1 - c : 0;
+      if (!dv && !dh) return null;
+      if (dv >= dh) return r > R.r2 ? { c1: R.c1, c2: R.c2, r1: R.r1, r2: r } : { c1: R.c1, c2: R.c2, r1: r, r2: R.r2 };
+      return c > R.c2 ? { c1: R.c1, c2: c, r1: R.r1, r2: R.r2 } : { c1: c, c2: R.c2, r1: R.r1, r2: R.r2 };
+    }
+    const rectAddr = (T) => normAddr(colName(T.c1) + T.r1 + ":" + colName(T.c2) + T.r2);
+    function fillApply(R, T) {
+      const vert = T.r1 !== R.r1 || T.r2 !== R.r2, n = vert ? R.r2 - R.r1 + 1 : R.c2 - R.c1 + 1, mod = (a, m) => ((a % m) + m) % m;
+      let hasF = false;
+      for (let r = T.r1; r <= T.r2; r++) for (let c = T.c1; c <= T.c2; c++) {
+        if (r >= R.r1 && r <= R.r2 && c >= R.c1 && c <= R.c2) continue;
+        const k = vert ? r - R.r1 : c - R.c1, line = []; // k: vị trí so với đầu vùng nguồn
+        for (let i = 0; i < n; i++) line.push(String(data[vert ? colName(c) + (R.r1 + i) : colName(R.c1 + i) + r] == null ? "" : data[vert ? colName(c) + (R.r1 + i) : colName(R.c1 + i) + r]));
+        const si = mod(k, n), src = line[si], sc = vert ? c : R.c1 + si, sr = vert ? R.r1 + si : r;
+        let v = src;
+        if (src.charAt(0) === "=") { v = FX.shift(src, r - sr, c - sc); hasF = true; }
+        else if (n >= 2 && line.every((x) => FX.isNum(x))) { const a0 = parseFloat(line[0]), st = (parseFloat(line[n - 1]) - a0) / (n - 1); v = String(Math.round((a0 + st * k) * 1e9) / 1e9); }
+        else if (n === 1) { const m = /^(.*?[^\d/.,:-])(\d+)$/.exec(src); if (m && !FX.isNum(src)) { const x = Math.max(0, +m[2] + k); v = m[1] + String(x).padStart(m[2].length, "0"); } }
+        setVal(colName(c) + r, v);
+      }
+      sel = { a: { c: T.c1, r: T.r1 }, f: { c: T.c2, r: T.r2 }, m: "cells" };
+      paintAll(); paint(); changed(); focusFx();
+      info.innerHTML = "🔽 Đã điền đến <b>" + rectAddr(T) + "</b>" + (hasF ? " — địa chỉ trong công thức đã tự điều chỉnh (địa chỉ có dấu $ giữ nguyên)." : ".");
+    }
+    fillH.addEventListener("pointerdown", (e) => {
+      if (locked || !sel || sel.m !== "cells" || e.button > 0) return;
+      e.preventDefault(); e.stopPropagation();
+      if (editing && !commitEdit()) return;
+      if (!vGuard()) return;
+      filling = { R: rectOf(sel), to: null };
+      try { fillH.setPointerCapture(e.pointerId); } catch (x) { /* bỏ qua */ }
+    });
+    fillH.addEventListener("pointermove", (e) => {
+      if (!filling) return;
+      const T = fillTarget(e.clientX, e.clientY); filling.to = T;
+      root.querySelectorAll(".fillp").forEach((x) => x.classList.remove("fillp"));
+      if (T) for (let r = T.r1; r <= T.r2; r++) for (let c = T.c1; c <= T.c2; c++) td(c, r).classList.add("fillp");
+      info.innerHTML = T ? "🔽 Thả ra để điền đến <b>" + rectAddr(T) + "</b>" : "🔽 Kéo xuống (hoặc sang ngang) để sao chép…";
+    });
+    const fillEnd = () => {
+      if (!filling) return; const F = filling; filling = null;
+      root.querySelectorAll(".fillp").forEach((x) => x.classList.remove("fillp"));
+      if (F.to && !locked) fillApply(F.R, F.to); else paint();
+    };
+    fillH.addEventListener("pointerup", fillEnd); fillH.addEventListener("pointercancel", fillEnd);
     const hitCell = (x, y) => { const t = document.elementFromPoint(x, y); return t && grid.contains(t) ? t.closest("td,th") : null; };
     grid.addEventListener("pointerdown", (e) => {
       if (locked || !selectable || e.button > 0) return;
       const t = e.target.closest("td,th"); if (!t || t.classList.contains("xs-corner")) return;
-      if (editing) { if (editing.td === t) return; commitEdit(); }
+      if (editing) { if (editing.td === t) return; if (!commitEdit()) { e.preventDefault(); return; } }
+      if (!vGuard()) { e.preventDefault(); return; }
       e.preventDefault();
       const ext = e.shiftKey && sel;
       if (t.dataset.col != null) { const c = +t.dataset.col; sel = ext && sel.m === "cols" ? { ...sel, f: { c, r: 1 } } : { a: { c, r: 1 }, f: { c, r: 1 }, m: "cols" }; }
@@ -1231,16 +1482,24 @@
       if (!canEdit(ad)) { info.innerHTML = "🔒 Chỉ nhập vào ô được tô vàng."; return; }
       inp.value = initial != null ? initial : data[ad] || ""; t.appendChild(inp); inp.focus();
       editing = { c: act.c, r: act.r, ad, td: t, input: inp };
-      inp.onkeydown = (e) => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); commitEdit(true); move(0, 1); focusFx(); } else if (e.key === "Escape") cancelEdit(); else if (e.key === "Tab") { e.preventDefault(); commitEdit(true); move(1, 0); focusFx(); } };
+      inp.onkeydown = (e) => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); if (commitEdit(true)) { move(0, 1); focusFx(); } } else if (e.key === "Escape") cancelEdit(); else if (e.key === "Tab") { e.preventDefault(); if (commitEdit(true)) { move(1, 0); focusFx(); } } };
       inp.oninput = () => { fx.value = inp.value; };
       inp.onblur = () => { if (editing && editing.input === inp) commitEdit(true); };
     }
-    function commitEdit(fromBlur) { if (!editing) return; const E = editing; editing = null; setVal(E.ad, E.input.value); E.input.remove(); repaintRow(E.c, E.r); paint(); changed(); if (!fromBlur) focusFx(); }
+    function commitEdit(fromBlur) {
+      if (!editing) return true; const E = editing, val = E.input.value, vr = ruleOf(E.c, E.r);
+      if (vr && !vAlerting && !vCheck(vr.rule, val, E.ad)) { // nhập sai quy tắc xác thực -> thông báo lỗi
+        editing = null; E.input.remove(); paintCell(E.c, E.r);
+        const back = () => { sel = { a: { c: E.c, r: E.r }, f: { c: E.c, r: E.r }, m: "cells" }; paint(); };
+        vAlert(vr.rule, () => { back(); startEdit(val); }, () => { back(); focusFx(); }, () => { setVal(E.ad, val); repaintRow(E.c, E.r); back(); changed(); focusFx(); });
+        return false;
+      }
+      editing = null; setVal(E.ad, val); E.input.remove(); repaintRow(E.c, E.r); paint(); changed(); if (!fromBlur) focusFx(); return true;
+    }
     function cancelEdit() { if (!editing) return; const E = editing; editing = null; E.input.remove(); paintCell(E.c, E.r); paint(); focusFx(); }
     function clearSel() { if (!sel || locked) return; const R = rectOf(sel); for (let r = R.r1; r <= R.r2; r++) for (let c = R.c1; c <= R.c2; c++) if (canEdit(colName(c) + r)) delete data[colName(c) + r]; paintAll(); paint(); changed(); }
     // Chọn ô xong -> con trỏ nằm sẵn ở VÙNG NHẬP DỮ LIỆU (ô nhập thật: gõ được bằng bàn phím ảo
     // điện thoại và bộ gõ tiếng Việt); gõ đến đâu ô hiện đến đó, Enter xuống ô dưới. Nháy đúp = sửa trong ô.
-    let fxDirty = false, fxOrig = "";
     function focusFx() {
       if (!editable || locked || !sel) return;
       const act = activeOf(sel); fxOrig = data[colName(act.c) + act.r] || ""; fx.value = fxOrig; fxDirty = false; fx.readOnly = !canEdit(colName(act.c) + act.r);
@@ -1262,11 +1521,11 @@
         const multi = sel && (() => { const R = rectOf(sel); return R.c1 !== R.c2 || R.r1 !== R.r2; })();
         if ((e.ctrlKey || e.metaKey) && /^[cv]$/i.test(k) && !fxDirty) { if (k.toLowerCase() === "c") copySel(); else { e.preventDefault(); pasteSel(); focusFx(); } return; }
         if (k === "Escape" && clip && !fxDirty) { clip = null; root.querySelectorAll(".copied").forEach((x) => x.classList.remove("copied")); }
-        if (k === "Enter" || k === "Tab") { e.preventDefault(); if (fxDirty) changed(); if (k === "Enter") move(0, e.shiftKey ? -1 : 1); else move(1, 0); focusFx(); return; }
+        if (k === "Enter" || k === "Tab") { e.preventDefault(); const go = () => { if (k === "Enter") move(0, e.shiftKey ? -1 : 1); else move(1, 0); focusFx(); }; if (!vGuard(go)) return; if (fxDirty) changed(); go(); return; }
         if (k === "Escape") { e.preventDefault(); if (sel) { const act = activeOf(sel); setVal(colName(act.c) + act.r, fxOrig); repaintRow(act.c, act.r); } focusFx(); return; }
         if ((k === "Delete" || k === "Backspace") && multi && !fxDirty) { e.preventDefault(); clearSel(); focusFx(); return; }
         if (arrows[k] && (!fxDirty || k === "ArrowUp" || k === "ArrowDown")) {
-          e.preventDefault(); const [dc, dr] = arrows[k];
+          e.preventDefault(); if (!vGuard()) return; const [dc, dr] = arrows[k];
           if (e.shiftKey && sel && sel.m === "cells") { sel.f = { c: clamp(sel.f.c + dc, 0, cols - 1), r: clamp(sel.f.r + dr, 1, rows) }; paint(); }
           else { move(dc, dr); focusFx(); }
         }
@@ -1278,7 +1537,7 @@
       root.querySelector('[data-tool="del"]').onclick = () => { clearSel(); focusFx(); };
       root.querySelector('[data-tool="copy"]').onclick = () => { copySel(); };
       root.querySelector('[data-tool="paste"]').onclick = () => { pasteSel(); focusFx(); };
-      fx.addEventListener("blur", () => { if (fxDirty) { fxDirty = false; changed(); } });
+      fx.addEventListener("blur", () => { if (vAlerting) return; if (fxDirty) { if (!vGuard()) return; fxDirty = false; changed(); } });
       root.querySelectorAll(".xs-tab").forEach((tab) => { tab.ondblclick = () => { // nháy đúp tên trang tính để đổi tên
         if (locked) return; tab.contentEditable = "true"; tab.focus(); document.getSelection().selectAllChildren(tab);
         tab.onkeydown = (e) => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); tab.blur(); } };
@@ -1295,7 +1554,7 @@
           : { a: { c: clamp(R.c1, 0, cols - 1), r: clamp(R.r1, 1, rows) }, f: { c: clamp(R.c2, 0, cols - 1), r: clamp(R.r2, 1, rows) }, m: "cells" };
         paint();
       },
-      lock() { locked = true; drag = false; root.classList.add("locked"); fx.readOnly = true; },
+      lock() { locked = true; drag = false; filling = null; fillH.hidden = true; root.classList.add("locked"); fx.readOnly = true; },
       repaint() { paintAll(); paint(); },
       mark(ad, cls) { const R = addrRect(ad, cols, rows); if (!R) return; for (let r = R.r1; r <= Math.min(R.r2, rows); r++) for (let c = R.c1; c <= Math.min(R.c2, cols - 1); c++) td(c, r).classList.add(cls); },
       onSelect(fn) { cb = fn; },
@@ -1316,26 +1575,29 @@
   const mmKind = (f) => MM_KINDS[f && f.kind] || MM_KINDS.doc;
   function mmClone(n) { n = n || {}; return { text: String(n.text == null ? "" : n.text), box: !!n.box, files: (n.files || []).map((f) => Object.assign({}, f)), children: (n.children || []).map(mmClone) }; }
   // Sơ đồ -> dàn ý chữ (GV đọc được ở bảng Tự luận; màn chiếu dựng lại được sơ đồ)
-  function mmToText(root) {
-    const out = [], one = (s) => String(s == null ? "" : s).replace(/\s+/g, " ").trim();
+  function mmToText(root, lib) {
+    const out = [], one = (s) => String(s == null ? "" : s).replace(/\s+/g, " ").trim(), libF = (lib && lib.files) || [];
+    const fromLib = (f) => libF.some((g) => g.kind === f.kind && g.name === f.name && (g.url || g.note || "") === (f.url || f.note || "")); // tệp lấy từ thư mục: chỉ ghi tên
     (function walk(n, d) {
       const pad = "  ".repeat(d);
       out.push(pad + (String(n.text).split("\n").map(one).filter(Boolean).join(" / ") || "(trống)"));
-      (n.files || []).forEach((f) => { const k = mmKind(f), extra = one(f.url || f.note); out.push(pad + "  📎 " + k[0] + " " + (one(f.name) || k[1]) + (extra ? " — " + extra : "")); });
+      (n.files || []).forEach((f) => { const k = mmKind(f), extra = fromLib(f) ? "" : one(f.url || f.note); out.push(pad + "  📎 " + k[0] + " " + (one(f.name) || k[1]) + (extra ? " — " + extra : "")); });
       (n.children || []).forEach((c) => walk(c, d + 1));
     })(root, 0);
     const t = out.join("\n"); return t.length > 2950 ? t.slice(0, 2950) + "\n…" : t;
   }
-  function mmFromText(txt) {
-    const root = { text: "", files: [], children: [] }, stack = [];
+  function mmFromText(txt, lib) {
+    const root = { text: "", files: [], children: [] }, stack = [], libF = (lib && lib.files) || [];
     String(txt || "").split("\n").filter((s) => s.trim() && s.trim() !== "…").forEach((ln) => {
       const d = Math.floor(ln.match(/^ */)[0].length / 2), s = ln.trim();
       if (!stack.length) { root.text = s.replace(/ \/ /g, "\n"); stack.push(root); return; }
       if (s.indexOf("📎") === 0) {
         let rest = s.replace(/^📎\s*/, ""), kind = "doc";
         Object.keys(MM_KINDS).some((k) => { if (rest.indexOf(MM_KINDS[k][0]) !== 0) return false; kind = k; rest = rest.slice(MM_KINDS[k][0].length).trim(); return true; });
-        const cut = rest.indexOf(" — "), f = { kind, name: cut >= 0 ? rest.slice(0, cut) : rest };
+        const cut = rest.indexOf(" — "); let f = { kind, name: cut >= 0 ? rest.slice(0, cut) : rest };
         if (cut >= 0) { const x = rest.slice(cut + 3); if (/^https?:\/\//i.test(x)) f.url = x; else f.note = x; }
+        const same = libF.filter((g) => g.kind === f.kind && g.name === f.name)[0]; // tệp lấy từ thư mục dự án: dựng lại đủ nội dung
+        if (same) f = Object.assign({}, same);
         (stack[Math.max(0, Math.min(d - 1, stack.length - 1))]).files.push(f); return;
       }
       const node = { text: s.replace(/ \/ /g, "\n"), files: [], children: [] }, dd = Math.max(1, Math.min(d, stack.length));
@@ -1477,10 +1739,19 @@
       }; });
     }
     const PH = { doc: "Nội dung văn bản (tóm tắt ngắn)", img: "Mô tả ảnh (không bắt buộc)", video: "Nội dung / nguồn video", sheet: "Trang tính chứa gì? (vd: số cây mỗi lớp trồng)", link: "Địa chỉ trang web: https://…" };
+    const lib = opts.library && opts.library.files && opts.library.files.length ? opts.library : null;
+    function attachFile(f) {
+      (sel.files = sel.files || []).push(f); attachP.hidden = true; paintNode(sel); later(); changed();
+      const o = info.get(sel); if (o) { o.el.classList.remove("pop"); void o.el.offsetWidth; o.el.classList.add("pop"); }
+    }
     function openAttach() {
       if (!attachP.hidden) { attachP.hidden = true; return; }
-      let kind = "img", src = null;
-      attachP.innerHTML = `<div class="mm-kinds">${Object.keys(MM_KINDS).map((k) => `<button type="button" data-k="${k}">${MM_KINDS[k][0]} ${MM_KINDS[k][1]}</button>`).join("")}</div>
+      let kind = "img", src = null, pickF = -1;
+      attachP.innerHTML = (lib ? `<div class="mm-lib"><div class="mm-lib-path">📁 ${esc(lib.path || "Thư mục dự án")}</div>
+        <div class="mm-lib-files">${lib.files.map((f, i) => `<button type="button" data-l="${i}">${mmKind(f)[0]} ${esc(f.name)}</button>`).join("")}</div>
+        <div class="mm-aact"><span class="mm-lib-fn">File name: <b>—</b></span><button type="button" class="prim" data-a="open" disabled>📂 Open — đính kèm vào nhánh đang chọn</button></div></div>
+        <div class="mm-lib-or">hoặc tự tạo tệp đính kèm:</div>` : "")
+        + `<div class="mm-kinds">${Object.keys(MM_KINDS).map((k) => `<button type="button" data-k="${k}">${MM_KINDS[k][0]} ${MM_KINDS[k][1]}</button>`).join("")}</div>
         <div class="mm-afields"><input class="mm-aname" placeholder="Tên tệp / tiêu đề (vd: Ảnh vườn trường)" maxlength="60"><input class="mm-anote" maxlength="200"><label class="mm-pick">📁 Chọn ảnh từ máy<input type="file" accept="image/*" hidden></label></div>
         <div class="mm-aact"><button type="button" class="prim" data-a="ok">✅ Đính kèm vào nhánh đang chọn</button><button type="button" data-a="no">Hủy</button><span class="mm-apic"></span></div>`;
       const nm = attachP.querySelector(".mm-aname"), nt = attachP.querySelector(".mm-anote"), pick = attachP.querySelector(".mm-pick"), pic = attachP.querySelector(".mm-apic");
@@ -1492,10 +1763,17 @@
         const f = { kind, name: nm.value.trim() || MM_KINDS[kind][1] }, v = nt.value.trim();
         if (v) { if (kind === "link" && /^https?:\/\//i.test(v)) f.url = v; else f.note = v; }
         if (src) f.src = src;
-        (sel.files = sel.files || []).push(f); attachP.hidden = true; paintNode(sel); later(); changed();
-        const o = info.get(sel); if (o) { o.el.classList.remove("pop"); void o.el.offsetWidth; o.el.classList.add("pop"); }
+        attachFile(f);
       };
-      setKind("img"); attachP.hidden = false; nm.focus();
+      if (lib) {
+        const fn = attachP.querySelector(".mm-lib-fn b"), open = attachP.querySelector("[data-a=open]");
+        attachP.querySelectorAll(".mm-lib-files button").forEach((b) => {
+          b.onclick = () => { pickF = +b.dataset.l; attachP.querySelectorAll(".mm-lib-files button").forEach((x) => x.classList.toggle("on", x === b)); fn.textContent = lib.files[pickF].name; open.disabled = false; };
+          b.ondblclick = () => { b.onclick(); open.onclick(); };
+        });
+        open.onclick = () => { if (pickF >= 0) attachFile(Object.assign({}, lib.files[pickF])); };
+      }
+      setKind("img"); attachP.hidden = false; if (!lib) nm.focus();
     }
     build();
     return { el: box, relayout: later };
@@ -1506,17 +1784,26 @@
     if (!mmMem[key]) {
       let t = null;
       if (ed) { try { t = JSON.parse(localStorage.getItem(lsKey) || "null"); } catch (e) { t = null; } }
-      if (!t && ed && STUDENT) { const s = ask("getText", tk); if (s && s.text) t = mmFromText(s.text); } // máy khác: dựng lại từ bản đã gửi
+      if (!t && ed && STUDENT) { const s = ask("getText", tk); if (s && s.text) t = mmFromText(s.text, spec.library); } // máy khác: dựng lại từ bản đã gửi
       mmMem[key] = mmClone(t && typeof t.text === "string" ? t : spec.root || { text: "Chủ đề" });
     }
-    const save = () => { try { localStorage.setItem(lsKey, JSON.stringify(mmMem[key])); } catch (e) { /* hết chỗ / chế độ riêng tư: vẫn làm tiếp được */ } };
+    const needEl = spec.need && spec.need.length ? el("div", "mm-need") : null;
+    const needPaint = () => { // tiêu chí: các loại tệp cần đính kèm ("video|link" = một trong hai)
+      if (!needEl) return; const have = {};
+      (function walk(n) { (n.files || []).forEach((f) => { have[f.kind] = 1; }); (n.children || []).forEach(walk); })(mmMem[key]);
+      const ok = spec.need.map((k) => String(k).split("|").some((x) => have[x])), done = ok.filter(Boolean).length;
+      needEl.innerHTML = `<b>📎 Đã đính kèm ${done}/${ok.length} loại dữ liệu:</b> ` + spec.need.map((k, i) => `<span class="${ok[i] ? "ok" : ""}">${ok[i] ? "✅" : "⬜"} ${String(k).split("|").map((x) => mmKind({ kind: x }).join(" ")).join(" / ")}</span>`).join("")
+        + (done === ok.length ? ` <b class="mm-need-all">🎉 Đủ yêu cầu!</b>` : "");
+    };
+    const save = () => { try { localStorage.setItem(lsKey, JSON.stringify(mmMem[key])); } catch (e) { /* hết chỗ / chế độ riêng tư: vẫn làm tiếp được */ } needPaint(); };
     const box = el("div", "mm-box");
     if (spec.intro) box.appendChild(el("p", "subtitle", esc(spec.intro)));
-    box.appendChild(mountMindmap(mmMem[key], { editable: ed, title: spec.title, layout: spec.layout, onChange: ed ? save : null,
+    box.appendChild(mountMindmap(mmMem[key], { editable: ed, title: spec.title, layout: spec.layout, library: ed ? spec.library : null, onChange: ed ? save : null,
       onReset: ed ? () => { mmMem[key] = mmClone(spec.root || { text: "Chủ đề" }); save(); return mmMem[key]; } : null }).el);
+    if (needEl) { box.appendChild(needEl); needPaint(); }
     if (spec.submit && STUDENT) {
       const sent = ask("getText", tk), btn = el("button", "btn", "📨 Gửi sơ đồ cho thầy/cô"), st = el("span", "ta-status", sent ? "✓ Đã gửi — sửa xong có thể gửi lại" : "");
-      btn.onclick = () => { emit("onText", { key: tk, activityId: aid(a), text: mmToText(mmMem[key]) }); st.textContent = "✓ Đã gửi lúc " + new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) + " — sửa xong có thể gửi lại"; sound("ok"); };
+      btn.onclick = () => { emit("onText", { key: tk, activityId: aid(a), text: mmToText(mmMem[key], spec.library) }); st.textContent = "✓ Đã gửi lúc " + new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) + " — sửa xong có thể gửi lại"; sound("ok"); };
       const row = el("div", "ta-row"); row.append(btn, st); box.appendChild(row);
     }
     if (spec.submit && !STUDENT && ask("groupTexts", tk)) { const b = el("button", "btn ghost", "📥 Xem sơ đồ các nhóm đã gửi"); b.onclick = () => mmGallery(a, tk); box.appendChild(wrapEl(b)); }
@@ -1527,7 +1814,7 @@
     const list = ask("groupTexts", tk) || [], p = popup(`📥 Sơ đồ tư duy các nhóm đã gửi (${list.length})`, true);
     if (!list.length) { p.card.appendChild(el("p", "subtitle", "Chưa có nhóm nào gửi sơ đồ.")); return; }
     const tabs = el("div", "mm-gtabs"), stage = el("div");
-    const show = (i) => { [...tabs.children].forEach((b, j) => b.classList.toggle("on", i === j)); stage.innerHTML = ""; stage.appendChild(mountMindmap(mmFromText(list[i].text), { layout: a.mindmap.layout }).el); };
+    const show = (i) => { [...tabs.children].forEach((b, j) => b.classList.toggle("on", i === j)); stage.innerHTML = ""; stage.appendChild(mountMindmap(mmFromText(list[i].text, a.mindmap.library), { layout: a.mindmap.layout }).el); };
     list.forEach((g, i) => { const b = el("button", null, esc(g.name)); b.type = "button"; b.onclick = () => show(i); tabs.appendChild(b); });
     p.card.append(tabs, stage); show(0);
   }
@@ -1596,7 +1883,19 @@
     const toast = (t) => { const x = el("div", "gm-toast", esc(t)); box.appendChild(x); setTimeout(() => x.remove(), 2600); };
     const initial = () => (S2.me.name || "?").trim().split(/\s+/).pop().charAt(0).toUpperCase();
     const bodyOf = (m) => String(m.body || "").replace(/\{ten\}/g, (S2.me.name || "bạn").trim().split(/\s+/).pop()); // {ten} = tên chủ hộp thư
-    function draw() { box.innerHTML = ""; (S2.view === "login" ? drawLogin : S2.view === "signup" ? drawSignup : drawBox)(); }
+    const det = spec.detect ? el("div", "gm-detect") : null;
+    if (det) wrap.appendChild(det);
+    function paintDet() { // thám tử: thư lừa đảo (scam) phải được Báo cáo thư rác / xoá; thư thật không bị báo nhầm
+      if (!det) return;
+      const mine = S2.items.filter((m) => /^i\d+$/.test(m.id)), scams = mine.filter((m) => m.scam), caught = scams.filter((m) => m.box === "spam" || m.box === "trash").length;
+      const wrong = mine.filter((m) => !m.scam && !m.spam && m.box === "spam").length, all = caught === scams.length && !wrong;
+      det.className = "gm-detect" + (all ? " done" : "");
+      det.innerHTML = `🕵️ <b>Thám tử lừa đảo:</b> đã phát hiện <b>${caught}/${scams.length}</b> thư lừa đảo (Báo cáo thư rác hoặc Xoá)`
+        + (wrong ? ` · <span class="gm-det-no">⚠️ Báo nhầm ${wrong} thư thật</span>` : "") + (all ? " · 🎉 Xuất sắc — hộp thư đã an toàn!" : "");
+      if (all && !S2.detDone) { S2.detDone = true; celebrate(); sound("ok"); }
+      if (!all) S2.detDone = false;
+    }
+    function draw() { box.innerHTML = ""; (S2.view === "login" ? drawLogin : S2.view === "signup" ? drawSignup : drawBox)(); paintDet(); }
     // ---- Đăng nhập (2 bước như Google) ----
     function drawLogin(step) {
       const card = el("div", "gm-auth");
@@ -1777,7 +2076,7 @@
 .xs-fx{color:#6b7280;font-style:italic;font-weight:700;font-family:Georgia,serif}
 .xs-formula{flex:1;min-width:0;font:inherit;font-size:1.1rem;padding:4px 10px;border:1.5px solid #b9bfca;border-radius:4px;background:#fff;color:#111}
 .xs-formula[readonly]{background:#fafafa}
-.xs-gridwrap{overflow:hidden;touch-action:none}
+.xs-gridwrap{overflow:hidden;touch-action:none;position:relative}
 .xs-grid{border-collapse:collapse;table-layout:fixed;width:100%;font-size:clamp(12px,1.55vw,19px)}
 .xs-grid th{background:var(--xs-head);color:#4b5563;font-weight:600;border:1px solid var(--xs-line);height:1.95em;font-size:.86em;padding:0;overflow:hidden}
 .xsheet.selectable .xs-grid th{cursor:pointer}
@@ -1797,6 +2096,9 @@
 .xs-grid td.m-no{box-shadow:inset 0 0 0 9999px rgba(220,38,38,.25)}
 .xs-grid td.m-target{box-shadow:inset 0 0 0 9999px rgba(250,204,21,.35)}
 .xs-grid td.copied{outline:2.5px dashed var(--xs-green);outline-offset:-4px}
+.xs-grid td.fillp{outline:2px dashed #6b7280;outline-offset:-3px}
+.xs-fillh{position:absolute;width:11px;height:11px;margin:-6px 0 0 -6px;background:var(--xs-green);border:2px solid #fff;box-shadow:0 0 0 1px var(--xs-green);z-index:3;cursor:crosshair;touch-action:none}
+.xs-fillh::before{content:"";position:absolute;inset:-11px}
 .xs-grid td.err{text-align:center;color:#b91c1c;font-weight:700}
 .xs-hint{font-size:1.1rem;margin:6px 0;color:#334155}
 .xs-expect{margin:10px 0;padding:10px 14px;border-radius:12px;background:#f0fdf4;border:2px solid #86efac;font-size:1.15rem}
@@ -1888,6 +2190,64 @@
 .mm-file{border:1.5px dashed #94a3b8;background:#fff;border-radius:8px;padding:3px 8px;font-size:.85rem;font-weight:700;color:#334155;cursor:pointer;text-align:left;font-family:inherit}
 .mm-file:hover{background:#fef9c3;border-color:#ca8a04}
 .mm-hint{font-size:.9rem;color:#475569;padding:6px 12px;background:#faf5ff;border-top:1px solid #ede9fe}
+.mm-lib{border:1.5px solid #cbd5e1;border-radius:10px;overflow:hidden;background:#fff}
+.mm-lib-path{background:#f1f5f9;padding:6px 10px;font-weight:700;color:#334155;border-bottom:1px solid #e2e8f0}
+.mm-lib-files{display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px}
+.mm-lib-files button{border:1px solid transparent;background:#fff;border-radius:6px;padding:6px 10px;font-size:1rem;cursor:pointer;color:#1e293b}
+.mm-lib-files button:hover{background:#eff6ff;border-color:#bfdbfe}
+.mm-lib-files button.on{background:#dbeafe;border-color:#3b82f6;font-weight:700}
+.mm-lib .mm-aact{padding:6px 10px;border-top:1px solid #e2e8f0;background:#f8fafc}
+.mm-lib-fn{flex:1 1 200px;color:#475569}
+.mm-aact button:disabled{opacity:.5;cursor:default}
+.mm-lib-or{font-size:.9rem;color:#64748b;font-style:italic}
+.mm-need{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin-top:8px;padding:8px 12px;background:#fff7ed;border:1.5px solid #fdba74;border-radius:12px;font-size:1rem}
+.mm-need span{color:#64748b}.mm-need span.ok{color:#15803d;font-weight:700}
+.mm-need-all{color:#15803d}
+.chat{max-width:560px;margin:12px auto;border:3px solid #1e293b;border-radius:26px;overflow:hidden;background:#e5ddd5;box-shadow:0 10px 26px rgba(15,23,42,.18)}
+.chat-top{display:flex;align-items:center;gap:10px;background:#0f766e;color:#fff;padding:10px 14px}
+.chat-av{font-size:1.9rem;width:46px;height:46px;border-radius:50%;background:#fff;display:grid;place-items:center;flex:0 0 46px}
+.chat-who{flex:1;min-width:0;line-height:1.2}.chat-who b{display:block;font-size:1.1rem}.chat-who small{opacity:.85;font-size:.85rem}
+.chat-ico{opacity:.85;letter-spacing:4px}
+.chat-log{display:flex;flex-direction:column;gap:6px;padding:12px 12px 16px;max-height:52vh;min-height:180px;overflow-y:auto}
+.chat-b{max-width:80%;padding:8px 12px;border-radius:14px;font-size:1.08rem;line-height:1.4;box-shadow:0 1px 2px rgba(0,0,0,.15);white-space:pre-wrap;overflow-wrap:anywhere}
+.chat-b.them{align-self:flex-start;background:#fff;border-top-left-radius:4px;color:#111827}
+.chat-b.me{align-self:flex-end;background:#dcf8c6;border-top-right-radius:4px;color:#111827}
+.chat-b.me.ok{box-shadow:0 0 0 2px #16a34a}.chat-b.me.no{box-shadow:0 0 0 2px #dc2626;background:#fee2e2}
+.chat-b.new,.chat-b[style*="animation-delay"]{animation:chatIn .35s ease both}
+@keyframes chatIn{from{opacity:0;transform:translateY(8px) scale(.96)}to{opacity:1;transform:none}}
+.chat-sep{align-self:center;background:#fef3c7;color:#92400e;font-size:.85rem;font-weight:700;padding:3px 12px;border-radius:999px;margin:6px 0}
+.pw{margin:14px 0;border:2px solid #a5b4fc;border-radius:16px;background:#fff;padding:12px 16px;max-width:720px}
+.pw-head{font-weight:800;font-size:1.2rem;color:#3730a3}.pw-intro{margin:4px 0}
+.pw-warn{margin:6px 0;background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:10px;padding:6px 10px;font-size:.95rem}
+.pw-row{display:flex;gap:8px}.pw-in{flex:1;min-width:0;font:inherit;font-size:1.3rem;padding:8px 12px;border:2px solid #c7d2fe;border-radius:10px;letter-spacing:1px}
+.pw-eye{border:2px solid #c7d2fe;background:#eef2ff;border-radius:10px;font-size:1.2rem;padding:0 12px;cursor:pointer}
+.pw-bar{height:14px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin:10px 0 4px}.pw-bar i{display:block;height:100%;width:0;border-radius:999px;transition:width .3s,background .3s}
+.pw-lv{font-size:1.05rem}.pw-crit{list-style:none;padding:0;margin:8px 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:4px 12px}
+.pw-crit li{color:#64748b}.pw-crit li.ok{color:#15803d;font-weight:700}
+.pw-w div{color:#b45309;font-size:.98rem}
+.pw-ex{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}.pw-ex span{color:#475569;font-weight:700}
+.pw-ex button{border:1px solid #cbd5e1;background:#f8fafc;border-radius:8px;padding:4px 10px;font-family:Consolas,monospace;font-size:1rem;cursor:pointer}
+.gm-detect{margin-top:10px;padding:10px 14px;border-radius:12px;background:#fff7ed;border:2px solid #fdba74;font-size:1.05rem}
+.gm-detect.done{background:#f0fdf4;border-color:#86efac}.gm-det-no{color:#b91c1c;font-weight:700}
+.xsheet.has-v{overflow:visible;position:relative}.xsheet.has-v .xs-title{border-radius:11px 11px 0 0}
+.xs-vtip{position:absolute;z-index:6;background:#fffde7;border:1px solid #a3a3a3;box-shadow:2px 2px 6px rgba(0,0,0,.2);padding:4px 9px;font-size:.85rem;color:#333;max-width:230px;pointer-events:none;line-height:1.35}
+.xs-vtip b{display:block}.xs-vtip[hidden],.xs-vdrop[hidden],.xs-vlist[hidden]{display:none}
+.xs-vdrop{position:absolute;z-index:6;width:24px;border:1px solid #9ca3af;background:#f3f4f6;cursor:pointer;font-size:.85rem;padding:0;color:#111}
+.xs-vlist{position:absolute;z-index:7;background:#fff;border:1px solid #6b7280;box-shadow:0 6px 16px rgba(0,0,0,.22);max-height:240px;overflow-y:auto;display:flex;flex-direction:column}
+.xs-vlist button{border:0;background:#fff;text-align:left;padding:5px 12px;font:inherit;font-size:1rem;cursor:pointer;color:#111;white-space:nowrap}
+.xs-vlist button:hover,.xs-vlist button:focus{background:#2563eb;color:#fff}
+.xs-vinfo{color:#15803d}
+.xs-valert-ov{position:fixed;inset:0;background:rgba(15,23,42,.25);z-index:300;display:grid;place-items:center;padding:12px}
+.xs-valert{background:#fff;border:1px solid #6b7280;box-shadow:0 14px 34px rgba(0,0,0,.35);width:min(460px,94vw);font-family:"Segoe UI",Arial,sans-serif;color:#111;animation:chatIn .18s ease both}
+.xs-va-head{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;font-weight:600}
+.xs-va-head button{border:0;background:none;font-size:1.1rem;cursor:pointer}
+.xs-va-body{display:flex;gap:16px;align-items:center;padding:16px 22px;background:#f3f4f6;font-size:1.05rem}
+.xs-va-ico{flex:0 0 42px;height:42px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:900;font-size:1.3rem}
+.xs-va-ico.stop{background:#dc2626}.xs-va-ico.warning{background:#f59e0b;border-radius:8px}.xs-va-ico.information{background:#2563eb}
+.xs-va-btns{display:flex;gap:10px;justify-content:center;padding:8px 12px 16px;background:#f3f4f6}
+.xs-va-btns button{min-width:96px;padding:6px 14px;border:1px solid #9ca3af;background:#e5e7eb;cursor:pointer;font:inherit}
+.xs-va-btns button:first-child{border:2px solid #2563eb}
+.xs-va-help{padding:0 18px 14px;background:#f3f4f6;font-size:.92rem;color:#475569}
 .mm-pop{position:fixed;inset:0;z-index:130;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;padding:16px}
 .mm-pop-card{background:#fff;color:#1f2937;border-radius:18px;width:min(760px,96vw);max-height:92vh;overflow:auto;padding:14px 18px;box-shadow:0 20px 50px rgba(0,0,0,.35);animation:lhGiftPop .3s ease}
 .mm-pop-card.wide{width:96vw}
@@ -2071,6 +2431,110 @@
       }
     };
     renderQuizInto(c, a);
+  }
+
+  // ---- TRÒ CHUYỆN TÌNH HUỐNG (type "chat") — khung tin nhắn giống ứng dụng nhắn tin ----------------
+  //  chat: { name, avatar?: "🦊", status?: "…" }, intro?,
+  //  questions: [{ question: "tin nhắn đến (mỗi dòng 1 bong bóng)", options: ["câu trả lời", …], answer, explanation,
+  //               reaction?: "tin đáp lại khi em trả lời an toàn", badReaction?: "tin đáp lại khi chưa an toàn",
+  //               chat?: { name, avatar, status } (đổi người nhắn), prompt?: "dòng nhắc" }]
+  //  Mỗi câu là câu trắc nghiệm bình thường: chấm điểm, lớp học, theo nhịp GV giống quiz.
+  function chatChoiceOf(a, i) {
+    if (STUDENT) { const r = ask("getAttempt", qKey(a, i)); return r ? r.choice : null; }
+    return a._chosen && i in a._chosen ? a._chosen[i] : null;
+  }
+  function renderChat(a) {
+    ensureEngineCSS();
+    const qs = a.questions || [];
+    const c = el("div", "card chat-card"); activityHead(a, c);
+    if (a.intro) c.appendChild(el("p", "subtitle", esc(a.intro)));
+    if (!qs.length) { view.appendChild(c); return renderQuizInto(c, a); }
+    if (a._qi == null) { a._qi = 0; while (a._qi < qs.length - 1 && ask("getAttempt", qKey(a, a._qi))) a._qi++; }
+    const who = (i) => Object.assign({ name: "Người lạ", avatar: "👤" }, a.chat, qs[i] && qs[i].chat);
+    const cur = who(a._qi), st = actStateOf(a), judged = st === "free" || st === "revealed";
+    const phone = el("div", "chat");
+    phone.innerHTML = `<div class="chat-top"><span class="chat-av">${esc(cur.avatar)}</span><div class="chat-who"><b>${esc(cur.name)}</b>${cur.status ? `<small>${esc(cur.status)}</small>` : ""}</div><span class="chat-ico">📞 ⋮</span></div><div class="chat-log"></div>`;
+    const log = phone.querySelector(".chat-log");
+    const lines = (t) => String(t == null ? "" : t).split("\n").filter((x) => x.trim());
+    const bub = (t, me, extra, delay) => { const b = el("div", "chat-b " + (me ? "me" : "them") + (extra ? " " + extra : ""), esc(t)); if (delay) b.style.animationDelay = delay + "s"; log.appendChild(b); return b; };
+    const replyText = (q, ch) => (q.type === "true-false" ? (ch ? "Đúng" : "Sai") : Array.isArray(ch) ? ch.map((k) => (q.options || [])[k]).join(" · ") : (q.options || [])[ch]);
+    const answerBubbles = (i, ch, live) => {
+      const q = qs[i], ok = judgeLocal(q, ch);
+      bub(replyText(q, ch), true, judged ? (ok ? "ok" : "no") : i === a._qi ? "pick" : "", 0);
+      if (judged) lines(ok ? q.reaction : q.badReaction).forEach((t, k) => bub(t, false, "", live ? 0.7 + k * 0.6 : 0));
+    };
+    for (let i = 0; i <= a._qi; i++) {
+      if (i && who(i).name !== who(i - 1).name) log.appendChild(el("div", "chat-sep", `Tin nhắn từ ${esc(who(i).avatar)} ${esc(who(i).name)}`));
+      lines(qs[i].question).forEach((t, k) => bub(t, false, i === a._qi ? "new" : "", i === a._qi ? k * 0.5 : 0));
+      const ch = chatChoiceOf(a, i);
+      if (ch != null && (i < a._qi || STUDENT)) answerBubbles(i, ch, false);
+    }
+    c.appendChild(phone); view.appendChild(c);
+    const toEnd = () => { log.scrollTop = log.scrollHeight; };
+    toEnd(); setTimeout(toEnd, 1600);
+    c._chatPick = (ch) => { log.querySelectorAll(".chat-b.pick").forEach((x) => x.remove()); bub(replyText(qs[a._qi], ch), true, "pick", 0); toEnd(); }; // theo nhịp GV: đổi câu trả lời
+    c._chat = (ok, choice) => {
+      (a._chosen = a._chosen || {})[a._qi] = choice;
+      answerBubbles(a._qi, choice, true); toEnd(); setTimeout(toEnd, 2200);
+      if (a._qi >= qs.length - 1) {
+        const safe = qs.filter((q, i) => { const ch = chatChoiceOf(a, i); return ch != null && judgeLocal(q, ch); }).length;
+        const done = el("div", "feedback ok");
+        done.innerHTML = `🛡️ Em đã xử lí an toàn <b>${safe}/${qs.length}</b> tình huống. ` + (safe === qs.length ? esc(a.winText || "Tuyệt vời — em là người dùng Internet thông thái!") : "Cùng xem lại các tình huống chưa an toàn nhé.");
+        c.appendChild(done); if (safe === qs.length) celebrate();
+      }
+    };
+    renderQuizInto(c, a);
+  }
+
+  // ---- THỬ ĐỘ MẠNH MẬT KHẨU (activity.password) — KHÔNG lưu, KHÔNG gửi đi đâu ----------------
+  //  password: true | { intro?, examples?: ["12345678", "Minh2012", …] (nút thử nhanh), minLength?: 8 }
+  const PW_COMMON = ["123456", "12345678", "123456789", "password", "matkhau", "qwerty", "abc123", "111111", "000000", "iloveyou", "admin"];
+  function pwCheck(p, min) {
+    const crit = [
+      [`Đủ dài (từ ${min} kí tự trở lên)`, p.length >= min],
+      ["Có chữ cái viết hoa (A – Z)", /[A-Z]/.test(p)],
+      ["Có chữ cái viết thường (a – z)", /[a-z]/.test(p)],
+      ["Có chữ số (0 – 9)", /\d/.test(p)],
+      ["Có kí tự đặc biệt (! @ # $ % & * …)", /[^A-Za-z0-9\s]/.test(p)],
+    ];
+    const low = p.toLowerCase(), warn = [];
+    if (PW_COMMON.some((w) => low.includes(w))) warn.push("Chứa dãy quá phổ biến (123456, password, matkhau…) — kẻ xấu thử đầu tiên.");
+    if (/(.)\1\1/.test(p)) warn.push("Có kí tự lặp lại liên tiếp (aaa, 111…).");
+    if (/(19|20)\d\d/.test(p)) warn.push("Có thể chứa năm sinh — người quen dễ đoán.");
+    if (/^\d+$/.test(p)) warn.push("Chỉ toàn chữ số.");
+    if (/\s/.test(p)) warn.push("Có dấu cách — nhiều trang web không cho dùng.");
+    const n = crit.filter((x) => x[1]).length;
+    let lv = !p ? 0 : !crit[0][1] ? 1 : n <= 2 ? 1 : n <= 4 ? 2 : 3;
+    if (warn.length && lv > 1) lv--;
+    if (lv === 3 && p.length >= 12) lv = 4;
+    return { crit, warn, lv };
+  }
+  function passwordBox(a) {
+    ensureEngineCSS();
+    const spec = a.password === true ? {} : a.password || {}, min = spec.minLength || 8;
+    const LV = [["", "", 0], ["🔴 Yếu", "#dc2626", 25], ["🟠 Trung bình", "#f59e0b", 55], ["🟢 Mạnh", "#16a34a", 85], ["💪 Rất mạnh", "#15803d", 100]];
+    const w = el("div", "pw");
+    w.innerHTML = `<div class="pw-head">🔐 Thử độ mạnh mật khẩu</div>${spec.intro ? `<p class="pw-intro">${esc(spec.intro)}</p>` : ""}
+      <p class="pw-warn">⚠️ Chỉ gõ mật khẩu VÍ DỤ, không gõ mật khẩu thật. App không lưu và không gửi mật khẩu đi đâu.</p>
+      <div class="pw-row"><input type="password" class="pw-in" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="64" placeholder="Gõ thử một mật khẩu…"><button type="button" class="pw-eye" title="Hiện / ẩn mật khẩu">👁️</button></div>
+      <div class="pw-bar"><i></i></div><div class="pw-lv"></div><ul class="pw-crit"></ul><div class="pw-w"></div>
+      ${(spec.examples || []).length ? `<div class="pw-ex"><span>Thử nhanh:</span>${spec.examples.map((x, i) => `<button type="button" data-i="${i}">${esc(x)}</button>`).join("")}</div>` : ""}`;
+    const inp = w.querySelector(".pw-in"), bar = w.querySelector(".pw-bar i"), lvEl = w.querySelector(".pw-lv"), crit = w.querySelector(".pw-crit"), wr = w.querySelector(".pw-w");
+    let best = 0;
+    const paint = () => {
+      const R = pwCheck(inp.value, min), L2 = LV[R.lv];
+      bar.style.width = L2[2] + "%"; bar.style.background = L2[1];
+      lvEl.innerHTML = inp.value ? `Độ mạnh: <b style="color:${L2[1]}">${L2[0]}</b> · ${inp.value.length} kí tự` : "Gõ thử để xem độ mạnh.";
+      crit.innerHTML = R.crit.map(([t, ok]) => `<li class="${ok ? "ok" : ""}">${ok ? "✅" : "⬜"} ${esc(t)}</li>`).join("");
+      wr.innerHTML = R.warn.map((t) => `<div>⚠️ ${esc(t)}</div>`).join("");
+      if (R.lv >= 3 && best < 3) { celebrate(); sound("ok"); }
+      best = inp.value ? Math.max(best, R.lv) : best;
+    };
+    inp.oninput = paint;
+    w.querySelector(".pw-eye").onclick = () => { inp.type = inp.type === "password" ? "text" : "password"; };
+    w.querySelectorAll(".pw-ex button").forEach((b) => { b.onclick = () => { inp.value = spec.examples[+b.dataset.i]; inp.type = "text"; paint(); }; });
+    paint();
+    return w;
   }
 
   // ---- HỘP QUÀ MAY MẮN (type "giftbox") — lưới hộp quà, mỗi hộp 1 câu hỏi; đúng thì mở quà ----
@@ -2422,7 +2886,7 @@
   jump$.innerHTML = "<option>— Nhảy tới hoạt động —</option>" + L.activities.map((a, i) => `<option value="${i}">${i + 1}. ${esc(a.name)}</option>`).join("");
   jump$.onchange = () => { if (jump$.value !== "") jump(+jump$.value); };
   $("#tShowAns").onclick = () => { state.showAnswers = !state.showAnswers; render(); };
-  function clearActivity(a) { (a.questions || []).concat((a.content && a.content.challenge) || []).forEach((q) => { delete q._store; }); ["_qi", "_ci", "_chal", "_wrong", "_checked", "_home", "_draft", "_rorder", "_porder", "_sandbox", "_box", "_res", "_marks"].forEach((k) => delete a[k]);
+  function clearActivity(a) { (a.questions || []).concat((a.content && a.content.challenge) || []).forEach((q) => { delete q._store; }); ["_qi", "_ci", "_chal", "_wrong", "_checked", "_home", "_draft", "_rorder", "_porder", "_sandbox", "_box", "_res", "_marks", "_chosen"].forEach((k) => delete a[k]);
     if (a.mail && !STUDENT) { const k = a.mail.key || aid(a); delete mailMem[k]; try { localStorage.removeItem("lh_mail:" + ((L.meta && L.meta.title) || "") + ":" + k); } catch (e) {} }
     if (a.mindmap && a.mindmap.editable && !STUDENT) { const k = a.mindmap.key || aid(a); delete mmMem[k]; try { localStorage.removeItem("lh_mm:" + ((L.meta && L.meta.title) || "") + ":" + k); } catch (e) {} }
   }
@@ -2479,6 +2943,7 @@ Kết quả hoạt động này của tất cả các nhóm sẽ bị xóa; máy
 
   // ---- renderer registry -------------------------------------------------
   const RENDERERS = {
+    chat: renderChat,
     intro: renderKnowledge, explore: renderKnowledge, knowledge: renderKnowledge,
     quiz: renderQuiz, matching: renderMatching, dragdrop: renderDragDrop,
     ordering: renderOrdering, fillblank: renderFillBlank, flashcard: renderFlashcard,

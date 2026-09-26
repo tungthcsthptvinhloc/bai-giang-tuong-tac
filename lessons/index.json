@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-09-25T16:44:30.952Z",
+ "generatedAt": "2026-09-26T15:32:15.875Z",
  "lessons": [
   {
    "id": "tin6-bai01-thong-tin-va-du-lieu",
@@ -82,6 +82,46 @@
    "open": 5
   },
   {
+   "id": "tin6-bai09-an-toan-thong-tin-tren-internet",
+   "title": "Bài 9: An toàn thông tin trên Internet",
+   "grade": "6",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4 — Đạo đức, pháp luật và văn hoá trong môi trường số",
+   "activities": 16,
+   "items": 45,
+   "open": 6
+  },
+  {
+   "id": "tin6-bai10-so-do-tu-duy",
+   "title": "Bài 10: Sơ đồ tư duy",
+   "grade": "6",
+   "subject": "Tin học",
+   "unit": "Chủ đề 5 — Ứng dụng tin học",
+   "activities": 18,
+   "items": 30,
+   "open": 7
+  },
+  {
+   "id": "tin6-bai11-dinh-dang-van-ban",
+   "title": "Bài 11: Định dạng văn bản",
+   "grade": "6",
+   "subject": "Tin học",
+   "unit": "Chủ đề 5 — Ứng dụng tin học",
+   "activities": 16,
+   "items": 37,
+   "open": 3
+  },
+  {
+   "id": "tin6-bai12-trinh-bay-thong-tin-dang-bang",
+   "title": "Bài 12: Trình bày thông tin ở dạng bảng",
+   "grade": "6",
+   "subject": "Tin học",
+   "unit": "Chủ đề 5 — Ứng dụng tin học",
+   "activities": 17,
+   "items": 31,
+   "open": 4
+  },
+  {
    "id": "tin7-bai01-thiet-bi-vao-ra",
    "title": "Bài 1: Thiết bị vào – ra",
    "grade": "7",
@@ -162,6 +202,16 @@
    "open": 2
   },
   {
+   "id": "tin7-bai09-trinh-bay-bang-tinh",
+   "title": "Bài 9: Trình bày bảng tính",
+   "grade": "7",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4 — Ứng dụng tin học",
+   "activities": 16,
+   "items": 53,
+   "open": 1
+  },
+  {
    "id": "tin9-bai01-the-gioi-ki-thuat-so",
    "title": "Bài 1: Thế giới kĩ thuật số",
    "grade": "9",
@@ -230,6 +280,46 @@
    "activities": 14,
    "items": 24,
    "open": 8
+  },
+  {
+   "id": "tin9-bai08-thuc-hanh-cong-cu-truc-quan-trinh-bay-thong-tin",
+   "title": "Bài 8: Thực hành: Sử dụng công cụ trực quan trình bày thông tin trong trao đổi và hợp tác",
+   "grade": "9",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4 — Ứng dụng tin học",
+   "activities": 18,
+   "items": 37,
+   "open": 9
+  },
+  {
+   "id": "tin9-bai09a-cong-cu-xac-thuc-du-lieu",
+   "title": "Bài 9a: Sử dụng công cụ xác thực dữ liệu",
+   "grade": "9",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4a — Sử dụng bảng tính điện tử nâng cao",
+   "activities": 18,
+   "items": 38,
+   "open": 3
+  },
+  {
+   "id": "tin9-bai10a-su-dung-ham-countif",
+   "title": "Bài 10a: Sử dụng hàm COUNTIF",
+   "grade": "9",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4a — Sử dụng bảng tính điện tử nâng cao",
+   "activities": 16,
+   "items": 48,
+   "open": 3
+  },
+  {
+   "id": "tin9-bai11a-su-dung-ham-sumif",
+   "title": "Bài 11a: Sử dụng hàm SUMIF",
+   "grade": "9",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4a — Sử dụng bảng tính điện tử nâng cao",
+   "activities": 14,
+   "items": 37,
+   "open": 3
   }
  ]
 }

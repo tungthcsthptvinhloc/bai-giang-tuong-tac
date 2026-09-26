@@ -166,6 +166,8 @@ Hệ thống đã có sẵn (không cần làm gì trong bài, chỉ cần biế
 - Nên đặt `time` (giây) cho hoạt động có bài tập — là thời gian mặc định khi GV bấm giờ.
 - Câu chấm điểm: `questions` (multiple-choice/multiple-select/true-false/**sheet**), `matching`,
   `dragdrop`, `ordering`, `fillblank`, `content.challenge` của summary.
+- **Điền khuyết xuống dòng**: trong `text` của `fillblank` dùng `
+` để xuống dòng (mỗi câu a, b, c một dòng); `{{}}` là ô trống.
 - Câu tự luận nhóm gửi cho GV: `vandung.cases[].question`, `scenario.content.question`.
 - `data/lesson.js` phải giữ dòng `module.exports = LESSON` (máy chủ đọc bằng Node).
 
@@ -180,7 +182,8 @@ const SHEET = { title: "Bảng điểm.xlsx", cols: 7, rows: 11, sheets: ["Sheet
   widths: { B: 2.3 },                          // tỉ lệ độ rộng cột (mặc định 1)
   cells: { C2: "BẢNG ĐIỂM LỚP 7A", B6: "Bùi Lê Đình Anh", D6: "7" },
   bold: ["C2", "B5:F5"], fill: { "A3:C3": "#fde047" }, color: { A1: "#16a34a" }, size: { A1: 16 },
-  center: ["A3:A8"] };                         // (right/left/italic tương tự)
+  center: ["A3:A8"],                           // (right/left/italic tương tự)
+  comma: ["D3:E6"] };                          // số hiện dấu phẩy hàng nghìn: 8000 -> 8,000 (như hình Excel trong SGK)
 { id: "dia-chi-o", type: "knowledge", sheet: SHEET, questions: [
   { type: "sheet", question: "Bấm vào ô ghi tên Bùi Lê Đình Anh.", answer: "B6", explanation: "...", level: "nhan-biet" },
   { type: "sheet", question: "Kéo chọn vùng D7:F9.", answer: "D7:F9", ... },
@@ -205,12 +208,36 @@ const SHEET = { title: "Bảng điểm.xlsx", cols: 7, rows: 11, sheets: ["Sheet
   → tự cập nhật; lỗi #LỖI! #DIV/0! #VALUE! #VÒNG! #NAME? (sai tên hàm). Hàm bỏ qua ô trống/ô chữ; chữ gõ trực tiếp làm
   tham số (“Hà Nội”) cũng được BỎ QUA theo lưu ý SGK Tin 7 Bài 8 (GV đã chọn; ghi chú “Mở rộng”: Excel thật báo #VALUE!);
   chữ trong phép toán (="a"+1) → #VALUE!. Hàm có nhiều tham số vùng: =MAX(D4:D8;D11:D16). **Ctrl+C / Ctrl+V** (nút 📋 📥 trên điện thoại) sao chép công thức,
-  địa chỉ tự dời giữ vị trí tương đối ($ giữ cố định).
+  địa chỉ tự dời giữ vị trí tương đối ($ giữ cố định; chữ trong ngoặc kép như "HS01" không bị dời).
+- **Nút kéo điền ■** (fill handle, luôn có ở lưới sửa được): ô vuông ở góc dưới phải vùng chọn — kéo xuống/lên/sang ngang để
+  sao chép như Excel (chuột, cảm ứng). Công thức tự dời địa chỉ; ≥ 2 số → cấp số cộng (5, 10 → 15, 20); một ô chữ kèm số
+  → tăng dần (HS01 → HS02…); còn lại chép lặp. Ô ngày tháng chỉ chép (không tăng ngày).
+- **COUNTIF / COUNTIFS (Mở rộng)**: =COUNTIF(range, criteria) — điều kiện ">100" ">=8" "<>Yes", chữ "Yes" (không phân biệt
+  hoa/thường), kí tự đại diện "Y*" "?es", số 30, địa chỉ ô D2 (ô trống = 0); "" đếm ô trống. Vùng cả cột `B:B` (đến hàng 1000).
+  COUNTIFS nhận nhiều cặp (vùng, điều kiện) cùng kích thước. Dùng cho Tin 9 Bài 10a.
+- **SUMIF**: =SUMIF(range, criteria, [sum_range]) — cùng kiểu điều kiện như COUNTIF; bỏ sum_range thì cộng chính các ô của
+  range; sum_range tính từ ô đầu, cùng kích thước range (như Excel). Dùng cho Tin 9 Bài 11a. Hàm mới (IF…) thêm vào FX ở CẢ HAI file.
 - **Câu gõ công thức** (`mode: "formula"`): `{ type: "sheet", mode: "formula", target: "E4" | "E4:E6", answer: "=C4*D4" }`
   — HS chỉ nhập được vào ô `target` (tô vàng); `answer` là công thức của ô đầu, các ô sau tự suy ra khi sao chép.
   Chấm bằng cách thử đổi các ô số (FX.judge, dùng chung app.js và core.js): công thức tương đương (=D4*C4,
-  =C4*C3^2 …) được tính đúng, công thức chỉ có số (=25*10) bị tính sai. Dùng cho Tin 7 Bài 7, 8, 9 (hàm), Tin 8, 9.
+  =C4*C3^2 …) được tính đúng, công thức chỉ có số (=25*10, =35) bị tính sai. Có thêm lượt thử “cập nhật dữ liệu”
+  (ô chữ “Đang làm”, “???”, ô trống → số): công thức bỏ sót ô (=D5+E5+F5 thay cho =SUM(C5:I5)) bị tính sai.
+  **Đếm/lọc theo chữ** (COUNTIF…): đặt `vary: "B3:B10"` (hoặc mảng vùng) trong spec lưới — khi chấm, dữ liệu chữ trong vùng này
+  được xáo lại 3 lần nên công thức quên $ khi sao chép, chọn thiếu hàng, sai cột, hoặc gõ chữ thay cho ô điều kiện (F2, D2)
+  bị tính sai (vùng không có tiêu đề; ô ngoài `rows` không bị xáo nên vùng rộng hơn $B$3:$B$100 vẫn đúng).
+  validate-lesson.js cảnh báo nếu câu COUNTIF thiếu `vary`. Câu hỏi nên nói rõ “dùng ô F2 làm điều kiện”.
+  Dùng cho Tin 7 Bài 7, 8, 9 (hàm), Tin 8, 9.
   Câu công thức trong `content.challenge` phải có `sheet` riêng.
+  Câu hỏi hiện TỪNG CÂU MỘT: lưới `sheet` chỉ hiện ở câu kiểu sheet. Câu trắc nghiệm/trả lời ngắn cần nhìn bảng → thêm
+  `sandbox` (luôn hiện dưới Nhiệm vụ) hoặc `sgkImage` cho câu đó.
+
+**Xác thực dữ liệu đặt sẵn** (`validate` trong spec bảng tính — Data Validation, Tin 9 Bài 9a…):
+`validate: { "B3:B10": { list: "F2:F10" }, "D3:D10": { type: "whole", op: ">", min: 0, input: { title: "Dữ liệu kiểu số", msg: "Giá trị lớn hơn 0" }, error: { style: "stop", title: "Dữ liệu nhập sai", msg: "Hãy nhập lại dữ liệu kiểu số và lớn hơn 0" } } }`.
+- `list`: vùng (`"F2:F10"`) hoặc mảng; ô có nút ▾ danh sách thả xuống (bảng tính thử `sandbox`). `type`: `whole` · `decimal` ·
+  `date` (m/d/yyyy) · `textlen`; `op`: `>` `>=` `<` `<=` `=` `<>` `between` `notbetween` với `min`/`max`.
+- Chọn ô → hiện lời nhắc vàng (Input Message) + dòng “✅ Xác thực: …”; nhập sai → hộp thoại lỗi như Excel (Stop: Retry/Cancel/Help;
+  Warning: Yes/No/Cancel; Information: OK/Cancel). Ô trống hợp lệ; dán không bị kiểm tra (giống Excel). HS KHÔNG tự đặt quy tắc
+  trong app (thiết lập làm trên Excel thật) — chỉ trải nghiệm quy tắc đặt sẵn.
 
 **Đáp án bằng HÌNH** (`optionImages`): câu trắc nghiệm hỏi nhận biết biểu tượng/giao diện
 (VD biểu tượng PhET) — `options` vẫn ghi chữ (cho bảng GV/Excel), HS chỉ thấy hình:
@@ -256,6 +283,12 @@ chỉ nhìn ảnh, HS **mở tệp đính kèm, thêm nhánh, đính kèm tệp*
   KHÔNG bịa địa chỉ video/trang web — để trống `url` và mô tả bằng `note`.
 - `editable`: chọn nhánh → gõ ở ô ✏️ (Tab = nhánh con, Enter = nhánh cùng cấp), 📎 Đính kèm (ảnh chọn được từ máy),
   🗑️ Xóa nhánh, 🔄 Làm lại. Tự lưu trên máy (localStorage theo `key`).
+- `library: { path: "E-TrinhBayThongTin › DuAnTrienLam", files: [{ kind, name: "KinhPhi.xlsx", sheet|html|note|url }] }`
+  (chỉ khi `editable`): bảng 📎 Đính kèm có **thư mục tệp có sẵn** giống hộp thoại Open trong SGK — HS chọn tệp →
+  📂 Open (nháy đúp cũng được) là đính kèm đủ nội dung (bảng tính tự tính, ảnh SVG, văn bản). Bài thực hành có tệp
+  dữ liệu SGK cho sẵn thì dùng cái này. Sơ đồ gửi GV được dựng lại đủ nội dung nhờ khớp `kind` + `name`.
+- `need: ["doc", "img", "sheet", "video|link"]`: thanh tiêu chí “📎 Đã đính kèm x/4 loại dữ liệu” tự cập nhật
+  (`"video|link"` = một trong hai) — dùng khi giáo án yêu cầu “đính kèm ít nhất N loại dữ liệu”.
 - `submit`: máy HS có nút **📨 Gửi sơ đồ cho thầy/cô** (gửi dạng dàn ý, xem ở tab ✍️ Tự luận, khóa `aid:mm`);
   màn trình chiếu nối tiết học có nút **📥 Xem sơ đồ các nhóm đã gửi** (dựng lại sơ đồ từng nhóm để lên trình bày).
 - Dùng được trong mọi loại hoạt động có khung Nhiệm vụ (knowledge, vandung, quiz…).
@@ -290,6 +323,29 @@ Màn chiếu: bấm số hàng để chọn câu, đúng thì hàng lật chữ;
 - `trap`: nút liên kết lừa đảo trong thư → bấm vào hiện cảnh báo. `body` dùng `{ten}` = tên chủ hộp thư.
 - Nhiều hoạt động dùng chung `key` = cùng một hộp thư (tạo tài khoản → đăng nhập → soạn thư). Tự lưu trên máy; KHÔNG lưu mật khẩu.
 - `submit`: thư HS gửi được chuyển cho GV (tab ✍️ Tự luận, khóa `aid:mail`); màn chiếu có **📥 Xem thư các nhóm đã gửi**.
+- `detect: true` + thư `scam: true` (nằm ở Hộp thư đến, KHÔNG `spam`): thanh **🕵️ Thám tử lừa đảo** — “đã phát hiện x/N thư lừa đảo”
+  (Báo cáo thư rác hoặc Xoá), báo khi HS báo nhầm thư thật; đủ hết thì chúc mừng. Nên có cả thư thật để HS phân biệt. Dùng cho bài an
+  toàn thông tin (Tin 6 Bài 9…), kết hợp câu hỏi nhận diện dấu hiệu lừa đảo (chỉ mô phỏng, không chấm theo lớp).
+
+## Trò chuyện tình huống & thử độ mạnh mật khẩu (engine v5)
+
+**Khung chat tình huống** (`type: "chat"`) — ứng xử khi người lạ nhắn tin, xin thông tin, rủ gặp mặt, lan truyền tin xấu…:
+```js
+{ id: "tro-chuyen", type: "chat", chat: { name: "Bạn mới quen", avatar: "🦊", status: "Vừa kết bạn qua trò chơi trực tuyến" },
+  questions: [{ question: "Chào bạn 😊\nCho mình xin số điện thoại nhé!",      // tin nhắn đến — mỗi dòng 1 bong bóng
+    options: ["Được, số mình là…", "Mình không cho người lạ số điện thoại đâu", …], answer: 1, explanation: "…",
+    reaction: "Thôi mà, cho đi…",       // tin đáp lại khi HS trả lời an toàn (tuỳ chọn)
+    badReaction: "Hihi cảm ơn, giờ cho mình xin địa chỉ nữa…",  // khi chưa an toàn (tuỳ chọn)
+    chat: { name: "…", avatar: "…" },   // (tuỳ chọn) đổi người nhắn → hiện vạch “Tin nhắn từ …”
+    type: "multiple-choice", level: "van-dung" }] }
+```
+- Mỗi tin nhắn là **câu trắc nghiệm bình thường** (chấm điểm, lớp học, theo nhịp GV, bảng GV, Excel như quiz). Câu trả lời HS chọn
+  hiện thành bong bóng của em (viền xanh/đỏ khi công bố). Cuối cùng: “🛡️ Em đã xử lí an toàn x/N tình huống” (`winText` tuỳ chọn).
+- Không dùng tên/biểu tượng ứng dụng thật (Zalo, Facebook…) — chỉ “Tin nhắn”, tên nhân vật hư cấu.
+
+**Thử độ mạnh mật khẩu** (`activity.password`, đặt ở bất kỳ hoạt động nào): `password: { intro?, examples: ["12345678", "Minh2012", "M!nh#6A-2024"], minLength: 8 }`.
+Thanh độ mạnh Yếu / Trung bình / Mạnh / Rất mạnh theo tiêu chí SGK (đủ dài, chữ hoa, chữ thường, chữ số, kí tự đặc biệt) + cảnh báo
+dãy phổ biến, năm sinh, lặp kí tự. **Không lưu, không gửi đi**; có nhắc “chỉ gõ mật khẩu ví dụ”. Kết hợp câu hỏi chấm điểm riêng.
 
 ## Tính năng tương tác nâng cao (engine v2 — mặc định BẬT)
 
@@ -300,7 +356,9 @@ trường dữ liệu để kích hoạt — đây là yêu cầu chuẩn, khôn
   làm gì. App hiện khung "🎯 Nhiệm vụ" luôn hiển thị ở đầu hoạt động.
 - **Hiện-khi-bấm (teacher-led):** gợi ý, đáp án/giải thích, nội dung kiến thức và
   "Em cần nhớ" đều ẩn, giáo viên bấm mới hiện — dạy theo hướng khám phá. Cụ thể:
-  `content.blocks` (kiến thức) ẩn sau nút; đặt `content.revealLabel` để đổi nhãn.
+  `content.blocks` (kiến thức) ẩn sau nút; đặt `content.revealLabel` để đổi nhãn. `content.html` (chuỗi HTML) thì HIỆN LUÔN — dùng cho
+  hội thoại/tình huống mở đầu cần HS đọc ngay (không phải kiến thức cần giấu). Hoạt động trò chơi (matching, dragdrop, ordering…) dùng
+  `activity.html` để hiện hình minh hoạ ngay dưới Nhiệm vụ.
   Mỗi câu hỏi có thể thêm `hint` (nút 💡 Gợi ý). `remember` tự thành nút "📌 Em cần nhớ".
 - **Đồng hồ đếm giờ từng hoạt động (⏱️):** đặt `time` (giây) cho mỗi hoạt động; giáo
   viên bấm ▶ để đếm ngược. Hết giờ **báo hiệu** (âm thanh + nhấp nháy), KHÔNG tự
@@ -363,6 +421,7 @@ trường dữ liệu để kích hoạt — đây là yêu cầu chuẩn, khôn
 - [ ] Bài về bảng tính: đã dùng câu `sheet` (bấm ô, chọn vùng/hàng/cột, gõ địa chỉ) và `sandbox` để HS thao tác thật?
 - [ ] Bài về sơ đồ tư duy / trình bày thông tin: đã dùng `mindmap` (xem tệp đính kèm, HS tự tạo sơ đồ + gửi GV)? Phiếu “Làm được / Chưa làm được” dùng `checklist`?
 - [ ] SGK/giáo án có “Giải ô chữ” → `crossword` chép đúng lưới? Bài thư điện tử / phần mềm trực tuyến HS chưa có tài khoản → mô phỏng (`mail`) thay vì bắt tạo tài khoản thật?
+- [ ] Bài an toàn thông tin / ứng xử trên mạng: tình huống người lạ nhắn tin → `chat`; mật khẩu mạnh → `password`; thư lừa đảo → `mail.detect`?
 - [ ] Hiệu ứng đúng/sai (pháo giấy, huy hiệu) và bút vẽ hoạt động?
 - [ ] Chữ/nút đủ lớn cho máy chiếu, có fullscreen, điều khiển bằng phím?
 - [ ] Chạy offline, không lỗi console JS, `validate-lesson.js` PASS?

@@ -102,6 +102,11 @@ function checkQuestion({ q, activity }, ids, answerPositions, levelCount) {
     if (!/^=/.test(String(q.answer || ""))) err(`${where}: sheet mode "formula" cần \`answer\` là công thức bắt đầu bằng "=".`);
     if (!/^[A-Za-z]{1,3}\d+(:[A-Za-z]{1,3}\d+)?$/.test(String(q.target || "").replace(/\s/g, ""))) err(`${where}: sheet mode "formula" cần \`target\` là ô/vùng HS nhập công thức (VD "E4" hoặc "E4:E6").`);
     if (!q.sheet && !activity.sheet) err(`${where}: thiếu lưới \`sheet\` (đặt ở hoạt động hoặc ở câu hỏi).`);
+    const vary = [].concat(((q.sheet || activity.sheet || {}).vary) || []);
+    if (vary.some((x) => !/^\$?[A-Za-z]{1,3}\$?\d+(:\$?[A-Za-z]{1,3}\$?\d+)?$/.test(String(x).replace(/\s/g, ""))))
+      err(`${where}: \`sheet.vary\` phải là địa chỉ ô/vùng dữ liệu chữ được xáo khi chấm (VD "B3:B10").`);
+    if (/COUNTIFS?\s*\(/i.test(String(q.answer || "")) && !vary.length)
+      warn(`${where}: công thức COUNTIF/SUMIF — nên đặt \`sheet.vary\` (vùng dữ liệu chữ) để chấm chặt hơn khi HS chọn sai vùng.`);
   } else if (q.type === "sheet") {
     // Bảng tính mô phỏng: answer = địa chỉ ô "B6" | vùng "B4:E11" | cột "D" | hàng "6" (hoặc mảng)
     const ans = Array.isArray(q.answer) ? q.answer : [q.answer];
@@ -136,8 +141,26 @@ function checkCrosswordsMail(L) {
     if (a.mail) {
       const where = `HĐ "${a.id}" mail`, m = a.mail, RE = /^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$/;
       if (!m.me || !RE.test(m.me.address || "")) err(`${where}: cần \`me: { name, address }\` với địa chỉ hợp lệ.`);
-      (m.inbox || []).forEach((x, i) => { if (!x.from || !x.subject) err(`${where}: thư ${i + 1} thiếu \`from\` hoặc \`subject\`.`); if (x.addr && !RE.test(x.addr)) err(`${where}: thư ${i + 1} có \`addr\` không hợp lệ.`); });
+      (m.inbox || []).forEach((x, i) => { if (!x.from || !x.subject) err(`${where}: thư ${i + 1} thiếu \`from\` hoặc \`subject\`.`); if (x.addr && !RE.test(x.addr)) err(`${where}: thư ${i + 1} có \`addr\` không hợp lệ.`); if (x.scam && x.spam) warn(`${where}: thư ${i + 1} vừa \`scam\` vừa \`spam\` — thư lừa đảo nên nằm ở Hộp thư đến để HS tự phát hiện.`); });
+      if (m.detect && !(m.inbox || []).some((x) => x.scam)) err(`${where}: có \`detect\` nhưng không thư nào \`scam: true\`.`);
+      if (m.detect && !(m.inbox || []).some((x) => !x.scam && !x.spam)) warn(`${where}: nên có cả thư thật (không scam) để HS phân biệt.`);
     }
+    if (a.type === "chat") {
+      const where = `HĐ "${a.id}" (chat)`;
+      if (!a.chat || !a.chat.name) err(`${where}: cần \`chat: { name, avatar?, status? }\`.`);
+      (a.questions || []).forEach((q, i) => { if (!["multiple-choice", "true-false", "multiple-select"].includes(q.type)) err(`${where}: câu ${i + 1} phải là multiple-choice / true-false / multiple-select.`); });
+      if (!(a.questions || []).length) err(`${where}: chưa có câu hỏi (tin nhắn).`);
+    }
+    [a.sheet, a.sandbox].concat((a.questions || []).map((q) => q.sheet)).filter((sp) => sp && sp.validate).forEach((sp) => {
+      Object.entries(sp.validate).forEach(([ad, rule]) => {
+        const where = `HĐ "${a.id}" validate "${ad}"`;
+        if (!/^\$?[A-Z]{1,3}\$?\d+(:\$?[A-Z]{1,3}\$?\d+)?$/i.test(ad)) err(`${where}: địa chỉ vùng không hợp lệ.`);
+        if (!rule || (!rule.list && !["whole", "decimal", "date", "textlen"].includes(rule.type))) err(`${where}: cần \`list\` hoặc \`type\` (whole/decimal/date/textlen).`);
+        if (rule && rule.op && !([">", ">=", "<", "<=", "=", "<>", "between", "notbetween"].includes(rule.op))) err(`${where}: op "${rule.op}" không hợp lệ.`);
+        if (rule && rule.error && rule.error.style && !["stop", "warning", "information"].includes(rule.error.style)) err(`${where}: error.style chỉ nhận stop/warning/information.`);
+      });
+    });
+    if (a.password && typeof a.password === "object" && a.password.examples && !Array.isArray(a.password.examples)) err(`HĐ "${a.id}" password: \`examples\` phải là mảng.`);
   });
 }
 
@@ -171,6 +194,15 @@ function checkMindmapsChecklists(L) {
       })(m.root, "gốc");
       if (m.layout && !["both", "right"].includes(m.layout)) err(`${where}: layout chỉ nhận "both" hoặc "right".`);
       if (m.submit && !m.editable) warn(`${where}: có \`submit\` nhưng không \`editable\` — HS không sửa được sơ đồ trước khi gửi.`);
+      if (m.library) {
+        if (!Array.isArray(m.library.files) || !m.library.files.length) err(`${where}: library cần \`files: [{ kind, name, ... }]\`.`);
+        else m.library.files.forEach((f, i) => {
+          if (!MM_KINDS.includes(f.kind)) err(`${where}: library tệp ${i + 1} có kind "${f.kind}" (chỉ nhận ${MM_KINDS.join("/")}).`);
+          if (!f.name || / — |\n/.test(f.name)) err(`${where}: library tệp ${i + 1} cần \`name\` một dòng, không chứa " — ".`);
+        });
+        if (!m.editable) warn(`${where}: library chỉ dùng được khi \`editable\`.`);
+      }
+      (m.need || []).forEach((k) => { if (!String(k).split("|").every((x) => MM_KINDS.includes(x))) err(`${where}: need "${k}" không hợp lệ (dùng ${MM_KINDS.join("/")}, nối bằng "|").`); });
     }
     if (a.type === "checklist") {
       const where = `HĐ "${a.id}" (checklist)`;
