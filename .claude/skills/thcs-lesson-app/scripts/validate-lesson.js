@@ -183,7 +183,41 @@ function checkLevelCoverage(levelCount) {
 // Sơ đồ tư duy mô phỏng (activity.mindmap) + phiếu tự đánh giá (type "checklist")
 const MM_KINDS = ["doc", "img", "video", "sheet", "link"];
 function checkMindmapsChecklists(L) {
+  const SHAPES = ["term", "io", "proc", "cond"];
   (L.activities || []).forEach((a) => {
+    if (a.flow) { // ordering dạng sơ đồ khối
+      const where = `HĐ "${a.id}" flow`;
+      if (a.type !== "ordering") err(`${where}: \`flow\` chỉ dùng cho type "ordering".`);
+      else if (!Array.isArray(a.flow) || a.flow.length !== (a.steps || []).length) err(`${where}: cần mảng cùng độ dài với \`steps\`.`);
+      else a.flow.forEach((sh, i) => { if (!SHAPES.includes(sh)) err(`${where}: bước ${i + 1} có hình "${sh}" không hợp lệ (${SHAPES.join(", ")}).`); });
+    }
+    if (a.blocks) { // ordering dạng khối lệnh Scratch
+      const where = `HĐ "${a.id}" blocks`, CATS = ["event", "looks", "sensing", "variables", "operators", "control", "motion", "sound"];
+      if (a.type !== "ordering") err(`${where}: \`blocks\` chỉ dùng cho type "ordering".`);
+      else if (!Array.isArray(a.blocks) || a.blocks.length !== (a.steps || []).length) err(`${where}: cần mảng cùng độ dài với \`steps\`.`);
+      else a.blocks.forEach((c, i) => { if (!CATS.includes(c)) err(`${where}: khối ${i + 1} có nhóm "${c}" không hợp lệ (${CATS.join(", ")}).`); });
+    }
+    if (a.scratch) { // chạy thử chương trình Scratch
+      const where = `HĐ "${a.id}" scratch`, OPS = ["flag", "say", "ask", "set", "if", "repeat", "move", "bounce", "rotate", "drum"];
+      if (!Array.isArray(a.scratch.script) || !a.scratch.script.length) err(`${where}: cần \`script: [khối…]\`.`);
+      else (function walk(list) { list.forEach((b) => {
+        if (!OPS.includes(b.op)) err(`${where}: khối "${b.op}" không hợp lệ (${OPS.join(", ")}).`);
+        if (b.op === "set" && !b.var) err(`${where}: khối set thiếu \`var\`.`);
+        if (b.op === "set" && !b.answer && typeof b.expr !== "string") err(`${where}: khối set "${b.var}" cần \`answer: true\` hoặc \`expr\`.`);
+        if (b.op === "if") { if (typeof b.cond !== "string") err(`${where}: khối if thiếu \`cond\`.`); walk(b.then || []); walk(b.else || []); }
+        if (b.op === "repeat") walk(b.body || []);
+      }); })(a.scratch.script);
+    }
+    if (a.runner) { // máy chạy thử thuật toán
+      const r = a.runner, where = `HĐ "${a.id}" runner`, names = (r.inputs || []).map((f) => f.name);
+      if (!Array.isArray(r.steps) || r.steps.length < 3) err(`${where}: cần \`steps\` (ít nhất Bắt đầu, một bước, Kết thúc).`);
+      else r.steps.forEach((st, i) => {
+        if (!SHAPES.includes(st.shape)) err(`${where}: bước ${i + 1} có hình "${st.shape}" không hợp lệ.`);
+        if (st.set) { if (typeof st.expr !== "string") err(`${where}: bước ${i + 1} có \`set\` nhưng thiếu \`expr\`.`); names.push(st.set); }
+        if (st.output && !names.includes(st.output)) err(`${where}: bước ${i + 1} đưa ra "${st.output}" chưa được tính/nhập trước đó.`);
+      });
+      if (r.steps && r.steps.some((st) => st.input) && !names.length) err(`${where}: có bước nhập nhưng thiếu \`inputs\`.`);
+    }
     if (a.mindmap) {
       const m = a.mindmap, where = `HĐ "${a.id}" mindmap`;
       if (!m.root || typeof m.root.text !== "string") err(`${where}: cần \`root: { text, children: [...] }\`.`);
@@ -213,6 +247,7 @@ function checkMindmapsChecklists(L) {
         else s.items.forEach((t) => { if (/;\s/.test(t) || /\n/.test(t)) err(`${where}: "${t}" không được chứa "; " hay xuống dòng (dùng để gửi phiếu).`); });
       });
       if (a.columns && a.columns.length !== 2) warn(`${where}: nên có đúng 2 cột (Làm được / Chưa làm được).`);
+      if (a.target != null && (typeof a.target !== "string" || !a.target.trim() || /\n/.test(a.target))) err(`${where}: \`target\` (phiếu chấm chéo) phải là một dòng chữ, ví dụ "Nhóm em chấm sản phẩm của".`);
     }
   });
 }

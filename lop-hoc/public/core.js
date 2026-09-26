@@ -52,7 +52,7 @@
       if (a.type === "summary" && a.content && a.content.challenge) a.content.challenge.forEach((q, qi) => items.push({ ...base, iid: "c" + qi, key: keyOf(aid, "c" + qi), label: q.question, q, type: q.type }));
       if (a.type === "vandung") (a.cases || []).forEach((cs, i) => openQs.push({ ...base, iid: "t" + i, key: keyOf(aid, "t" + i), label: cs.question }));
       if (a.type === "scenario" && a.content && a.content.question) openQs.push({ ...base, iid: "t0", key: keyOf(aid, "t0"), label: a.content.question });
-      if (a.type === "checklist") openQs.push({ ...base, iid: "t0", key: keyOf(aid, "t0"), label: "📋 Phiếu tự đánh giá (tick Làm được / Chưa làm được)" });
+      if (a.type === "checklist") openQs.push({ ...base, iid: "t0", key: keyOf(aid, "t0"), label: a.target ? "🤝 Phiếu chấm chéo — " + a.target : "📋 Phiếu tự đánh giá (tick Làm được / Chưa làm được)" });
       if (a.mail && a.mail.submit) openQs.push({ ...base, iid: "mail", key: keyOf(aid, "mail"), label: "📧 " + a.mail.submit });
       if (a.mindmap && a.mindmap.submit) openQs.push({ ...base, iid: "mm", key: keyOf(aid, "mm"), label: "🧠 " + a.mindmap.submit });
     });

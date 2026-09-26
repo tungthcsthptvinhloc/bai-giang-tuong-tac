@@ -512,6 +512,8 @@
     if (a.mindmap) cardEl.appendChild(mindmapBox(a));
     if (a.mail) cardEl.appendChild(mailBox(a));
     if (a.password) cardEl.appendChild(passwordBox(a));
+    if (a.runner) cardEl.appendChild(runnerBox(a));
+    if (a.scratch) cardEl.appendChild(scratchBox(a));
   }
   function appendRemember(items, cardOrView) {
     // "Em cần nhớ" — ẩn, bấm mới hiện
@@ -889,6 +891,14 @@
     };
     return ui;
   }
+  // Sơ đồ khối: a.flow = ["term","io","proc","cond",…] (cùng thứ tự với steps ĐÚNG) → mỗi bước là một hình khối
+  //  term: Bắt đầu/Kết thúc (hình oval) · io: Đầu vào/Đầu ra (hình bình hành) · proc: Bước xử lí (hình chữ nhật) · cond: kiểm tra điều kiện (hình thoi)
+  const FC_SHAPES = { term: 1, io: 1, proc: 1, cond: 1 };
+  const fcNode = (text, shape) => `<span class="fc-node fc-${FC_SHAPES[shape] ? shape : "proc"}">${esc(text)}</span>`;
+  // Khối lệnh Scratch: a.blocks = ["event","looks","sensing","variables","operators","control","motion","sound"] (cùng thứ tự steps ĐÚNG)
+  const SB_CATS = { event: 1, looks: 1, sensing: 1, variables: 1, operators: 1, control: 1, motion: 1, sound: 1 };
+  const sbNode = (text, cat) => `<span class="sb sb-${SB_CATS[cat] ? cat : "control"}${cat === "event" ? " sb-hat" : ""}">${esc(text)}</span>`;
+  const stepHTML = (a, i) => (a.flow ? fcNode((a.steps || [])[i], a.flow[i]) : a.blocks ? sbNode((a.steps || [])[i], a.blocks[i]) : esc((a.steps || [])[i]));
   function orderingUI(a) {
     const steps = a.steps || [];
     return {
@@ -898,14 +908,14 @@
       score: (d) => ({ good: d.filter((s, pos) => s === pos).length, total: steps.length, choice: { o: d.slice() } }),
       review(d) {
         const box = el("div", "rv-list");
-        d.forEach((s, pos) => { const ok = s === pos; box.appendChild(el("div", "rv-row " + (ok ? "ok" : "no"), `<span class="rv-n">${pos + 1}</span><span>${esc(steps[s])}${ok ? "" : `<small class="rv-fix">Bước này đúng ra ở vị trí ${s + 1}</small>`}</span>${mark(ok)}`)); });
+        d.forEach((s, pos) => { const ok = s === pos; box.appendChild(el("div", "rv-row " + (ok ? "ok" : "no"), `<span class="rv-n">${pos + 1}</span><span>${stepHTML(a, s)}${ok ? "" : `<small class="rv-fix">Bước này đúng ra ở vị trí ${s + 1}</small>`}</span>${mark(ok)}`)); });
         return box;
       },
       draw(box, d, en, redraw) {
-        box.appendChild(el("p", "subtitle", "Dùng ▲▼ để sắp đúng thứ tự rồi bấm Nộp bài."));
-        const list = el("ul", "order-list");
+        box.appendChild(el("p", "subtitle", a.flow ? "Dùng ▲▼ để ghép các hình khối thành sơ đồ khối đúng rồi bấm Nộp bài." : a.blocks ? "Dùng ▲▼ để ghép các khối lệnh thành chương trình Scratch đúng rồi bấm Nộp bài." : "Dùng ▲▼ để sắp đúng thứ tự rồi bấm Nộp bài."));
+        const list = el("ul", "order-list" + (a.flow ? " fc-list" : a.blocks ? " sb-list" : ""));
         d.forEach((s, pos) => {
-          const li = el("li", null, `<span>${esc(steps[s])}</span>`), up = el("button", null, "▲"), dn = el("button", null, "▼");
+          const li = el("li", null, `<span>${stepHTML(a, s)}</span>`), up = el("button", null, "▲"), dn = el("button", null, "▼");
           up.disabled = !en || pos === 0; dn.disabled = !en || pos === d.length - 1;
           up.onclick = () => { [d[pos - 1], d[pos]] = [d[pos], d[pos - 1]]; redraw(); };
           dn.onclick = () => { [d[pos + 1], d[pos]] = [d[pos], d[pos + 1]]; redraw(); };
@@ -961,12 +971,12 @@
   function renderOrdering(a) {
     const c = el("div", "card"); activityHead(a, c);
     const key = aid(a) + ":main";
-    const answerHTML = `<ol class="lead">${(a.steps || []).map(s => `<li>${esc(s)}</li>`).join("")}</ol>`;
+    const answerHTML = a.flow ? `<div class="fc-chart">${(a.steps || []).map((_, i) => stepHTML(a, i)).join('<span class="fc-arrow">↓</span>')}</div>` : a.blocks ? `<div class="sb-stack">${(a.steps || []).map((_, i) => stepHTML(a, i)).join("")}</div>` : `<ol class="lead">${(a.steps || []).map(s => `<li>${esc(s)}</li>`).join("")}</ol>`;
     if (STUDENT) return renderWholeStudent(c, a, key, actStateOf(a), answerHTML, orderingUI(a));
-    c.appendChild(el("p", "subtitle", "Dùng ▲▼ để sắp đúng thứ tự rồi bấm Kiểm tra."));
+    c.appendChild(el("p", "subtitle", a.flow ? "Dùng ▲▼ để ghép các hình khối thành sơ đồ khối đúng rồi bấm Kiểm tra." : a.blocks ? "Dùng ▲▼ để ghép các khối lệnh thành chương trình Scratch đúng rồi bấm Kiểm tra." : "Dùng ▲▼ để sắp đúng thứ tự rồi bấm Kiểm tra."));
     let order = (a.steps || []).map((s, i) => ({ s, i })); order = shuffle(order.slice());
-    const list = el("ul", "order-list");
-    function draw() { list.innerHTML = ""; order.forEach((o, pos) => { const li = el("li"); li.innerHTML = `<span>${esc(o.s)}</span>`; const up = el("button", null, "▲"), dn = el("button", null, "▼"); up.onclick = () => { if (pos > 0) { [order[pos - 1], order[pos]] = [order[pos], order[pos - 1]]; draw(); } }; dn.onclick = () => { if (pos < order.length - 1) { [order[pos + 1], order[pos]] = [order[pos], order[pos + 1]]; draw(); } }; const ctrl = el("span"); ctrl.append(up, dn); li.appendChild(ctrl); list.appendChild(li); }); }
+    const list = el("ul", "order-list" + (a.flow ? " fc-list" : a.blocks ? " sb-list" : ""));
+    function draw() { list.innerHTML = ""; order.forEach((o, pos) => { const li = el("li"); li.innerHTML = `<span>${stepHTML(a, o.i)}</span>`; const up = el("button", null, "▲"), dn = el("button", null, "▼"); up.onclick = () => { if (pos > 0) { [order[pos - 1], order[pos]] = [order[pos], order[pos - 1]]; draw(); } }; dn.onclick = () => { if (pos < order.length - 1) { [order[pos + 1], order[pos]] = [order[pos], order[pos + 1]]; draw(); } }; const ctrl = el("span"); ctrl.append(up, dn); li.appendChild(ctrl); list.appendChild(li); }); }
     draw(); c.appendChild(list);
     const btn = el("button", "btn", "Kiểm tra");
     btn.onclick = () => {
@@ -1819,6 +1829,143 @@
     p.card.append(tabs, stage); show(0);
   }
 
+  // ---- MÁY CHẠY THỬ THUẬT TOÁN (activity.runner) — sơ đồ khối chạy từng bước ---------------------
+  //  runner: { title?, intro?, inputs: [{ name: "a", label?, value: 8 }], steps: [
+  //    { shape: "term", text: "Bắt đầu" }, { shape: "io", text: "Giá trị a, giá trị b", input: true },
+  //    { shape: "proc", text: "Tổng ← a + b", set: "Tổng", expr: "a + b" }, { shape: "io", text: "Giá trị tổng", output: "Tổng" },
+  //    { shape: "term", text: "Kết thúc" } ] }
+  //  expr: số, tên biến, + - * / : ( ) (":" là chia). Không chấm điểm, không gửi — HS tự thử với đầu vào khác nhau.
+  function rnEval(expr, vars) {
+    let e = String(expr || "");
+    Object.keys(vars).sort((x, y) => y.length - x.length).forEach((k) => { e = e.split(k).join("(" + Number(vars[k]) + ")"); });
+    e = e.replace(/:/g, "/").replace(/×/g, "*").replace(/,/g, ".");
+    if (!/^[\d\s+\-*/().]+$/.test(e)) return NaN;
+    try { return Function("return (" + e + ")")(); } catch (x) { return NaN; }
+  }
+  const rnFmt = (v) => (typeof v === "number" && isFinite(v) ? String(Math.round(v * 100) / 100).replace(".", ",") : "?");
+  function runnerBox(a) {
+    const spec = a.runner, steps = spec.steps || [], ins = spec.inputs || [];
+    const box = el("div", "rn-box");
+    if (spec.title) box.appendChild(el("h3", "rn-title", "⚙️ " + esc(spec.title)));
+    if (spec.intro) box.appendChild(el("p", "subtitle", esc(spec.intro)));
+    const wrap = el("div", "rn-wrap"), chart = el("div", "fc-chart rn-chart"), side = el("div", "rn-side");
+    const nodes = steps.map((st, i) => { if (i) chart.insertAdjacentHTML("beforeend", '<span class="fc-arrow">↓</span>'); const w = el("div", "rn-step"); w.innerHTML = fcNode(st.text, st.shape); chart.appendChild(w); return w; });
+    const inBox = el("div", "rn-inputs", "<b>📥 Đầu vào</b>"), fields = {};
+    ins.forEach((f) => { const lb = el("label", "rn-in"); lb.appendChild(el("span", null, esc(f.label || f.name) + " =")); const inp = el("input"); inp.type = "number"; inp.step = "any"; inp.value = f.value != null ? f.value : ""; fields[f.name] = inp; lb.appendChild(inp); inBox.appendChild(lb); });
+    const mem = el("div", "rn-mem"), out = el("div", "rn-out"), log = el("ol", "rn-log");
+    const bNext = el("button", "btn", "▶ Chạy từng bước"), bAll = el("button", "btn ghost", "⏩ Chạy hết"), bReset = el("button", "btn ghost", "🔄 Làm lại");
+    const ctr = el("div", "rn-ctrl"); ctr.append(bNext, bAll, bReset);
+    side.append(inBox, ctr, mem, out, log); wrap.append(chart, side); box.appendChild(wrap);
+    let p = 0, vars = {};
+    const paintMem = () => { const ks = Object.keys(vars); mem.innerHTML = "<b>🧠 Bộ nhớ</b>" + (ks.length ? ks.map((k) => `<span class="rn-var"><i>${esc(k)}</i> = <b>${rnFmt(vars[k])}</b></span>`).join("") : ' <span class="rn-empty">(trống)</span>'); };
+    const paint = () => { nodes.forEach((n, i) => { n.classList.toggle("on", i === p - 1); n.classList.toggle("done", i < p - 1); }); bNext.disabled = bAll.disabled = p >= steps.length; paintMem(); };
+    const say = (t) => { log.appendChild(el("li", null, t)); };
+    const step = () => {
+      if (p >= steps.length) return; const st = steps[p];
+      if (st.input) {
+        for (const f of ins) { const v = parseFloat(String(fields[f.name].value).replace(",", ".")); if (!isFinite(v)) { alert("Hãy nhập số cho " + (f.label || f.name) + "."); fields[f.name].focus(); return; } }
+        ins.forEach((f) => { vars[f.name] = parseFloat(String(fields[f.name].value).replace(",", ".")); fields[f.name].disabled = true; });
+        say("📥 Nhận đầu vào: " + ins.map((f) => esc(f.label || f.name) + " = " + rnFmt(vars[f.name])).join(", "));
+      } else if (st.set) { vars[st.set] = rnEval(st.expr, vars); say("⚙️ " + esc(st.text) + " → <b>" + esc(st.set) + " = " + rnFmt(vars[st.set]) + "</b>"); }
+      else if (st.output) { const v = vars[st.output]; out.innerHTML = `<b>📤 Đầu ra:</b> ${esc(st.output)} = <span class="rn-val">${rnFmt(v)}</span>`; say("📤 Đưa ra: " + esc(st.output) + " = " + rnFmt(v)); }
+      else say((p === 0 ? "🟢 " : "🔴 ") + esc(st.text));
+      p++; paint(); if (p >= steps.length) sound("ok");
+    };
+    bNext.onclick = step;
+    bAll.onclick = () => { let guard = 0; while (p < steps.length && guard++ < 200) { const q = p; step(); if (p === q) break; } };
+    bReset.onclick = () => { p = 0; vars = {}; log.innerHTML = ""; out.innerHTML = ""; Object.values(fields).forEach((f) => { f.disabled = false; }); paint(); };
+    paint();
+    return box;
+  }
+
+  // ---- CHẠY THỬ CHƯƠNG TRÌNH SCRATCH (activity.scratch) — khối lệnh giống Scratch + sân khấu có chú mèo ----------
+  //  scratch: { title?, intro?, sprite?: "🐱", script: [khối…] }   (mỗi khối có thể có n: 1 → hiện ① như SGK)
+  //   { op: "flag" } · { op: "say", text | join: ["chuỗi", { v: "tên biến" } | { e: "a - b" }], secs? } · { op: "ask", text }
+  //   { op: "set", var, answer: true } (đặt biến là trả lời) · { op: "set", var, expr: "a + b", show?: "a + b" }
+  //   { op: "if", cond: "a > b || a == b", show: "a > b hoặc a = b", then: [...], else?: [...] }
+  //   { op: "repeat", times: 10, body: [...] } · { op: "move", steps } · { op: "bounce" } · { op: "rotate", text? } · { op: "drum" }
+  //  Không chấm điểm, không gửi — HS bấm 🏁 để chạy, nhập câu trả lời khi mèo hỏi, xem khối đang chạy sáng lên.
+  const SB_CIRC = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
+  function scCond(expr, vars) {
+    let e = String(expr || "");
+    Object.keys(vars).sort((x, y) => y.length - x.length).forEach((k) => { e = e.split(k).join("(" + Number(vars[k]) + ")"); });
+    if (!/^[\d\s+\-*/().<>=!&|]+$/.test(e)) return false;
+    try { return !!Function("return (" + e + ")")(); } catch (x) { return false; }
+  }
+  function scratchBox(a) {
+    const spec = a.scratch, box = el("div", "sc-box");
+    if (spec.title) box.appendChild(el("h3", "rn-title", "🐱 " + esc(spec.title)));
+    if (spec.intro) box.appendChild(el("p", "subtitle", esc(spec.intro)));
+    const wrap = el("div", "sc-wrap"), code = el("div", "sc-code"), right = el("div", "sc-right");
+    const stage = el("div", "sc-stage"), sprite = el("div", "sc-sprite", `<span class="sc-cat">${esc(spec.sprite || "🐱")}</span><div class="sc-bubble" hidden></div>`);
+    const askRow = el("div", "sc-ask"); askRow.hidden = true;
+    const askIn = el("input"); askIn.type = "text"; askIn.placeholder = "Nhập câu trả lời rồi nhấn Enter"; const askOk = el("button", "btn", "✔");
+    askRow.append(askIn, askOk); stage.append(sprite, askRow);
+    const mon = el("div", "sc-mon"), ctr = el("div", "rn-ctrl"), bGo = el("button", "btn", "🏁 Chạy chương trình"), bStop = el("button", "btn ghost", "⏹ Dừng");
+    ctr.append(bGo, bStop); right.append(ctr, stage, mon); wrap.append(code, right); box.appendChild(wrap);
+    const bubble = sprite.querySelector(".sc-bubble"), cat = sprite.querySelector(".sc-cat");
+    const txt = (t) => `<span class="sb-in">${esc(t)}</span>`, num = (t) => `<span class="sb-in sb-num">${esc(t)}</span>`, rv = (t) => `<span class="sb-rep sb-rv">${esc(t)}</span>`, rop = (t) => `<span class="sb-rep sb-rop">${esc(t)}</span>`, rsen = (t) => `<span class="sb-rep sb-rsen">${esc(t)}</span>`;
+    const label = (b) => {
+      switch (b.op) {
+        case "flag": return "khi nhấn vào <b class='sb-flag'>🏁</b>";
+        case "say": return "nói " + (b.join ? rop("nối " + b.join.map((p) => (typeof p === "string" ? "[" + p + "]" : "(" + (p.v || p.e) + ")")).join(" và ")) : txt(b.text)) + (b.secs ? " trong " + num(b.secs) + " giây" : "");
+        case "ask": return "hỏi " + txt(b.text) + " và đợi";
+        case "set": return "đặt " + `<span class="sb-in sb-dd">${esc(b.var)} ▾</span>` + " là " + (b.answer ? rsen("trả lời") : rop(b.show || b.expr));
+        case "repeat": return "lặp lại " + num(b.times) + " lần";
+        case "move": return "di chuyển " + num(b.steps) + " bước";
+        case "bounce": return "nếu chạm biên, bật lại";
+        case "rotate": return "chỉnh kiểu quay thành " + `<span class="sb-in sb-dd">${esc(b.text || "left-right")} ▾</span>`;
+        case "drum": return "chơi trống " + `<span class="sb-in sb-dd">1 ▾</span>` + " trong " + num("0.25") + " nhịp";
+        default: return esc(b.op);
+      }
+    };
+    const CAT = { flag: "event", say: "looks", ask: "sensing", set: "variables", if: "control", repeat: "control", move: "motion", bounce: "motion", rotate: "motion", drum: "sound" };
+    const nTag = (b) => (b.n ? `<i class="sb-n">${SB_CIRC[b.n - 1] || b.n}</i>` : "");
+    const draw = (list, host) => list.forEach((b) => {
+      if (b.op === "if" || b.op === "repeat") {
+        const c = el("div", "sb sb-c sb-control"); b._el = c;
+        c.appendChild(el("div", "sb-row", (b.op === "if" ? "nếu " + `<span class="sb-bool">${esc(b.show || b.cond)}</span>` + " thì" : label(b)) + nTag(b)));
+        const inner = el("div", "sb-inner"); draw(b.then || b.body || [], inner); c.appendChild(inner);
+        if (b.else) { c.appendChild(el("div", "sb-row", "còn không thì")); const i2 = el("div", "sb-inner"); draw(b.else, i2); c.appendChild(i2); }
+        c.appendChild(el("div", "sb-foot", b.op === "repeat" ? "↻" : "")); host.appendChild(c);
+      } else { const d = el("div", "sb sb-" + CAT[b.op] + (b.op === "flag" ? " sb-hat" : ""), label(b) + nTag(b)); b._el = d; host.appendChild(d); }
+    });
+    draw(spec.script || [], code);
+    let vars = {}, answer = "", x = 0, dir = 1, flip = false, run = 0, askDone = null;
+    const paintMon = () => { const ks = Object.keys(vars); mon.innerHTML = ks.length ? ks.map((k) => `<span class="sc-var">${esc(k)} <b>${esc(typeof vars[k] === "number" ? rnFmt(vars[k]) : vars[k])}</b></span>`).join("") : ""; };
+    const place = () => { const W = Math.max(0, stage.clientWidth - 60); sprite.style.left = Math.round(W / 2 + x * (W / 480)) + "px"; cat.style.transform = flip && dir < 0 ? "scaleX(-1)" : ""; };
+    const say = (t) => { bubble.hidden = !t; bubble.textContent = t || ""; };
+    const sleep = (ms, id) => new Promise((ok) => setTimeout(() => ok(id === run), ms));
+    const val = (p) => (typeof p === "string" ? p : p.e ? rnFmt(rnEval(p.e, vars)) : typeof vars[p.v] === "number" ? rnFmt(vars[p.v]) : String(vars[p.v] == null ? "" : vars[p.v]));
+    async function exec(list, id) {
+      for (const b of list) {
+        if (id !== run) return false;
+        b._el && b._el.classList.add("on");
+        if (b.op === "say") { say(b.join ? b.join.map(val).join("") : b.text); if (!(await sleep(b.secs ? Math.min(b.secs, 3) * 1000 : 900, id))) return false; if (b.secs) say(""); }
+        else if (b.op === "ask") {
+          say(b.text); askRow.hidden = false; askIn.value = ""; askIn.focus();
+          answer = await new Promise((ok) => { askDone = ok; }); askRow.hidden = true; say(""); if (id !== run) return false;
+        } else if (b.op === "set") { const v = b.answer ? String(answer).trim().replace(",", ".") : null; vars[b.var] = b.answer ? (v !== "" && isFinite(+v) ? +v : String(answer)) : rnEval(b.expr, vars); paintMon(); if (!(await sleep(500, id))) return false; }
+        else if (b.op === "if") { if (!(await sleep(500, id))) return false; b._el.classList.remove("on"); if (!(await exec(scCond(b.cond, vars) ? b.then || [] : b.else || [], id))) return false; }
+        else if (b.op === "repeat") { for (let k = 0; k < (+b.times || 0); k++) { b._el.classList.add("on"); if (!(await exec(b.body || [], id))) return false; } }
+        else if (b.op === "move") { x += (+b.steps || 0) * dir; place(); if (!(await sleep(250, id))) return false; }
+        else if (b.op === "bounce") { if (x > 210 || x < -210) { dir = -dir; x = Math.max(-210, Math.min(210, x)); place(); } if (!(await sleep(150, id))) return false; }
+        else if (b.op === "rotate") { flip = true; if (!(await sleep(150, id))) return false; }
+        else if (b.op === "drum") { stage.classList.add("sc-beat"); if (!(await sleep(200, id))) return false; stage.classList.remove("sc-beat"); }
+        else if (!(await sleep(400, id))) return false;
+        b._el && b._el.classList.remove("on");
+      }
+      return true;
+    }
+    const clearOn = () => code.querySelectorAll(".sb.on").forEach((e) => e.classList.remove("on"));
+    const submit = () => { if (askDone) { const f = askDone; askDone = null; f(askIn.value); } };
+    askOk.onclick = submit; askIn.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } };
+    bGo.onclick = async () => { const id = ++run; submit(); clearOn(); vars = {}; answer = ""; x = 0; dir = 1; flip = false; say(""); paintMon(); place(); bGo.disabled = true; const ok = await exec(spec.script || [], id); if (id === run) { bGo.disabled = false; clearOn(); if (ok) sound("ok"); } };
+    bStop.onclick = () => { run++; submit(); askRow.hidden = true; say(""); clearOn(); bGo.disabled = false; };
+    setTimeout(place, 0); paintMon();
+    return box;
+  }
+
   // ---- HỘP THƯ ĐIỆN TỬ MÔ PHỎNG (activity.mail) — giao diện giống Gmail ------------------------
   // mail: { key?, me: { name, address }, login?: true (bắt đầu ở màn đăng nhập), signup?: true (có "Tạo tài khoản"),
   //         inbox: [{ from, addr, subject, body ("{ten}" = tên chủ hộp thư), time, files?: [{ name }], spam?, trap?: "🎁 Nhận quà ngay", star? }],
@@ -2159,6 +2306,62 @@
 @keyframes lhGiftPop{0%{transform:scale(.6);opacity:0}70%{transform:scale(1.06)}100%{transform:scale(1);opacity:1}}
 .penguin-enemy{display:inline-block;transition:transform .3s}.penguin-enemy.howl{animation:shake .5s}
 .mm-box{margin:14px 0}
+.fc-node{display:inline-block;min-width:170px;max-width:100%;padding:9px 22px;font-weight:700;text-align:center;color:#1f2937;line-height:1.3;background:#fef08a;border-radius:4px}
+.fc-term{background:#fbcfe8;border-radius:999px}
+.fc-io{background:#99f6e4;border-radius:0;clip-path:polygon(9% 0,100% 0,91% 100%,0 100%);padding:9px 38px}
+.fc-proc{background:#fef08a}
+.fc-cond{background:#86efac;border-radius:0;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);padding:22px 44px}
+.fc-chart{display:flex;flex-direction:column;align-items:center;gap:2px;margin:10px auto}
+.fc-arrow{font-size:1.4rem;font-weight:900;color:#334155;line-height:1}
+.order-list.fc-list li{background:transparent;border:none;padding:0 0 0 0;margin:30px 0 0;position:relative;justify-content:center}
+.order-list.fc-list li:first-child{margin-top:8px}
+.order-list.fc-list li>span:first-child{flex:1;display:flex;justify-content:center}
+.order-list.fc-list li+li::before{content:"↓";position:absolute;top:-30px;left:calc(50% - 48px);font-size:1.4rem;font-weight:900;color:#334155}
+.order-list.fc-list li>span:last-child{flex:0 0 96px;display:flex;gap:6px}
+.rv-row .fc-node{min-width:0}
+.rn-box{margin:14px 0;border:3px solid #0ea5e9;border-radius:18px;background:#f8fafc;padding:12px 16px}
+.rn-title{margin:0 0 6px;color:#0369a1}
+.rn-wrap{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start}
+.rn-chart{flex:1 1 300px;margin:0}
+.rn-step{border-radius:14px;padding:3px;transition:background .2s}
+.rn-step.on{background:#38bdf8;box-shadow:0 0 0 4px #bae6fd}.rn-step.done{opacity:.6}
+.rn-side{flex:1 1 280px;display:flex;flex-direction:column;gap:10px;font-size:1.08rem}
+.rn-inputs{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.rn-inputs>b{width:100%}
+.rn-in{display:flex;gap:6px;align-items:center;font-weight:700}.rn-in input{width:5.5em;font-size:1.15rem;padding:5px 8px;border:2px solid #7dd3fc;border-radius:10px}
+.rn-ctrl{display:flex;flex-wrap:wrap;gap:8px}
+.rn-mem{background:#fff;border:2px dashed #94a3b8;border-radius:12px;padding:8px 12px;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center}
+.rn-var{background:#e0f2fe;border-radius:8px;padding:2px 10px}.rn-empty{color:#94a3b8}
+.rn-out:empty{display:none}.rn-out{background:#dcfce7;border:2px solid #16a34a;border-radius:12px;padding:8px 12px}
+.rn-val{font-size:1.5rem;font-weight:900;color:#15803d}
+.rn-log{margin:0;padding-left:22px;font-size:1rem;color:#334155}.rn-log:empty{display:none}
+.sb{display:inline-flex;align-items:center;flex-wrap:wrap;gap:5px;padding:6px 12px;border-radius:6px;color:#fff;font-weight:700;font-size:1rem;line-height:1.3;text-align:left;box-shadow:inset 0 -3px rgba(0,0,0,.15);position:relative}
+.sb-hat{border-radius:22px 22px 6px 6px;padding-top:12px}
+.sb-event{background:#ffbf00;color:#3b2a00}.sb-looks{background:#9966ff}.sb-sensing{background:#5cb1d6}.sb-variables{background:#ff8c1a}
+.sb-operators{background:#59c059}.sb-control{background:#ffab19;color:#3b2a00}.sb-motion{background:#4c97ff}.sb-sound{background:#0fbd8c}
+.sb-in{background:#fff;color:#333;border-radius:4px;padding:1px 7px;font-weight:600}.sb-num{border-radius:999px}.sb-dd{background:rgba(0,0,0,.12);color:#fff}
+.sb-rep{border-radius:999px;padding:2px 10px;border:1.5px solid rgba(0,0,0,.12)}.sb-rv{background:#ff8c1a;color:#fff}.sb-rop{background:#59c059;color:#fff}.sb-rsen{background:#5cb1d6;color:#fff}
+.sb-bool{background:#59c059;color:#fff;padding:2px 12px;clip-path:polygon(10px 0,calc(100% - 10px) 0,100% 50%,calc(100% - 10px) 100%,10px 100%,0 50%)}
+.sb-flag{font-size:1.1rem}.sb-n{font-style:normal;background:#fff;color:#be123c;border-radius:999px;padding:0 5px;font-size:.9rem;margin-left:4px}
+.sb-c{display:flex;flex-direction:column;align-items:stretch;padding:0;background:#ffab19}.sb-c>.sb-row{padding:6px 12px}
+.sb-inner{margin-left:18px;display:flex;flex-direction:column;align-items:flex-start;gap:2px;background:#fff8ec;padding:4px 0 4px 4px}
+.sb-foot{height:16px;padding-left:12px;font-size:.85rem;line-height:16px}
+.sb.on,.sb-c.on>.sb-row{box-shadow:0 0 0 4px #fde047,0 0 14px #facc15}
+.sb-stack{display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin:8px auto;width:fit-content;max-width:100%}
+.order-list.sb-list li{background:transparent;border:none;padding:0;margin:4px 0}.order-list.sb-list li>span:first-child{flex:1}
+.order-list.sb-list li>span:last-child{flex:0 0 96px;display:flex;gap:6px}.rv-row .sb{font-size:.95rem}
+.sc-box{margin:14px 0;border:3px solid #9966ff;border-radius:18px;background:#faf8ff;padding:12px 16px}
+.sc-wrap{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
+.sc-code{flex:1 1 320px;display:flex;flex-direction:column;align-items:flex-start;gap:2px;background:#f9f9fb;border:1px solid #e5e7eb;border-radius:12px;padding:10px;overflow-x:auto;max-width:100%}
+.sc-right{flex:1 1 280px;display:flex;flex-direction:column;gap:10px}
+.sc-stage{position:relative;height:210px;background:linear-gradient(#e0f2fe,#fff 70%);border:2px solid #cbd5e1;border-radius:12px;overflow:hidden;transition:background .1s}
+.sc-stage.sc-beat{background:linear-gradient(#fde68a,#fff 70%)}
+.sc-sprite{position:absolute;bottom:18px;left:40%;width:60px;text-align:center;transition:left .22s linear}
+.sc-cat{display:inline-block;font-size:3.2rem;line-height:1}
+.sc-bubble{position:absolute;bottom:72px;left:20px;min-width:120px;max-width:230px;background:#fff;border:2px solid #94a3b8;border-radius:14px;padding:6px 10px;font-size:1rem;font-weight:600;color:#1f2937;text-align:left;white-space:pre-wrap}
+.sc-ask{position:absolute;left:8px;right:8px;bottom:6px;display:flex;gap:6px;background:#fff;border:2px solid #5cb1d6;border-radius:12px;padding:5px}
+.sc-ask input{flex:1;min-width:0;font-size:1.1rem;border:none;outline:none}.sc-ask .btn{padding:4px 14px}
+.sc-mon{display:flex;flex-wrap:wrap;gap:8px}.sc-mon:empty{display:none}
+.sc-var{background:#fff;border:2px solid #ff8c1a;border-radius:8px;padding:2px 8px}.sc-var b{background:#ff8c1a;color:#fff;border-radius:6px;padding:0 8px;margin-left:4px}
 .mm{border:2px solid #ddd6fe;border-radius:16px;background:#fffdf7;overflow:hidden;box-shadow:0 4px 14px rgba(20,33,61,.08);color:#1f2937}
 .mm-title{background:#7c3aed;color:#fff;padding:5px 14px;font-weight:700;font-size:.95rem}
 .mm-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;background:#f5f3ff;border-bottom:1px solid #e9e5fb}
@@ -2269,6 +2472,9 @@
 .ck-btn{width:52px;height:40px;border-radius:10px;border:2.5px solid #cbd5e1;background:#fff;font-size:1.3rem;font-weight:900;cursor:pointer;color:#fff}
 .ck-btn.k0.on{background:#16a34a;border-color:#16a34a}.ck-btn.k1.on{background:#f59e0b;border-color:#f59e0b}
 .ck-tally h3{margin:12px 0 6px}
+.ck-target{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:10px 0;font-size:1.15rem;font-weight:700}
+.ck-target input{font-size:1.15rem;padding:6px 12px;border:2px solid #cbd5e1;border-radius:10px;width:min(12em,100%)}
+.ck-tgt td small{color:#64748b;font-weight:400}
 .ck-trow{display:grid;grid-template-columns:minmax(0,2fr) 1fr 1fr;gap:10px;align-items:center;margin:6px 0;font-size:1.05rem}
 .ck-tb{position:relative;height:28px;background:#f1f5f9;border-radius:8px;overflow:hidden}
 .ck-tb i{position:absolute;left:0;top:0;bottom:0}
@@ -2584,6 +2790,7 @@
   }
 
   // ---- VẬN DỤNG (nhiều tình huống, bấm lộ đáp án GV chốt) ----------------
+  // cases: [{ question, answer, answerHtml? (sơ đồ/hình minh hoạ tự soạn, hiện cùng hướng trả lời) }]
   function renderVanDung(a) {
     const c = el("div", "card"); activityHead(a, c);
     c.appendChild(el("p", "subtitle", a.intro || "Thảo luận nhóm, trả lời rồi bấm để xem hướng chốt của giáo viên."));
@@ -2591,7 +2798,7 @@
       const box = el("div", "vd-case");
       box.innerHTML = `<p class="vd-q"><b>Bài ${i + 1}.</b> ${esc(cs.question)}</p>`;
       if (STUDENT) box.appendChild(textAnswerBox(aid(a) + ":t" + i, a));
-      if (showModel()) box.appendChild(revealBox("💡 Xem hướng trả lời (GV chốt)", () => el("div", "feedback ok", `<div class="explain">${esc(cs.answer)}</div>`)));
+      if (showModel()) box.appendChild(revealBox("💡 Xem hướng trả lời (GV chốt)", () => el("div", "feedback ok", `<div class="explain">${esc(cs.answer)}</div>${cs.answerHtml ? `<div class="diagram">${cs.answerHtml}</div>` : ""}`)));
       c.appendChild(box);
     });
     view.appendChild(c);
@@ -2601,28 +2808,39 @@
   //  columns?: ["✅ Làm được", "⏳ Chưa làm được"], sections: [{ title, items: [...] }], note?: "câu hỏi mở",
   //  modelAnswer?: [..] | "…" (GV bấm mới hiện). Máy HS gửi phiếu cho GV (dạng chữ dễ đọc, texts …/t0);
   //  màn chiếu nối tiết học: "📊 Thống kê cả lớp" từng mục.
+  //  target?: "Nhóm em chấm sản phẩm của nhóm" — phiếu CHẤM CHÉO: HS ghi nhóm được chấm (bắt buộc khi gửi);
+  //  thống kê có thêm bảng "🎯 Kết quả theo nhóm được chấm" (số phiếu, số mục ở từng cột).
   const ckCols = (a) => a.columns || ["✅ Làm được", "⏳ Chưa làm được"];
-  function ckText(a, marks, note) {
+  const ckTg = (a) => "🎯 " + a.target + ": ";
+  function ckText(a, marks, note, tg) {
     const cols = ckCols(a), out = [];
+    if (a.target && tg && tg.trim()) out.push(ckTg(a) + tg.trim().replace(/\s+/g, " "));
     (a.sections || []).forEach((s, si) => { out.push(s.title); cols.forEach((cn, k) => { const its = (s.items || []).filter((_, i) => marks[si + "-" + i] === k); if (its.length) out.push(cn + ": " + its.join("; ")); }); });
     if (note && note.trim()) out.push("💬 " + (a.note || "Ý kiến") + ": " + note.trim().replace(/\s+/g, " "));
     return out.join("\n").slice(0, 2990);
   }
   function ckParse(a, text) {
-    const cols = ckCols(a), marks = {}, pre = "💬 " + (a.note || "Ý kiến") + ": "; let si = -1, note = "";
+    const cols = ckCols(a), marks = {}, pre = "💬 " + (a.note || "Ý kiến") + ": "; let si = -1, note = "", target = "";
     String(text || "").split("\n").forEach((ln) => {
+      if (a.target && ln.indexOf(ckTg(a)) === 0) { target = ln.slice(ckTg(a).length); return; }
       const s = (a.sections || []).findIndex((x) => x.title === ln.trim()); if (s >= 0) { si = s; return; }
       if (ln.indexOf(pre) === 0) { note = ln.slice(pre.length); return; }
       cols.forEach((cn, k) => { if (si >= 0 && ln.indexOf(cn + ": ") === 0) ln.slice(cn.length + 2).split("; ").forEach((t) => { const i = (a.sections[si].items || []).indexOf(t); if (i >= 0) marks[si + "-" + i] = k; }); });
     });
-    return { marks, note };
+    return { marks, note, target };
   }
   function renderChecklist(a) {
     ensureEngineCSS();
     const c = el("div", "card"); activityHead(a, c);
     const cols = ckCols(a), key = aid(a) + ":t0";
-    if (!a._marks) { const sent = STUDENT && ask("getText", key), p = sent ? ckParse(a, sent.text) : { marks: {}, note: "" }; a._marks = p.marks; if (drafts[key] == null && p.note) drafts[key] = p.note; }
+    if (!a._marks) { const sent = STUDENT && ask("getText", key), p = sent ? ckParse(a, sent.text) : { marks: {}, note: "", target: "" }; a._marks = p.marks; if (drafts[key] == null && p.note) drafts[key] = p.note; if (drafts[key + ":tg"] == null && p.target) drafts[key + ":tg"] = p.target; }
     const marks = a._marks;
+    let tgIn = null;
+    if (a.target) {
+      const row = el("div", "ck-target"); row.appendChild(el("label", null, "🎯 " + esc(a.target) + ":"));
+      tgIn = el("input"); tgIn.type = "text"; tgIn.maxLength = 40; tgIn.placeholder = "Ví dụ: Nhóm 3"; tgIn.value = drafts[key + ":tg"] || "";
+      tgIn.oninput = () => { drafts[key + ":tg"] = tgIn.value; }; row.appendChild(tgIn); c.appendChild(row);
+    }
     (a.sections || []).forEach((s, si) => {
       const t = el("table", "ck-table"), tb = el("tbody");
       t.innerHTML = `<thead><tr><th>${esc(s.title)}</th>${cols.map((cn) => `<th>${esc(cn)}</th>`).join("")}</tr></thead>`;
@@ -2639,8 +2857,9 @@
     if (STUDENT) {
       const sent = ask("getText", key), btn = el("button", "btn", "📨 Gửi phiếu cho thầy/cô"), st = el("span", "ta-status", sent ? "✓ Đã gửi" : "");
       btn.onclick = () => {
+        if (tgIn && !tgIn.value.trim()) { alert("Hãy ghi nhóm được chấm trước khi gửi."); tgIn.focus(); return; }
         if (!Object.keys(marks).length) { alert("Hãy tick ít nhất một mục trước khi gửi."); return; }
-        emit("onText", { key, activityId: aid(a), text: ckText(a, marks, ta ? ta.value : "") });
+        emit("onText", { key, activityId: aid(a), text: ckText(a, marks, ta ? ta.value : "", tgIn ? tgIn.value : "") });
         st.textContent = "✓ Đã gửi lúc " + new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }); sound("ok");
       };
       const row = el("div", "ta-row"); row.append(btn, st); c.appendChild(row);
@@ -2652,7 +2871,15 @@
   function ckTally(a, key) {
     const list = ask("groupTexts", key) || [], cols = ckCols(a), parsed = list.map((g) => ckParse(a, g.text)), n = Math.max(1, list.length);
     const d = el("div", "ck-tally");
-    d.innerHTML = `<p class="subtitle">${list.length} nhóm đã gửi phiếu.</p>` + (a.sections || []).map((s, si) => `<h3>${esc(s.title)}</h3>` + (s.items || []).map((it, i) => `<div class="ck-trow"><span>${esc(it)}</span>${cols.map((cn, k) => { const m = parsed.filter((p) => p.marks[si + "-" + i] === k).length; return `<span class="ck-tb k${k}" title="${esc(cn)}"><i style="width:${m / n * 100}%"></i><b>${m}</b></span>`; }).join("")}</div>`).join("")).join("")
+    let byTg = "";
+    if (a.target) { // chấm chéo: gom phiếu theo nhóm được chấm
+      const norm = (t) => String(t || "").trim().replace(/\s+/g, " ").toLowerCase(), g = {};
+      parsed.forEach((p, i) => { const k = norm(p.target) || "—"; (g[k] = g[k] || { name: String(p.target || "—").trim() || "—", n: 0, by: [], c: cols.map(() => 0) }); g[k].n++; g[k].by.push(list[i].name); Object.values(p.marks).forEach((m) => { if (g[k].c[m] != null) g[k].c[m]++; }); });
+      const rows = Object.values(g).sort((x, y) => x.name.localeCompare(y.name, "vi", { numeric: true }));
+      byTg = `<h3>🎯 Kết quả theo nhóm được chấm</h3><table class="ck-table ck-tgt"><thead><tr><th>${esc(a.target)}</th><th>Số phiếu</th>${cols.map((cn) => `<th>${esc(cn)}</th>`).join("")}</tr></thead><tbody>`
+        + rows.map((r) => `<tr><td class="ck-item"><b>${esc(r.name)}</b><br><small>chấm bởi: ${esc(r.by.join(", "))}</small></td><td>${r.n}</td>${r.c.map((m) => `<td>${m}</td>`).join("")}</tr>`).join("") + `</tbody></table>`;
+    }
+    d.innerHTML = `<p class="subtitle">${list.length} nhóm đã gửi phiếu.</p>` + byTg + (a.sections || []).map((s, si) => `<h3>${esc(s.title)}</h3>` + (s.items || []).map((it, i) => `<div class="ck-trow"><span>${esc(it)}</span>${cols.map((cn, k) => { const m = parsed.filter((p) => p.marks[si + "-" + i] === k).length; return `<span class="ck-tb k${k}" title="${esc(cn)}"><i style="width:${m / n * 100}%"></i><b>${m}</b></span>`; }).join("")}</div>`).join("")).join("")
       + `<p class="ck-legend">${cols.map((cn, k) => `<span class="ck-lg k${k}">${esc(cn)}</span>`).join("")}</p>`
       + (parsed.some((p) => p.note) ? `<h3>💬 ${esc(a.note || "Ý kiến")}</h3><ul class="lead">${list.map((g, i) => (parsed[i].note ? `<li><b>${esc(g.name)}:</b> ${esc(parsed[i].note)}</li>` : "")).join("")}</ul>` : "");
     const rb = el("button", "btn ghost", "🔄 Cập nhật"); rb.onclick = () => d.replaceWith(ckTally(a, key)); d.appendChild(wrapEl(rb));

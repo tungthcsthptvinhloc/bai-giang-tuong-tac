@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-09-26T15:32:15.875Z",
+ "generatedAt": "2026-09-26T16:55:48.582Z",
  "lessons": [
   {
    "id": "tin6-bai01-thong-tin-va-du-lieu",
@@ -120,6 +120,56 @@
    "activities": 17,
    "items": 31,
    "open": 4
+  },
+  {
+   "id": "tin6-bai13-tim-kiem-va-thay-the",
+   "title": "Bài 13: Thực hành: Tìm kiếm và thay thế",
+   "grade": "6",
+   "subject": "Tin học",
+   "unit": "Chủ đề 5 — Ứng dụng tin học",
+   "activities": 13,
+   "items": 27,
+   "open": 3
+  },
+  {
+   "id": "tin6-bai14-hoan-thien-so-luu-niem",
+   "title": "Bài 14: Thực hành tổng hợp: Hoàn thiện sổ lưu niệm",
+   "grade": "6",
+   "subject": "Tin học",
+   "unit": "Chủ đề 5 — Ứng dụng tin học",
+   "activities": 18,
+   "items": 30,
+   "open": 5
+  },
+  {
+   "id": "tin6-bai15-thuat-toan",
+   "title": "Bài 15: Thuật toán",
+   "grade": "6",
+   "subject": "Tin học",
+   "unit": "Chủ đề 6 — Giải quyết vấn đề với sự trợ giúp của máy tính",
+   "activities": 15,
+   "items": 25,
+   "open": 2
+  },
+  {
+   "id": "tin6-bai16-cac-cau-truc-dieu-khien",
+   "title": "Bài 16: Các cấu trúc điều khiển",
+   "grade": "6",
+   "subject": "Tin học",
+   "unit": "Chủ đề 6 — Giải quyết vấn đề với sự trợ giúp của máy tính",
+   "activities": 14,
+   "items": 42,
+   "open": 2
+  },
+  {
+   "id": "tin6-bai17-chuong-trinh-may-tinh",
+   "title": "Bài 17: Chương trình máy tính",
+   "grade": "6",
+   "subject": "Tin học",
+   "unit": "Chủ đề 6 — Giải quyết vấn đề với sự trợ giúp của máy tính",
+   "activities": 13,
+   "items": 26,
+   "open": 3
   },
   {
    "id": "tin7-bai01-thiet-bi-vao-ra",

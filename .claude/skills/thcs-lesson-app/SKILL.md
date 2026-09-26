@@ -168,7 +168,7 @@ Hệ thống đã có sẵn (không cần làm gì trong bài, chỉ cần biế
   `dragdrop`, `ordering`, `fillblank`, `content.challenge` của summary.
 - **Điền khuyết xuống dòng**: trong `text` của `fillblank` dùng `
 ` để xuống dòng (mỗi câu a, b, c một dòng); `{{}}` là ô trống.
-- Câu tự luận nhóm gửi cho GV: `vandung.cases[].question`, `scenario.content.question`.
+- Câu tự luận nhóm gửi cho GV: `vandung.cases[].question` (hướng trả lời `answer`, thêm sơ đồ/hình tự soạn bằng `answerHtml`), `scenario.content.question`.
 - `data/lesson.js` phải giữ dòng `module.exports = LESSON` (máy chủ đọc bằng Node).
 
 ## Bảng tính mô phỏng & trò chơi nhân vật (engine v5)
@@ -298,6 +298,32 @@ chỉ nhìn ảnh, HS **mở tệp đính kèm, thêm nhánh, đính kèm tệp*
 note: "câu hỏi mở (không bắt buộc)", modelAnswer: ["dự kiến sản phẩm…"], remember: [...]`. Máy HS tick rồi gửi
 (khóa `aid:t0`, GV đọc ở tab Tự luận); màn chiếu nối tiết học có **📊 Thống kê phiếu của cả lớp** từng mục.
 Mục (`items`) không chứa `"; "` hay xuống dòng (validator kiểm tra).
+**Phiếu chấm chéo giữa các nhóm**: thêm `target: "Nhóm em chấm sản phẩm của"` (và `columns: ["✅ Đạt", "🔧 Cần cải thiện"]`)
+→ máy HS có ô ghi nhóm được chấm (bắt buộc khi gửi); thống kê có thêm bảng **🎯 Kết quả theo nhóm được chấm** (số phiếu,
+tổng mục từng cột, nhóm nào chấm). Dùng khi giáo án có bước “các nhóm nhận xét, chấm điểm chéo”.
+
+## Sơ đồ khối thuật toán (engine v5)
+
+**Ghép sơ đồ khối** — trò `ordering` thêm `flow` (cùng độ dài, cùng thứ tự với `steps` ĐÚNG):
+`{ type: "ordering", steps: ["Bắt đầu", "Giá trị a, giá trị b", "Tổng ← a + b", "Giá trị tổng", "Kết thúc"], flow: ["term", "io", "proc", "io", "term"] }`
+→ mỗi bước hiện đúng hình khối (term: oval Bắt đầu/Kết thúc · io: hình bình hành Đầu vào/Đầu ra · proc: hình chữ nhật Bước xử lí ·
+cond: hình thoi kiểm tra điều kiện) nối bằng mũi tên; chấm, nộp, xem lại giống ordering thường.
+**Máy chạy thử thuật toán** — `runner` ở BẤT KỲ hoạt động nào (không chấm, không gửi):
+`runner: { title, intro, inputs: [{ name: "a", label?, value: 8 }], steps: [{ shape: "term", text: "Bắt đầu" }, { shape: "io", text: "Giá trị a, giá trị b", input: true },
+{ shape: "proc", text: "Tổng ← a + b", set: "Tổng", expr: "a + b" }, { shape: "io", text: "Giá trị tổng", output: "Tổng" }, { shape: "term", text: "Kết thúc" }] }`
+— HS nhập đầu vào, chạy từng bước (khối đang chạy sáng lên, bảng Bộ nhớ, nhật kí, đầu ra). `expr`: số, tên biến, + − × / : ( ).
+**Chương trình Scratch** (bài lập trình trực quan):
+- `scratch` ở BẤT KỲ hoạt động nào = chạy thử chương trình (không chấm): khối lệnh vẽ giống Scratch (màu theo nhóm lệnh) + sân khấu
+  có chú mèo. 🏁 chạy, mèo nói/hỏi, HS nhập câu trả lời, khối đang chạy sáng lên, ô biến hiện giá trị.
+  `scratch: { title, intro, script: [{ op: "flag", n: 1 }, { op: "say", text, secs } | { op: "say", join: ["Tổng là: ", { v: "tong" } | { e: "a - b" }], secs },
+  { op: "ask", text }, { op: "set", var: "a", answer: true }, { op: "set", var: "tong", expr: "a + b", show: "a + b" },
+  { op: "if", cond: "a > b || a == b", show: "a > b hoặc a = b", then: [...], else: [...] }, { op: "repeat", times: 10, body: [...] },
+  { op: "move", steps: 10 }, { op: "bounce" }, { op: "rotate" }, { op: "drum" }] }` (`n` = số ①② như SGK).
+- Ghép khối lệnh: `ordering` thêm `blocks: ["event","looks","sensing","variables","operators","control","motion","sound"]` (cùng thứ tự steps).
+  Khi các cặp lệnh đổi chỗ được (nhập a/b), ghi rõ thứ tự trong `task` (ví dụ “nhập a trước, b sau”).
+- Nút mở Scratch thật: `links: [{ label, url: "https://scratch.mit.edu/projects/editor/" }]`.
+Không đặt `runner` trong trò ghép sơ đồ khối (lộ đáp án) — đặt ở hoạt động SAU. Vẽ sơ đồ tĩnh trong `content` bằng các lớp
+`fc-chart`, `fc-node fc-term|fc-io|fc-proc|fc-cond`, `fc-arrow` (engine có sẵn CSS).
 
 ## Câu trả lời ngắn, ô chữ & hộp thư mô phỏng (engine v5)
 
