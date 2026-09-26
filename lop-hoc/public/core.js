@@ -518,7 +518,7 @@
       });
       rows.push([Cc(""), { v: "Trung bình lớp", s: "head" }, ...colAvg.map((a) => { const v = avg(a); return v == null ? CT("") : NB(v); }), Cc(""), Cc(""), (() => { const v = avg(stuAvg); return v == null ? CT("") : NB(v); })()]);
       const last = colName(1 + n + 3);
-      sheets.push({ name: sheetName(c.name), cols: [6, 28, ...c.sess.map(() => 14), 10, 10, 11], rows, merges: [`A1:${last}`, `A2:${last}`, `A3:${last}`], freezeRow: 4 });
+      sheets.push({ name: sheetName(c.name), cols: [6, 28, ...c.sess.map(() => 14), 10, 10, 11], rows, merges: [`A1:${last}1`, `A2:${last}2`, `A3:${last}3`], freezeRow: 4 });
       summary.push({ c, colAvg, stuAvg });
     });
     // Tổng hợp: TB lớp theo từng bài (gộp các tiết của cùng một bài)
@@ -536,7 +536,7 @@
     });
     if (!summary.length) rs.push([Cc("(Không có tiết học nào khớp bộ lọc)")]);
     const lastS = colName(4 + lessonCols.length + 1);
-    sheets.unshift({ name: "Tổng hợp", cols: [6, 8, 12, 8, 8, ...lessonCols.map(() => 16), 12], rows: rs, merges: [`A1:${lastS}`, `A2:${lastS}`, `A3:${lastS}`], freezeRow: 4 });
+    sheets.unshift({ name: "Tổng hợp", cols: [6, 8, 12, 8, 8, ...lessonCols.map(() => 16), 12], rows: rs, merges: [`A1:${lastS}1`, `A2:${lastS}2`, `A3:${lastS}3`], freezeRow: 4 });
     const d = new Date();
     return { sheets, filename: `BaoCaoDiem_${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}.xlsx`, classes: summary.map(({ c, stuAvg }) => ({ name: c.name, grade: c.grade, sessions: c.sess.length, avg: avg(stuAvg) })) };
   }

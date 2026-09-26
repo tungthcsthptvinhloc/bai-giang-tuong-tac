@@ -86,7 +86,8 @@
       o.push(`<row r="${r + 1}">${cells.join("")}</row>`);
     });
     o.push("</sheetData>");
-    if (sh.merges && sh.merges.length) o.push(`<mergeCells count="${sh.merges.length}">${sh.merges.map((m) => `<mergeCell ref="${m}"/>`).join("")}</mergeCells>`);
+    const merges = (sh.merges || []).filter((m) => /^[A-Z]{1,3}[1-9]\d*:[A-Z]{1,3}[1-9]\d*$/.test(m)); // vùng gộp sai -> Excel báo lỗi, bỏ qua
+    if (merges.length) o.push(`<mergeCells count="${merges.length}">${merges.map((m) => `<mergeCell ref="${m}"/>`).join("")}</mergeCells>`);
     o.push(`<pageMargins left="0.5" right="0.4" top="0.6" bottom="0.6" header="0.3" footer="0.3"/></worksheet>`);
     return o.join("");
   }
