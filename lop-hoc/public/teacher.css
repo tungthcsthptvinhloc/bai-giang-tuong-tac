@@ -187,3 +187,13 @@ select { max-width: 100%; }
 .bigcode-box b { display: block; font-size: min(8rem, 16vw); line-height: 1; letter-spacing: .14em; color: #5b21b6; font-variant-numeric: tabular-nums; }
 .bigcode-box + svg { width: min(42vh, 70vw) !important; }
 .bigcode { font-size: 1.5rem; letter-spacing: .12em; color: #5b21b6; }
+
+/* Lịch sử: chọn nhiều, phân trang · Xuất báo cáo: bộ lọc chọn nhiều */
+table.t th.ck, table.t td.ck { width: 34px; text-align: center; }
+table.t tr.sel td { background: #fff7ed; }
+.pager { display: flex; gap: 6px; align-items: center; justify-content: center; margin: 12px 0; flex-wrap: wrap; }
+.fl { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 10px 0; }
+.fl > b { min-width: 58px; }
+.chip2 { border: 2px solid var(--line); background: #fff; border-radius: 999px; padding: 5px 12px; font-weight: 700; color: var(--muted); cursor: pointer; }
+.chip2.on { border-color: var(--pri2); background: var(--pri-soft); color: var(--pri); }
+.rep-go { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 14px; }

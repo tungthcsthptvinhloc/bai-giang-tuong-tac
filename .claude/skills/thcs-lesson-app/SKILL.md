@@ -159,6 +159,12 @@ Hệ thống đã có sẵn (không cần làm gì trong bài, chỉ cần biế
   gửi). Tự do: nộp 1 lần rồi xem ngay; theo nhịp: làm đủ thì **tự lưu** sau mỗi lần sửa.
   Có kết quả → HS thấy **bài của nhóm mình ✓/✗ từng mục** + đáp án đúng. (Màn trình chiếu
   1 máy vẫn là trò chơi báo đúng/sai từng mục.)
+- **Bảng GV — 🕘 Lịch sử**: phân trang, xóa từng tiết / các tiết đã chọn / tất cả (gõ `XOA`; tiết đang
+  diễn ra không xóa). **📑 Xuất báo cáo**: lọc Khối (số đầu tên lớp; không có thì theo bài `tinN-…`) –
+  Lớp – Tháng – Năm (chọn nhiều) → Excel `C.reportWorkbook`: sheet Tổng hợp + mỗi lớp 1 sheet (mỗi tiết
+  1 cột có ngày, vắng = “Vắng” không tính TB, cột Tổng điểm / Trung bình). Điểm HS = điểm nhóm tính
+  lại theo `data/lesson.js` hiện tại → **không đổi `id` hoạt động/thứ tự câu hỏi của bài đã dạy** kẻo
+  báo cáo các tiết cũ lệch điểm; tên bài nên có dạng “Bài N: …” (cột báo cáo lấy phần trước dấu “:”).
 
 Để bài mới tương thích, chỉ cần:
 - Mỗi hoạt động PHẢI có `id` duy nhất, KHÔNG đổi sau khi đã dạy (kết quả lưu theo id);

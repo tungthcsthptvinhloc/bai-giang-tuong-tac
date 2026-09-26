@@ -89,6 +89,23 @@ Khi GV bấm **🏁 Kết thúc**:
 - **Hết giờ chưa dạy hết bài**: tab ⚙️ Tính điểm → *Chỉ tính tới hoạt động GV đang chiếu*.
 - **Dạy tiếp ở tiết sau**: tab 🕘 Lịch sử → **▶ Mở lại**.
 
+## 4b. Lịch sử & báo cáo điểm
+
+- **🕘 Lịch sử** có phân trang (10 / 20 / 50 / 100 tiết mỗi trang).
+  - Xóa một tiết: nút 🗑 trên dòng.
+  - Xóa nhiều tiết: tick chọn (ô đầu bảng = chọn cả trang) → **🗑 Xóa các bài đã chọn**.
+  - Xóa hết: **🗑 Xóa tất cả**, rồi gõ chữ `XOA` để xác nhận.
+  - Xóa là mất hẳn kết quả, không khôi phục được — nên xuất Excel hoặc báo cáo trước. Tiết đang diễn ra không xóa được.
+  - Danh sách lớp không bị ảnh hưởng.
+- **📑 Xuất báo cáo**: lọc theo **Khối – Lớp – Tháng – Năm**.
+  - Mỗi tiêu chí chọn được nhiều mục; không chọn là *Tất cả*.
+  - Khối lấy theo số đầu tên lớp (6A1 → khối 6).
+  - Năm chỉ hiện các năm có tiết dạy.
+- **File Excel báo cáo** gồm:
+  - sheet **Tổng hợp**: điểm trung bình của từng lớp theo từng bài;
+  - **mỗi lớp 1 sheet**: mỗi tiết học 1 cột có ghi ngày, rồi *Số tiết tham gia*, *Tổng điểm*, *Trung bình*, dòng *Trung bình lớp*.
+  - Học sinh vắng ghi “Vắng”, không tính vào Tổng điểm và Trung bình.
+
 ## 5. Cách tính điểm (thang 10, chung cả nhóm)
 
 - Mỗi câu trắc nghiệm / bài ghép đôi / phân loại / sắp xếp / điền khuyết = **1 bài**. Trắc nghiệm được

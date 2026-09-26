@@ -476,6 +476,71 @@
     };
   }
 
+  // ---- BÁO CÁO ĐIỂM nhiều tiết (tab 📑 Xuất báo cáo) --------------------------------------
+  // Khối của lớp: số đầu tên lớp (6A1 → 6); không có thì lấy theo bài (tin6-… → 6)
+  function gradeOf(className, lessonId) {
+    const m = /^\s*(\d{1,2})/.exec(String(className || "")); if (m) return m[1];
+    const l = /^[a-z]+(\d{1,2})/i.exec(String(lessonId || "")); return l ? l[1] : "Khác";
+  }
+  const shortTitle = (t) => { const s = String(t || "").split(":")[0].trim(); return s || String(t || ""); };
+  // sessions: [{ id, meta, roster, groups, claims, answers, grading, live }], lessons: { lessonId: L }, classes: T.classes
+  // Mỗi lớp 1 sheet (mỗi tiết 1 cột; vắng = để trống, không tính vào TB) + sheet "Tổng hợp" (TB lớp theo từng bài)
+  function reportWorkbook(sessions, lessons, classes, filterText) {
+    const H = (v) => ({ v, s: "head" }), Cc = (v) => ({ v, s: "cell" }), N = (v) => ({ v, s: "num1" }), NB = (v) => ({ v, s: "num1b" }), CT = (v) => ({ v, s: "center" });
+    const avg = (a) => (a.length ? round1(a.reduce((t, x) => t + x, 0) / a.length) : null);
+    const infoOf = {}; const itemsOf = (lid) => infoOf[lid] || (infoOf[lid] = lessons[lid] ? lessonItems(lessons[lid]) : { items: [], openQs: [] });
+    const byClass = new Map();
+    sessions.slice().sort((a, b) => ((a.meta || {}).createdAt || 0) - ((b.meta || {}).createdAt || 0)).forEach((s) => {
+      const m = s.meta || {}, key = m.classId || "n:" + norm(m.className);
+      if (!byClass.has(key)) byClass.set(key, { key, name: m.className || "?", grade: gradeOf(m.className, m.lessonId), sess: [] });
+      const c = byClass.get(key); c.name = m.className || c.name;
+      const info = itemsOf(m.lessonId), cs = (s.claims || {}).students || {}, sc = {};
+      Object.keys(s.roster || {}).forEach((sid) => { const g = cs[sid]; if (g && (s.groups || {})[g]) sc[sid] = scoreGroup(s, g, info).score; });
+      c.sess.push({ s, m, sc, label: `${shortTitle(m.lessonTitle)}\n(${fmtDate(m.createdAt || 0)})` });
+    });
+    const list = [...byClass.values()].sort((a, b) => String(a.name).localeCompare(String(b.name), "vi", { numeric: true }));
+    const used = new Set(), sheetName = (n) => { let b = String(n || "Lớp").replace(/[\\\/?*\[\]:]/g, "-").slice(0, 28) || "Lớp", x = b, k = 2; while (used.has(x.toLowerCase()) || x.toLowerCase() === "tổng hợp") x = b.slice(0, 25) + " (" + k++ + ")"; used.add(x.toLowerCase()); return x; };
+    const sheets = [], summary = [];
+    list.forEach((c) => {
+      // học sinh: theo danh sách lớp hiện tại (nếu còn), thêm HS chỉ có trong các tiết cũ
+      const cur = (classes || {})[c.key], order = [], seen = new Set(), names = {};
+      sortedEntries(cur && cur.students).forEach(([sid, x]) => { order.push(sid); seen.add(sid); names[sid] = x.name; });
+      c.sess.forEach(({ s }) => sortedEntries(s.roster).forEach(([sid, x]) => { if (!seen.has(sid)) { seen.add(sid); order.push(sid); } if (!names[sid]) names[sid] = x.name; }));
+      const n = c.sess.length, rows = [[{ v: "BẢNG ĐIỂM LỚP " + String(c.name).toUpperCase(), s: "title" }], [{ v: filterText || "", s: "sub" }],
+        [{ v: "Mỗi tiết học 1 cột (ghi ngày). Ô “Vắng” = không tham gia tiết đó, không tính vào Tổng điểm và Trung bình. Cả nhóm nhận chung điểm của nhóm.", s: "sub" }],
+        [H("STT"), H("Họ và tên"), ...c.sess.map((x) => H(x.label)), H("Số tiết tham gia"), H("Tổng điểm"), H("Trung bình")]];
+      const colAvg = c.sess.map(() => []), stuAvg = [];
+      order.forEach((sid, i) => {
+        const vals = c.sess.map((x, k) => { const v = x.sc[sid]; if (typeof v === "number") colAvg[k].push(v); return v; });
+        const got = vals.filter((v) => typeof v === "number"), tot = got.length ? round1(got.reduce((t, v) => t + v, 0)) : null, a = avg(got);
+        if (a != null) stuAvg.push(a);
+        rows.push([CT(i + 1), Cc(names[sid] || "?"), ...vals.map((v, k) => (typeof v === "number" ? N(v) : (c.sess[k].s.roster || {})[sid] ? CT("Vắng") : CT(""))), CT(`${got.length}/${n}`), tot == null ? CT("") : N(tot), a == null ? CT("") : NB(a)]);
+      });
+      rows.push([Cc(""), { v: "Trung bình lớp", s: "head" }, ...colAvg.map((a) => { const v = avg(a); return v == null ? CT("") : NB(v); }), Cc(""), Cc(""), (() => { const v = avg(stuAvg); return v == null ? CT("") : NB(v); })()]);
+      const last = colName(1 + n + 3);
+      sheets.push({ name: sheetName(c.name), cols: [6, 28, ...c.sess.map(() => 14), 10, 10, 11], rows, merges: [`A1:${last}`, `A2:${last}`, `A3:${last}`], freezeRow: 4 });
+      summary.push({ c, colAvg, stuAvg });
+    });
+    // Tổng hợp: TB lớp theo từng bài (gộp các tiết của cùng một bài)
+    const lessonCols = []; const seenL = new Set();
+    list.forEach((c) => c.sess.forEach(({ m }) => { if (!seenL.has(m.lessonId)) { seenL.add(m.lessonId); lessonCols.push({ id: m.lessonId, title: m.lessonTitle, at: m.createdAt || 0 }); } }));
+    lessonCols.sort((a, b) => String(a.id).localeCompare(String(b.id), "vi", { numeric: true }));
+    const rs = [[{ v: "BÁO CÁO ĐIỂM HỌC SINH — TỔNG HỢP", s: "title" }], [{ v: filterText || "", s: "sub" }],
+      [{ v: "Điểm trung bình của lớp theo từng bài (trung bình điểm các học sinh có tham gia, gộp các tiết của cùng một bài). Chi tiết từng học sinh xem ở sheet của từng lớp.", s: "sub" }],
+      [H("STT"), H("Khối"), H("Lớp"), H("Số HS"), H("Số tiết"), ...lessonCols.map((l) => H(l.title)), H("TB chung của lớp")]];
+    summary.sort((a, b) => String(a.c.grade).localeCompare(String(b.c.grade), "vi", { numeric: true }) || String(a.c.name).localeCompare(String(b.c.name), "vi", { numeric: true })).forEach(({ c, stuAvg }, i) => {
+      const nHS = new Set(); c.sess.forEach(({ s }) => Object.keys(s.roster || {}).forEach((x) => nHS.add(x)));
+      rs.push([CT(i + 1), CT(c.grade), Cc(c.name), CT(((classes || {})[c.key] ? Object.keys(classes[c.key].students || {}).length : nHS.size)), CT(c.sess.length),
+        ...lessonCols.map((l) => { const v = avg([].concat(...c.sess.filter((x) => x.m.lessonId === l.id).map((x) => Object.values(x.sc)))); return v == null ? CT("") : N(v); }),
+        (() => { const v = avg(stuAvg); return v == null ? CT("") : NB(v); })()]);
+    });
+    if (!summary.length) rs.push([Cc("(Không có tiết học nào khớp bộ lọc)")]);
+    const lastS = colName(4 + lessonCols.length + 1);
+    sheets.unshift({ name: "Tổng hợp", cols: [6, 8, 12, 8, 8, ...lessonCols.map(() => 16), 12], rows: rs, merges: [`A1:${lastS}`, `A2:${lastS}`, `A3:${lastS}`], freezeRow: 4 });
+    const d = new Date();
+    return { sheets, filename: `BaoCaoDiem_${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}.xlsx`, classes: summary.map(({ c, stuAvg }) => ({ name: c.name, grade: c.grade, sessions: c.sess.length, avg: avg(stuAvg) })) };
+  }
+
   // ---- nạp bài giảng trong trình duyệt ---------------------------------------------------
   const lessonCache = {};
   function loadLesson(id) {
@@ -489,5 +554,5 @@
 
   return { NOT_QUIZ, WHOLE, clamp01, round1, esc, norm, fmt1, pad2, fmtDate, fmtTime, fmtClock, rid, splitKey, keyOf,
     FX, lessonItems, judgeQuestion, judge, judgeWhole, normAddr, addrMatch, normShort, choiceDist, actState, actControl, followFixups, actClock, answerOf, scoreGroup, groupName, sortedEntries, memberNames, machineList,
-    parseClassBook, classesSheet, sessionWorkbook, loadLesson, loadManifest };
+    parseClassBook, classesSheet, sessionWorkbook, gradeOf, reportWorkbook, loadLesson, loadManifest };
 });

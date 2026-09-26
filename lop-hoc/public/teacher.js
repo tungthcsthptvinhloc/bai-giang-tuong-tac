@@ -2,7 +2,7 @@
  * Bảng điều khiển GIÁO VIÊN — dùng chung cho offline (LAN) và online (Firebase).
  * Theo dõi các nhóm làm bài trực tiếp; điều khiển tiết học (theo nhịp, bấm giờ,
  * kết thúc/công bố, tạm dừng); chấm điểm; xuất Excel; quản lí danh sách lớp
- * (nhập/xuất Excel), số máy của phòng; lịch sử các tiết.
+ * (nhập/xuất Excel), số máy của phòng; lịch sử các tiết (xóa, phân trang); xuất báo cáo điểm nhiều tiết.
  * ==========================================================================*/
 (function () {
   "use strict";
@@ -103,7 +103,7 @@
   const TABS = [
     { id: "groups", label: "💻 Nhóm", need: true }, { id: "questions", label: "📊 Theo câu hỏi", need: true },
     { id: "texts", label: "✍️ Tự luận", need: true }, { id: "students", label: "🧑‍🎓 Học sinh", need: true },
-    { id: "grading", label: "⚙️ Tính điểm", need: true }, { id: "classes", label: "📋 Danh sách lớp" }, { id: "history", label: "🕘 Lịch sử" },
+    { id: "grading", label: "⚙️ Tính điểm", need: true }, { id: "classes", label: "📋 Danh sách lớp" }, { id: "history", label: "🕘 Lịch sử" }, { id: "report", label: "📑 Xuất báo cáo" },
   ];
   const hasSess = () => !!(sess && sess.meta && sess.meta.status === "open");
   function renderAll() {
@@ -121,7 +121,7 @@
     document.querySelectorAll("[data-tab]").forEach((b) => { b.onclick = () => { tab = b.dataset.tab; LS.set("lh_tab", tab); $("#tabBody").innerHTML = ""; renderAll(); }; });
     const body = $("#tabBody");
     if (ae && body.contains(ae) && /INPUT|TEXTAREA|SELECT/.test(ae.tagName) && ae.type !== "checkbox") return; // đang gõ -> không vẽ lại
-    ({ groups: tabGroups, questions: tabQuestions, texts: tabTexts, students: tabStudents, grading: tabGrading, classes: tabClasses, history: tabHistory }[tab] || tabClasses)(body);
+    ({ groups: tabGroups, questions: tabQuestions, texts: tabTexts, students: tabStudents, grading: tabGrading, classes: tabClasses, history: tabHistory, report: tabReport }[tab] || tabClasses)(body);
     if (overlayKind === "board") showBoard();
   }
 
@@ -408,11 +408,54 @@ Kết quả hoạt động này của tất cả các nhóm sẽ bị xóa; máy
   }
 
   // ======================== TAB: LỊCH SỬ ========================
+  // Phân trang (tải nhanh khi lịch sử dài) + chọn nhiều để xóa. Tiết đang diễn ra không xóa được.
+  let histPage = 0, histSize = LS.get("lh_hsize", 20); const histSel = new Set();
+  const histList = () => Object.entries(T.sessions || {}).map(([id, m]) => ({ id, ...m })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  async function deleteSessions(ids) {
+    ids = ids.filter((id) => id && id !== activeId && (T.sessions || {})[id]); if (!ids.length) return 0;
+    for (let i = 0; i < ids.length; i += 40) { // ghi theo từng đợt cho nhẹ
+      const up = {};
+      await Promise.all(ids.slice(i, i + 40).map(async (id) => {
+        up[`sessions/${id}`] = null; up[`teacher/sessions/${id}`] = null;
+        const code = ((T.sessions || {})[id] || {}).code;
+        if (code) { const c = await DB.get("codes/" + code).catch(() => null); if (c && c.s === id) up[`codes/${code}`] = null; }
+      }));
+      await DB.update("", up);
+    }
+    ids.forEach((id) => histSel.delete(id));
+    return ids.length;
+  }
   function tabHistory(body) {
-    const h = Object.entries(T.sessions || {}).map(([id, m]) => ({ id, ...m })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    const h = histList();
+    [...histSel].forEach((id) => { if (!(T.sessions || {})[id] || id === activeId) histSel.delete(id); });
     if (!h.length) { body.innerHTML = `<div class="card empty">Chưa có tiết học nào.</div>`; return; }
-    body.innerHTML = `<table class="t"><thead><tr><th>Thời gian</th><th>Lớp</th><th>Bài</th><th></th></tr></thead><tbody>${h.map((x) => `<tr><td>${new Date(x.createdAt).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" })}</td><td><b>${esc(x.className)}</b></td><td>${esc(x.lessonTitle)}</td>
-      <td class="nowrap"><button class="btn small ghost" data-xl="${esc(x.id)}">⬇️ Excel</button> ${x.id === activeId ? `<span class="pill good">đang diễn ra</span>` : `<button class="btn small ghost" data-resume="${esc(x.id)}">▶ Mở lại</button>`}</td></tr>`).join("")}</tbody></table>`;
+    const pages = Math.max(1, Math.ceil(h.length / histSize)); histPage = Math.max(0, Math.min(pages - 1, histPage));
+    const view = h.slice(histPage * histSize, (histPage + 1) * histSize), deletable = view.filter((x) => x.id !== activeId);
+    const allOn = deletable.length > 0 && deletable.every((x) => histSel.has(x.id));
+    const pager = pages > 1 ? `<div class="pager"><button class="btn small ghost" data-pg="0" ${histPage ? "" : "disabled"}>⏮</button><button class="btn small ghost" data-pg="${histPage - 1}" ${histPage ? "" : "disabled"}>◀</button>
+      <span>Trang <b>${histPage + 1}</b>/${pages}</span><button class="btn small ghost" data-pg="${histPage + 1}" ${histPage < pages - 1 ? "" : "disabled"}>▶</button><button class="btn small ghost" data-pg="${pages - 1}" ${histPage < pages - 1 ? "" : "disabled"}>⏭</button></div>` : "";
+    body.innerHTML = `<div class="toolbar"><button class="btn small danger" id="hDelSel" ${histSel.size ? "" : "disabled"}>🗑 Xóa các bài đã chọn${histSel.size ? ` (${histSel.size})` : ""}</button>
+        <button class="btn small ghost" id="hDelAll">🗑 Xóa tất cả</button>${histSel.size ? `<button class="btn small ghost" id="hClear">Bỏ chọn</button>` : ""}
+        <span class="sp"></span><span class="muted">${h.length} tiết học</span>
+        <select id="hSize" title="Số tiết mỗi trang">${[10, 20, 50, 100].map((n) => `<option value="${n}" ${n === histSize ? "selected" : ""}>${n} / trang</option>`).join("")}</select></div>
+      <table class="t"><thead><tr><th class="ck"><input type="checkbox" id="hAll" title="Chọn cả trang này" ${allOn ? "checked" : ""} ${deletable.length ? "" : "disabled"}></th><th>Thời gian</th><th>Lớp</th><th>Bài</th><th></th></tr></thead><tbody>${view.map((x) => `<tr class="${histSel.has(x.id) ? "sel" : ""}"><td class="ck">${x.id === activeId ? "" : `<input type="checkbox" data-hs="${esc(x.id)}" ${histSel.has(x.id) ? "checked" : ""}>`}</td><td>${new Date(x.createdAt).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" })}</td><td><b>${esc(x.className)}</b></td><td>${esc(x.lessonTitle)}</td>
+      <td class="nowrap"><button class="btn small ghost" data-xl="${esc(x.id)}">⬇️ Excel</button> ${x.id === activeId ? `<span class="pill good">đang diễn ra</span>` : `<button class="btn small ghost" data-resume="${esc(x.id)}">▶ Mở lại</button> <button class="btn small ghost" data-hdel="${esc(x.id)}" title="Xóa tiết học này">🗑</button>`}</td></tr>`).join("")}</tbody></table>${pager}
+      <p class="hint">Xóa là xóa hẳn kết quả của tiết học (không khôi phục được) — nên ⬇️ xuất Excel hoặc 📑 Xuất báo cáo trước khi xóa. Tiết đang diễn ra không xóa được.</p>`;
+    const redraw = () => { $("#tabBody").innerHTML = ""; renderAll(); };
+    body.querySelectorAll("[data-pg]").forEach((b) => { b.onclick = () => { histPage = +b.dataset.pg; redraw(); }; });
+    $("#hSize").onchange = (e) => { histSize = +e.target.value || 20; LS.set("lh_hsize", histSize); histPage = 0; redraw(); };
+    body.querySelectorAll("[data-hs]").forEach((cb) => { cb.onchange = () => { if (cb.checked) histSel.add(cb.dataset.hs); else histSel.delete(cb.dataset.hs); redraw(); }; });
+    $("#hAll").onchange = (e) => { deletable.forEach((x) => (e.target.checked ? histSel.add(x.id) : histSel.delete(x.id))); redraw(); };
+    const clr = $("#hClear"); if (clr) clr.onclick = () => { histSel.clear(); redraw(); };
+    const label = (id) => { const m = (T.sessions || {})[id] || {}; return `${m.className || "?"} · ${m.lessonTitle || ""} (${m.createdAt ? C.fmtDate(m.createdAt) : ""})`; };
+    body.querySelectorAll("[data-hdel]").forEach((b) => { b.onclick = () => { const id = b.dataset.hdel; if (confirm(`Xóa tiết học này?\n${label(id)}\n\nKết quả của tiết sẽ bị xóa hẳn, không khôi phục được.`)) act(deleteSessions([id]), "Đã xóa tiết học."); }; });
+    $("#hDelSel").onclick = () => { const ids = [...histSel]; if (ids.length && confirm(`Xóa ${ids.length} tiết học đã chọn?\n\nKết quả các tiết này sẽ bị xóa hẳn, không khôi phục được.`)) act(deleteSessions(ids).then((n) => toast(`Đã xóa ${n} tiết học.`))); };
+    $("#hDelAll").onclick = () => {
+      const ids = h.map((x) => x.id).filter((id) => id !== activeId); if (!ids.length) return toast("Không có tiết nào xóa được (tiết đang diễn ra không xóa).");
+      if (!confirm(`XÓA TẤT CẢ ${ids.length} tiết học trong lịch sử?${activeId ? "\n(Tiết đang diễn ra được giữ lại.)" : ""}\n\nToàn bộ kết quả sẽ bị xóa hẳn, không khôi phục được. Nên xuất báo cáo Excel trước.`)) return;
+      if (prompt(`Gõ chữ XOA để xác nhận xóa ${ids.length} tiết học:`) !== "XOA") return toast("Đã hủy — chưa xóa gì.");
+      act(deleteSessions(ids).then((n) => { histPage = 0; toast(`Đã xóa ${n} tiết học.`); }));
+    };
     body.querySelectorAll("[data-xl]").forEach((b) => { b.onclick = () => act(DB.get("sessions/" + b.dataset.xl).then((s) => { if (!s) throw new Error("Không còn dữ liệu tiết này"); return exportSession(s); })); });
     body.querySelectorAll("[data-resume]").forEach((b) => { b.onclick = () => {
       if (!confirm("Mở lại tiết này? (Tiết đang diễn ra — nếu có — sẽ kết thúc; HS nhập MÃ MỚI rồi vào lại bằng máy/tên cũ.)")) return;
@@ -420,6 +463,64 @@ Kết quả hoạt động này của tất cả các nhóm sẽ bị xóa; máy
       act(newCode(curCode()).then((code) => DB.update("", Object.assign(closeActive({}), { [`sessions/${id}/meta/status`]: "open", [`sessions/${id}/meta/code`]: code, [`teacher/sessions/${id}/status`]: "open", [`teacher/sessions/${id}/code`]: code, [`codes/${code}`]: { s: id, at: DB.now() }, "public/active": id }))), "Đã mở lại tiết học — có mã vào lớp mới.").then(() => { tab = "groups"; });
     }; });
   }
+  // ======================== TAB: XUẤT BÁO CÁO ========================
+  // Lọc Khối – Lớp – Tháng – Năm (chọn nhiều; không chọn = Tất cả) → Excel: sheet Tổng hợp + mỗi lớp 1 sheet
+  const REP_F = ["grades", "classes", "months", "years"];
+  const rep = Object.assign({ grades: [], classes: [], months: [], years: [] }, LS.get("lh_rep", {}));
+  let repBusy = false;
+  const clsKey = (m) => m.classId || "n:" + C.norm(m.className);
+  function repSessions() {
+    return Object.entries(T.sessions || {}).map(([id, m]) => { const d = new Date(m.createdAt || 0); return { id, m, grade: C.gradeOf(m.className, m.lessonId), cls: clsKey(m), month: d.getMonth() + 1, year: d.getFullYear() }; });
+  }
+  function tabReport(body) {
+    const all = repSessions();
+    if (!all.length) { body.innerHTML = `<div class="card empty">Chưa có tiết học nào để lập báo cáo.</div>`; return; }
+    const has = (f, v) => !rep[f].length || rep[f].map(String).includes(String(v));
+    const gradesAll = [...new Set(all.map((x) => x.grade))].sort((a, b) => String(a).localeCompare(String(b), "vi", { numeric: true }));
+    const clsMap = new Map(); all.filter((x) => has("grades", x.grade)).forEach((x) => { if (!clsMap.has(x.cls) || (clsMap.get(x.cls).at < (x.m.createdAt || 0))) clsMap.set(x.cls, { name: x.m.className, at: x.m.createdAt || 0, grade: x.grade }); });
+    rep.classes = rep.classes.filter((k) => clsMap.has(k)); // bỏ lớp không thuộc khối đã chọn
+    const clsAll = [...clsMap.entries()].sort((a, b) => String(a[1].name).localeCompare(String(b[1].name), "vi", { numeric: true }));
+    const yearsAll = [...new Set(all.map((x) => x.year))].sort((a, b) => a - b);
+    const pass = all.filter((x) => REP_F.every((f) => has(f, { grades: x.grade, classes: x.cls, months: x.month, years: x.year }[f])));
+    const byCls = new Map(); pass.forEach((x) => { const c = byCls.get(x.cls) || { name: x.m.className, grade: x.grade, n: 0, lessons: new Set() }; c.n++; c.lessons.add(String(x.m.lessonTitle || "").split(":")[0]); byCls.set(x.cls, c); });
+    const chips = (f, label, opts) => `<div class="fl"><b>${label}</b><button class="chip2 ${rep[f].length ? "" : "on"}" data-f="${f}" data-v="">Tất cả</button>${opts.map(([v, t]) => `<button class="chip2 ${rep[f].map(String).includes(String(v)) ? "on" : ""}" data-f="${f}" data-v="${esc(v)}">${esc(t)}</button>`).join("")}</div>`;
+    body.innerHTML = `<div class="card"><h3>📑 Xuất báo cáo điểm học sinh</h3>
+        <p class="hint">Chọn một hoặc nhiều mục ở mỗi tiêu chí; không chọn (Tất cả) là lấy hết. File Excel gồm sheet <b>Tổng hợp</b> (điểm TB của lớp theo từng bài) và <b>mỗi lớp 1 sheet</b> (mỗi tiết học 1 cột có ghi ngày, cột Số tiết tham gia, Tổng điểm, Trung bình; HS vắng để “Vắng”, không tính vào Trung bình).</p>
+        ${chips("grades", "Khối", gradesAll.map((g) => [g, g === "Khác" ? "Khác" : "Khối " + g]))}
+        ${chips("classes", "Lớp", clsAll.map(([k, c]) => [k, c.name]))}
+        ${chips("months", "Tháng", Array.from({ length: 12 }, (_, i) => [i + 1, "T" + (i + 1)]))}
+        ${chips("years", "Năm", yearsAll.map((y) => [y, String(y)]))}
+        <div class="row rep-go"><button class="btn big" id="repGo" ${pass.length && !repBusy ? "" : "disabled"}>${repBusy ? "⏳ Đang lập báo cáo…" : "⬇️ Xuất báo cáo Excel"}</button><span class="muted" id="repMsg">${pass.length ? `${pass.length} tiết học · ${byCls.size} lớp khớp bộ lọc` : "Không có tiết học nào khớp bộ lọc."}</span></div></div>
+      ${byCls.size ? `<table class="t"><thead><tr><th>Khối</th><th>Lớp</th><th>Số tiết</th><th>Các bài</th></tr></thead><tbody>${[...byCls.values()].sort((a, b) => String(a.name).localeCompare(String(b.name), "vi", { numeric: true })).map((c) => `<tr><td>${esc(c.grade)}</td><td><b>${esc(c.name)}</b></td><td class="num">${c.n}</td><td>${esc([...c.lessons].join(", "))}</td></tr>`).join("")}</tbody></table>` : ""}`;
+    body.querySelectorAll("[data-f]").forEach((b) => { b.onclick = () => {
+      const f = b.dataset.f, v = b.dataset.v;
+      if (!v) rep[f] = []; else { const cur = rep[f].map(String), i = cur.indexOf(v); if (i >= 0) rep[f].splice(i, 1); else rep[f].push(f === "months" || f === "years" ? +v : v); }
+      LS.set("lh_rep", rep); $("#tabBody").innerHTML = ""; renderAll();
+    }; });
+    $("#repGo").onclick = () => exportReport(pass, clsMap);
+  }
+  async function exportReport(pass, clsMap) {
+    if (repBusy) return; repBusy = true; const msg = () => $("#repMsg"), btn = () => $("#repGo");
+    if (btn()) { btn().disabled = true; btn().textContent = "⏳ Đang lập báo cáo…"; }
+    try {
+      const sessions = []; let k = 0;
+      for (let i = 0; i < pass.length; i += 6) { // tải dữ liệu từng đợt 6 tiết
+        const got = await Promise.all(pass.slice(i, i + 6).map((x) => DB.get("sessions/" + x.id).then((s) => (s ? Object.assign(s, { id: x.id, meta: Object.assign({}, x.m, s.meta || {}) }) : null)).catch(() => null)));
+        got.forEach((s) => { if (s) sessions.push(s); }); k += got.length; if (msg()) msg().textContent = `Đang tải dữ liệu ${k}/${pass.length} tiết…`;
+      }
+      if (!sessions.length) throw new Error("Không tải được dữ liệu các tiết học.");
+      const lessons = {};
+      await Promise.all([...new Set(sessions.map((s) => s.meta.lessonId))].map((id) => C.loadLesson(id).then((L) => { lessons[id] = L; }).catch(() => {})));
+      const names = (f, fmt) => (rep[f].length ? rep[f].map(fmt).join(", ") : "Tất cả");
+      const text = `Khối: ${names("grades", (g) => g)}   ·   Lớp: ${names("classes", (c) => (clsMap.get(c) || {}).name || c)}   ·   Tháng: ${names("months", (m) => m)}   ·   Năm: ${names("years", (y) => y)}   ·   Xuất ngày ${C.fmtDate(DB.now())}`;
+      const wb = C.reportWorkbook(sessions, lessons, T.classes || {}, text);
+      XLSX.download(wb.sheets, wb.filename); toast("Đã xuất " + wb.filename);
+      const miss = sessions.filter((s) => !lessons[s.meta.lessonId]).length;
+      if (miss) alert(`⚠️ ${miss} tiết học thuộc bài giảng không còn trong danh mục nên không tính được điểm (để trống).`);
+    } catch (e) { alert("⚠️ " + (e.message || e)); }
+    finally { repBusy = false; if (tab === "report") { $("#tabBody").innerHTML = ""; renderAll(); } }
+  }
+
   async function exportSession(s) {
     const Lx = await C.loadLesson(s.meta.lessonId);
     const wb = C.sessionWorkbook(s, Lx);
