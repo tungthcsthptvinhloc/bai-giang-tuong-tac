@@ -347,7 +347,7 @@ HS bấm ▶ Bước tiếp: thẻ đang xét sáng lên, bảng lần lặp t�
   allowDir? (nổi bọt: từ cuối dãy — SGK / từ đầu dãy — mở rộng), allowOrder? (tăng/giảm dần), practice? }` — mỗi bước = một lần
   so sánh, tô cặp đang so sánh, thẻ đổi chỗ, ghi dãy sau mỗi bước theo vòng lặp; đủ n − 1 vòng lặp như SGK.
   `practice: true`: HS tự bấm “Hoán đổi / Không hoán đổi”, máy báo sai ngay và đếm lỗi (không tính điểm).
-- **Emoji**: KHÔNG dùng emoji dải U+1FA70–U+1FAFF (🫧 🪜 🪣 🫖…) — Windows 10 hiện thành ô vuông.
+- **Emoji**: KHÔNG dùng emoji dải U+1FA70–U+1FAFF (🫧 🪜 🪣 🫖…) — Windows 10 hiện thành ô vuông. Thay bằng emoji cũ tương đương, ví dụ 🪜 → 🔢 (các bước), 🪣 → 🎨, 🫖 → ☕.
 - **Trò chơi tìm số thẻ úp**: `guess: { title, intro, cards: [2, 3, 5, …] (tăng dần), target? }` — HS (bạn B) chọn thẻ, app
   (bạn A) trả lời “bằng nhau / lớn hơn / bé hơn”, nhắc khi thẻ chọn chưa phải thẻ ở giữa vùng còn lại.
 
@@ -440,9 +440,6 @@ trường dữ liệu để kích hoạt — đây là yêu cầu chuẩn, khôn
   ảnh scan. Kết hợp với nút "Xem ảnh SGK" cho ảnh gốc.
 - **Trực quan cho lớp 6:** đặt bảng màu tươi sáng trong `styles/app.css` (`:root`),
   nhiều emoji/biểu tượng, card bo tròn. Mỗi bài nên có nhận diện màu riêng.
-- **Không dùng emoji dải U+1FA70–U+1FAFF** (Emoji 13+, ví dụ 🫧 🪜 🪣 🫖): Windows 10
-  của phòng máy (font Segoe UI Emoji cũ) hiện thành ô vuông. Thay bằng emoji cũ tương
-  đương, ví dụ 🪜 → 🔢 (các bước), 🪣 → 🎨, 🫖 → ☕.
 
 ## Tài nguyên trong skill
 
