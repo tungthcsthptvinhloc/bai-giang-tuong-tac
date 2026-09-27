@@ -223,6 +223,36 @@ function checkMindmapsChecklists(L) {
       if (!["bubble", "selection"].includes(r.algo)) err(`${where}: \`algo\` phải là "bubble" hoặc "selection".`);
       if (!Array.isArray(r.items) || r.items.length < 2) err(`${where}: cần \`items\` (ít nhất 2 phần tử).`);
     }
+    if (a.ifmachine) { // máy IF trực quan
+      const r = a.ifmachine, where = `HĐ "${a.id}" ifmachine`;
+      if (!Array.isArray(r.modes) || !r.modes.length) err(`${where}: cần \`modes\` (ít nhất 1 chế độ).`);
+      (r.modes || []).forEach((m, i) => {
+        if (!Array.isArray(m.levels) || !m.levels.length || m.levels.some((l) => typeof l.gt !== "number" || l.result == null)) err(`${where}: chế độ ${i + 1} cần \`levels\` [{ gt: số, result }].`);
+        if (m.otherwise == null) err(`${where}: chế độ ${i + 1} thiếu \`otherwise\` (giá trị khi mọi điều kiện sai).`);
+      });
+    }
+    if (a.algo) { // máy chạy thuật toán liệt kê các bước
+      const where = `HĐ "${a.id}" algo`, L = a.algo.lines || [], ids = L.map((l) => l.id).filter(Boolean);
+      const OPS = ["start", "end", "label", "input", "set", "if", "output", "goto", "swap"];
+      if (!L.length) err(`${where}: cần \`lines\`.`);
+      if (!L.some((l) => l.op === "end")) err(`${where}: thiếu dòng \`op: "end"\`.`);
+      L.forEach((l, i) => {
+        if (!OPS.includes(l.op)) err(`${where}: dòng ${i + 1} có \`op\` "${l.op}" không hợp lệ.`);
+        ["next", "yes", "no"].forEach((k) => { if (l[k] != null && !ids.includes(l[k])) err(`${where}: dòng ${i + 1} nhảy tới id "${l[k]}" không tồn tại.`); });
+        if (l.op === "input" && !l.v) err(`${where}: dòng ${i + 1} (input) thiếu \`v\`.`);
+        if (l.op === "if" && !l.c) err(`${where}: dòng ${i + 1} (if) thiếu điều kiện \`c\`.`);
+      });
+    }
+    if (a.maze) { // mê cung robot
+      const where = `HĐ "${a.id}" maze`;
+      if (!["sim", "race"].includes(a.maze.mode)) err(`${where}: \`mode\` phải là "sim" hoặc "race".`);
+      if (!Array.isArray(a.maze.mazes) || !a.maze.mazes.length) err(`${where}: cần \`mazes\` (ít nhất 1 mê cung).`);
+      (a.maze.mazes || []).forEach((m, i) => {
+        const map = m.map || [], txt = map.join("");
+        if (!map.length || map.some((row) => row.length !== map[0].length)) err(`${where}: mê cung ${i + 1} — các hàng của \`map\` phải dài bằng nhau.`);
+        if ((txt.match(/S/g) || []).length !== 1 || !txt.includes("E")) err(`${where}: mê cung ${i + 1} cần đúng 1 ô S (lối vào) và ít nhất 1 ô E (lối ra).`);
+      });
+    }
     if (a.guess) { // trò chơi tìm số (thẻ úp)
       const g = a.guess.cards;
       if (!Array.isArray(g) || g.length < 3 || !g.every((x, i) => typeof x === "number" && (i === 0 || g[i - 1] < x))) err(`HĐ "${a.id}" guess: \`cards\` phải là dãy số tăng dần (ít nhất 3 thẻ).`);

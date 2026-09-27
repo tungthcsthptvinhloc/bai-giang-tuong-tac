@@ -44,7 +44,7 @@
  *  - Phương án trả lời bằng HÌNH: question.optionImages (options vẫn giữ chữ cho bảng GV/Excel).
  *  - activity.links = [{label,url,note}]: nút mở phần mềm/trang web (tab mới).
  *  - Trò chơi "Hộp quà may mắn" (type "giftbox"): lưới hộp quà, mỗi hộp 1 câu hỏi, đúng thì mở quà.
- *  - Bảng tính mô phỏng TÍNH CÔNG THỨC (=C4*D4, + - * / ^, ngoặc, SUM/AVERAGE/MAX/MIN/COUNT/COUNTIF/COUNTIFS/SUMIF):
+ *  - Bảng tính mô phỏng TÍNH CÔNG THỨC (=C4*D4, + - * / ^ %, ngoặc, so sánh, SUM/AVERAGE/MAX/MIN/COUNT/COUNTIF/COUNTIFS/SUMIF/IF):
  *    ô hiện kết quả, sửa dữ liệu -> tự cập nhật; Ctrl+C / Ctrl+V (nút 📋 📥) và NÚT KÉO ĐIỀN (ô vuông góc vùng chọn)
  *    sao chép công thức tự dời địa chỉ. Dấu ; cũng được dùng ngăn cách tham số như Excel tiếng Việt.
  *    Câu hỏi sheet mode "formula": HS gõ công thức vào ô q.target, chấm bằng cách thử đổi dữ liệu (FX.judge).
@@ -130,7 +130,8 @@
   }
 
   // ===== FORMULA LIB — CÔNG THỨC BẢNG TÍNH (giữ GIỐNG HỆT trong app.js và lop-hoc/public/core.js) =====
-  //  FX.evalCell(data, addr) -> số | "" | chữ | "#LỖI!"…   data = { "C4": "25", "E4": "=C4*D4" }
+  //  Hỗ trợ: + - * / ^ %, & (nối chữ), so sánh = <> > < >= <=, TRUE/FALSE, SUM/AVERAGE/MAX/MIN/COUNT/COUNTIF/COUNTIFS/SUMIF/IF (lồng nhau)
+  //  FX.evalCell(data, addr) -> số | "" | chữ | TRUE/FALSE | "#LỖI!"…   data = { "C4": "25", "E4": "=C4*D4" }
   //  FX.shift("=C4*D4", 1, 0) -> "=C5*D5" (sao chép công thức: giữ vị trí tương đối)
   //  FX.judge(answer, choice, spec, target) -> { ok, fraction } — chấm câu "gõ công thức" bằng cách thử đổi dữ liệu
   const FX = (function () {
@@ -148,7 +149,9 @@
         if ((m = /^\$?([A-Za-z]{1,3}):\$?([A-Za-z]{1,3})(?![\dA-Za-z(])/.exec(rest))) { out.push({ t: "rng", c1: colN(m[1]), r1: 1, c2: colN(m[2]), r2: 1000 }); i += m[0].length; continue; } // cả cột B:B
         if ((m = /^\$?([A-Za-z]{1,3})\$?(\d+)(?::\$?([A-Za-z]{1,3})\$?(\d+))?/.exec(rest))) { out.push(m[3] ? { t: "rng", c1: colN(m[1]), r1: +m[2], c2: colN(m[3]), r2: +m[4] } : { t: "ref", c: colN(m[1]), r: +m[2] }); i += m[0].length; continue; }
         if ((m = /^(\d+(?:\.\d+)?|\.\d+)/.exec(rest))) { out.push({ t: "num", v: parseFloat(m[1]) }); i += m[1].length; continue; }
-        if ("+-*/^(),;".includes(s[i])) { out.push({ t: s[i] === ";" ? "," : s[i] }); i++; continue; }
+        if ((m = /^(TRUE|FALSE)(?![A-Za-z\d(])/i.exec(rest))) { out.push({ t: "bool", v: m[1].toUpperCase() === "TRUE" }); i += m[0].length; continue; }
+        if ((m = /^(<=|>=|<>|<|>|=)/.exec(rest))) { out.push({ t: "cmp", v: m[1] }); i += m[1].length; continue; } // so sánh: N3>50%
+        if ("+-*/^(),;%&".includes(s[i])) { out.push({ t: s[i] === ";" ? "," : s[i] }); i++; continue; }
         ERR("#LỖI!");
       }
       return out;
@@ -160,17 +163,21 @@
       function term() { let a = power(); while (peek() === "*" || peek() === "/") { const op = tk[p++].t; a = { k: "bin", op, a, b: power() }; } return a; }
       function power() { let a = unary(); while (peek() === "^") { p++; a = { k: "bin", op: "^", a, b: unary() }; } return a; }
       function unary() { if (peek() === "-") { p++; return { k: "neg", a: unary() }; } if (peek() === "+") { p++; return unary(); } return prim(); }
-      function prim() {
+      function cmp() { let a = cat(); while (peek() === "cmp") { const op = tk[p++].v; a = { k: "cmp", op, a, b: cat() }; } return a; }
+      function cat() { let a = expr(); while (peek() === "&") { p++; a = { k: "cat", a, b: expr() }; } return a; }
+      function prim() { let a = atom(); while (peek() === "%") { p++; a = { k: "pct", a }; } return a; } // 50% = 0.5
+      function atom() {
         const x = tk[p];
         if (!x) ERR("#LỖI!");
         if (x.t === "num") { p++; return { k: "num", v: x.v }; }
         if (x.t === "str") { p++; return { k: "str", v: x.v }; }
         if (x.t === "ref") { p++; return { k: "ref", c: x.c, r: x.r }; }
-        if (x.t === "(") { p++; const e = expr(); eat(")"); return e; }
-        if (x.t === "fn") { p++; eat("("); const args = []; if (peek() !== ")") { do { if (peek() === "rng") { const r = tk[p++]; args.push({ k: "rng", ...r }); } else args.push(expr()); } while (peek() === "," && ++p); } eat(")"); return { k: "fn", name: x.v, args }; }
+        if (x.t === "bool") { p++; return { k: "bool", v: x.v }; }
+        if (x.t === "(") { p++; const e = cmp(); eat(")"); return e; }
+        if (x.t === "fn") { p++; eat("("); const args = []; if (peek() !== ")") { do { if (peek() === "rng") { const r = tk[p++]; args.push({ k: "rng", ...r }); } else args.push(cmp()); } while (peek() === "," && ++p); } eat(")"); return { k: "fn", name: x.v, args }; }
         ERR("#LỖI!");
       }
-      const e = expr(); if (p !== tk.length) ERR("#LỖI!"); return e;
+      const e = cmp(); if (p !== tk.length) ERR("#LỖI!"); return e;
     }
     // Điều kiện của COUNTIF: ">100", "Yes", "Y*" (* ? là kí tự đại diện), 30, ô D2… — chữ không phân biệt hoa/thường
     function critFn(cr) {
@@ -201,7 +208,7 @@
         if (x.k === "str") cr = x.v;
         else if (x.k === "ref") { cr = get(x.c, x.r); if (cr === "" || cr == null) cr = 0; else if (typeof cr === "string" && cr.charAt(0) === "#") ERR(cr); }
         else if (x.k === "rng") ERR("#VALUE!");
-        else cr = evalAst(x, get);
+        else cr = evalV(x, get);
         tests.push({ c1: Math.min(R.c1, R.c2), r1: Math.min(R.r1, R.r2), f: critFn(cr) });
       }
       let cnt = 0;
@@ -216,7 +223,7 @@
       if (x.k === "str") cr = x.v;
       else if (x.k === "ref") { cr = get(x.c, x.r); if (cr === "" || cr == null) cr = 0; else if (typeof cr === "string" && cr.charAt(0) === "#") ERR(cr); }
       else if (x.k === "rng") ERR("#VALUE!");
-      else cr = evalAst(x, get);
+      else cr = evalV(x, get);
       const f = critFn(cr); let sum = 0;
       for (let dr = 0; dr <= R.r2 - R.r1; dr++) for (let dc = 0; dc <= R.c2 - R.c1; dc++) {
         if (!f(get(R.c1 + dc, R.r1 + dr))) continue;
@@ -225,18 +232,48 @@
       }
       return sum;
     }
-    function evalAst(n, get) {
-      if (n.k === "num") return n.v;
-      if (n.k === "str") ERR("#VALUE!"); // chữ trong phép toán
-      if (n.k === "ref") { const v = get(n.c, n.r); if (v === "" || v == null) return 0; if (typeof v === "number") return v; if (String(v).charAt(0) === "#") ERR(v); ERR("#VALUE!"); }
-      if (n.k === "neg") return -evalAst(n.a, get);
+    const PCT = /^[-+]?(\d+(\.\d*)?|\.\d+)%$/;
+    // Giá trị -> số trong phép toán (chữ số "5", "5%" đổi được như Excel; chữ khác -> #VALUE!)
+    function toNum(v) {
+      if (typeof v === "number") return v; if (typeof v === "boolean") return v ? 1 : 0; if (v === "" || v == null) return 0;
+      const s = String(v).trim(); if (s.charAt(0) === "#") ERR(s);
+      if (isNum(s)) return parseFloat(s); if (PCT.test(s)) return parseFloat(s) / 100; ERR("#VALUE!");
+    }
+    // So sánh như Excel: số < chữ < TRUE/FALSE; chữ không phân biệt hoa/thường; ô trống = 0 hoặc ""
+    function cmpV(a, b, op) {
+      if (a === "" && typeof b === "number") a = 0; if (b === "" && typeof a === "number") b = 0;
+      if (a === "" && typeof b === "boolean") a = false; if (b === "" && typeof a === "boolean") b = false;
+      const rk = (v) => (typeof v === "number" ? 0 : typeof v === "string" ? 1 : 2);
+      let c = rk(a) - rk(b);
+      if (!c) c = typeof a === "number" ? (Math.abs(a - b) <= 1e-12 * Math.max(1, Math.abs(a), Math.abs(b)) ? 0 : a - b)
+        : typeof a === "string" ? String(a).normalize("NFC").localeCompare(String(b).normalize("NFC"), "vi", { sensitivity: "accent" }) : (a ? 1 : 0) - (b ? 1 : 0);
+      return op === "=" ? c === 0 : op === "<>" ? c !== 0 : op === ">" ? c > 0 : op === "<" ? c < 0 : op === ">=" ? c >= 0 : c <= 0;
+    }
+    const txtV = (v) => (typeof v === "boolean" ? (v ? "TRUE" : "FALSE") : typeof v === "number" ? String(Math.round(v * 1e9) / 1e9) : String(v == null ? "" : v));
+    const valOf = (n, get) => { const v = evalV(n, get); return v === "" && n.k === "ref" ? 0 : v; }; // =A1 (ô trống) -> 0
+    function evalV(n, get) {
+      if (n.k === "num" || n.k === "str" || n.k === "bool") return n.v;
+      if (n.k === "ref") { const v = get(n.c, n.r); if (typeof v === "string" && v.charAt(0) === "#") ERR(v); return v == null ? "" : v; }
+      if (n.k === "rng") ERR("#VALUE!");
+      if (n.k === "neg") return -toNum(evalV(n.a, get));
+      if (n.k === "pct") return toNum(evalV(n.a, get)) / 100;
+      if (n.k === "cat") return txtV(valOf(n.a, get)) + txtV(valOf(n.b, get));
+      if (n.k === "cmp") return cmpV(evalV(n.a, get), evalV(n.b, get), n.op);
       if (n.k === "bin") {
-        const a = evalAst(n.a, get), b = evalAst(n.b, get);
+        const a = toNum(evalV(n.a, get)), b = toNum(evalV(n.b, get));
         if (n.op === "+") return a + b; if (n.op === "-") return a - b; if (n.op === "*") return a * b;
         if (n.op === "/") { if (b === 0) ERR("#DIV/0!"); return a / b; }
         return Math.pow(a, b);
       }
       if (n.k === "fn") {
+        // =IF(logical_test, [value_if_true], [value_if_false]) — chỉ tính nhánh được chọn (IF lồng nhau)
+        if (n.name === "IF") {
+          const a = n.args; if (a.length < 2 || a.length > 3) ERR("#LỖI!");
+          const t = evalV(a[0], get); let ok;
+          if (typeof t === "boolean") ok = t; else if (typeof t === "number") ok = t !== 0; else if (t === "") ok = false;
+          else { const u = String(t).toUpperCase(); if (u !== "TRUE" && u !== "FALSE") ERR("#VALUE!"); ok = u === "TRUE"; }
+          return ok ? valOf(a[1], get) : a[2] ? valOf(a[2], get) : false;
+        }
         if (n.name === "COUNTIF" || n.name === "COUNTIFS") return countIf(n, get);
         if (n.name === "SUMIF") return sumIf(n, get);
         const nums = [];
@@ -254,17 +291,18 @@
       }
       ERR("#LỖI!");
     }
+    const evalAst = (n, get) => toNum(evalV(n, get)); // giá trị dùng trong phép toán
     // Giá trị hiển thị của 1 ô (tính công thức, phát hiện tham chiếu vòng)
     function evalCell(data, addr, seen) {
       const raw = data[addr]; if (raw == null || raw === "") return "";
       const s = String(raw);
-      if (s.charAt(0) !== "=") return isNum(s) ? parseFloat(s) : s;
+      if (s.charAt(0) !== "=") return isNum(s) ? parseFloat(s) : PCT.test(s.trim()) ? parseFloat(s) / 100 : s; // 5% -> 0.05 như Excel
       seen = seen || {}; if (seen[addr]) return "#VÒNG!";
       seen[addr] = 1;
-      try { const v = evalAst(parse(s.slice(1)), (c, r) => evalCell(data, colS(c) + r, seen)); delete seen[addr]; return isFinite(v) ? v : "#NUM!"; }
+      try { const ast = parse(s.slice(1)); let v = evalV(ast, (c, r) => evalCell(data, colS(c) + r, seen)); if (v === "" && ast.k === "ref") v = 0; delete seen[addr]; return typeof v === "number" && !isFinite(v) ? "#NUM!" : v; }
       catch (e) { delete seen[addr]; if (e && e.fxErr) return e.fxErr; throw e; }
     }
-    const fmt = (v) => (typeof v === "number" ? String(Math.round(v * 1e9) / 1e9) : v);
+    const fmt = (v) => (typeof v === "number" || typeof v === "boolean" ? txtV(v) : v);
     // Sao chép công thức: dời các địa chỉ theo (dr hàng, dc cột); địa chỉ có $ giữ nguyên
     function shift(src, dr, dc) {
       let bad = false;
@@ -301,7 +339,12 @@
           vcells.push(k); if (cells[k] != null && pool.indexOf(cells[k]) < 0) pool.push(cells[k]);
         }
       });
+      // spec.tests: bộ dữ liệu thử do GV đặt, VD ngưỡng của IF [{ B2: 10000, B3: 10001 }, …] -> sai điều kiện (> hay >=, sai mốc) sẽ lộ ra
+      [].concat((spec && spec.tests) || []).forEach((t) => { const d = Object.assign({}, cells); Object.entries(t || {}).forEach(([k, v]) => { d[String(k).toUpperCase()] = String(v); }); trials.push(d); });
       if (pool.length) [1, 2, 3].forEach(() => { const d = Object.assign({}, cells); vcells.forEach((k) => { d[k] = pool[rnd() % pool.length]; }); trials.push(d); });
+      const nt = (v) => String(v).normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
+      const sameV = (a, b) => (typeof a === "number" && typeof b === "number" ? Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(b))
+        : typeof a === "string" && typeof b === "string" ? a.charAt(0) !== "#" && b.charAt(0) !== "#" && nt(a) === nt(b) : typeof a === "boolean" && a === b); // IF trả về chữ: so khớp chữ
       let good = 0;
       list.forEach((x, i) => {
         const f = String(got[i] || "").trim(), ref = shift(answer, x.dr, x.dc);
@@ -312,7 +355,7 @@
           const ds = Object.assign({}, d), dr = Object.assign({}, d);
           list.forEach((y, j) => { ds[y.ad] = String(got[j] || "").trim(); dr[y.ad] = shift(answer, y.dr, y.dc); });
           const a = evalCell(ds, x.ad), b = evalCell(dr, x.ad);
-          return typeof a === "number" && typeof b === "number" && Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(b));
+          return sameV(a, b);
         });
         if (same) good++;
       });
@@ -516,6 +559,9 @@
     if (a.search) cardEl.appendChild(a.search.mode === "binary" ? binaryBox(a) : searchBox(a));
     if (a.guess) cardEl.appendChild(guessBox(a));
     if (a.sorter) cardEl.appendChild(sorterBox(a));
+    if (a.ifmachine) cardEl.appendChild(ifBox(a));
+    if (a.maze) cardEl.appendChild(mazeBox(a));
+    if (a.algo) cardEl.appendChild(algoBox(a));
     if (a.scratch) cardEl.appendChild(scratchBox(a));
   }
   function appendRemember(items, cardOrView) {
@@ -855,6 +901,20 @@
     };
     return ui;
   }
+  // Vùng thả của phân loại. a.layout "ifchain": groups = [điều kiện 1, kết quả khi đúng, điều kiện 2, kết quả khi đúng, …, kết quả khi mọi điều kiện sai]
+  //  -> xếp thành sơ đồ khối IF / IF lồng nhau (Đúng ➜ sang phải, Sai ⬇ xuống điều kiện tiếp theo)
+  function ddZones(a, make) {
+    const groups = a.groups || [];
+    if (a.layout !== "ifchain") { const w = el("div", "two-col"); groups.forEach((g, gi) => w.appendChild(make(g, gi))); return w; }
+    const w = el("div", "ifc"), n = groups.length;
+    for (let gi = 0; gi + 1 < n; gi += 2) {
+      const row = el("div", "ifc-row"), cz = make(groups[gi], gi), rz = make(groups[gi + 1], gi + 1);
+      cz.classList.add("ifc-cond"); rz.classList.add("ifc-res");
+      row.append(cz, el("span", "ifc-yes", "Đúng ➜"), rz); w.append(row, el("div", "ifc-no", "⬇ Sai"));
+    }
+    if (n % 2) { const z = make(groups[n - 1], n - 1); z.classList.add("ifc-res", "ifc-else"); w.appendChild(z); }
+    return w;
+  }
   function dragdropUI(a, all) {
     const porder = a._porder || (a._porder = shuffle(all.slice()));
     const groups = a.groups || [];
@@ -865,11 +925,10 @@
       complete: (d) => d.every((g) => g >= 0),
       score: (d) => ({ good: all.filter((it) => d[it.i] === it.group).length, total: all.length, choice: { g: d.slice() } }),
       review(d) {
-        const zones = el("div", "two-col");
-        groups.forEach((g, gi) => {
+        const zones = ddZones(a, (g, gi) => {
           const z = el("div", "dropzone", `<h3>${esc(g)}</h3>`);
           porder.filter((it) => d[it.i] === gi).forEach((it) => { const ok = it.group === gi; z.appendChild(el("div", "chip " + (ok ? "rv-ok" : "rv-no"), `${ok ? "✓" : "✗"} ${esc(it.text)}${ok ? "" : `<small class="rv-fix">→ đúng: ${esc(groups[it.group] || "?")}</small>`}`)); });
-          zones.appendChild(z);
+          return z;
         });
         const miss = porder.filter((it) => !(d[it.i] >= 0));
         if (!miss.length) return zones;
@@ -882,12 +941,11 @@
         const pool = el("div", "dropzone pool", "<h3>🗂️ Thẻ chưa xếp</h3>");
         porder.filter((it) => d[it.i] < 0).forEach((it) => pool.appendChild(chip(it)));
         if (en) pool.onclick = () => { if (ui.sel != null) { d[ui.sel] = -1; ui.sel = null; redraw(); } };
-        const zones = el("div", "two-col");
-        groups.forEach((g, gi) => {
+        const zones = ddZones(a, (g, gi) => {
           const z = el("div", "dropzone", `<h3>${esc(g)}</h3>`);
           porder.filter((it) => d[it.i] === gi).forEach((it) => z.appendChild(chip(it)));
           if (en) z.onclick = () => { if (ui.sel != null) { d[ui.sel] = gi; ui.sel = null; redraw(); } };
-          zones.appendChild(z);
+          return z;
         });
         box.append(pool, zones);
       },
@@ -964,13 +1022,14 @@
     const c = el("div", "card"); activityHead(a, c);
     const key = aid(a) + ":main";
     const all = (a.items || []).map((it, i) => ({ ...it, i }));
-    const answerHTML = `<div class="two-col">${(a.groups || []).map((g, gi) => `<div class="dropzone"><h3>${esc(g)}</h3>${all.filter(it => it.group === gi).map(it => `<div class="chip done">${esc(it.text)}</div>`).join("")}</div>`).join("")}</div>`;
+    const answerHTML = ddZones(a, (g, gi) => el("div", "dropzone", `<h3>${esc(g)}</h3>${all.filter(it => it.group === gi).map(it => `<div class="chip done">${esc(it.text)}</div>`).join("")}`)).outerHTML;
     if (STUDENT) return renderWholeStudent(c, a, key, actStateOf(a), answerHTML, dragdropUI(a, all));
     c.appendChild(el("p", "subtitle", "Chọn một thẻ rồi bấm vào nhóm đúng."));
-    const pool = el("div"); const zonesWrap = el("div", "two-col");
+    const pool = el("div"); const zoneEls = [];
     const wrong = a._wrong || (a._wrong = new Set());
     let sel = null, placed = 0; const items = shuffle(all.slice());
-    (a.groups || []).forEach((g, gi) => { const z = el("div", "dropzone"); z.innerHTML = `<h3>${esc(g)}</h3>`; z.onclick = () => { if (!sel) return; const correct = +sel.dataset.g === gi; if (correct) { sel.classList.add("done"); z.appendChild(sel); sel.classList.remove("selected"); sel = null; placed++; celebrate(); if (placed === items.length) finishDD(c, a, wrong, items.length); } else { wrong.add(sel.dataset.i); z.classList.add("shake"); sound("no"); setTimeout(() => z.classList.remove("shake"), 400); } }; zonesWrap.appendChild(z); });
+    (a.groups || []).forEach((g, gi) => { const z = el("div", "dropzone"); z.innerHTML = `<h3>${esc(g)}</h3>`; z.onclick = () => { if (!sel) return; const correct = +sel.dataset.g === gi; if (correct) { sel.classList.add("done"); z.appendChild(sel); sel.classList.remove("selected"); sel = null; placed++; celebrate(); if (placed === items.length) finishDD(c, a, wrong, items.length); } else { wrong.add(sel.dataset.i); z.classList.add("shake"); sound("no"); setTimeout(() => z.classList.remove("shake"), 400); } }; zoneEls[gi] = z; });
+    const zonesWrap = ddZones(a, (g, gi) => zoneEls[gi]);
     items.forEach((it) => { const ch = el("div", "chip", esc(it.text)); ch.dataset.g = it.group; ch.dataset.i = it.i; ch.onclick = () => { if (ch.classList.contains("done")) return; [...pool.children].forEach(x => x.classList.remove("selected")); ch.classList.add("selected"); sel = ch; }; pool.appendChild(ch); });
     c.append(pool, zonesWrap); view.appendChild(c);
   }
@@ -1219,21 +1278,24 @@
     if (!data.__init) { Object.entries(spec.cells || {}).forEach(([k, v]) => { if (v != null && v !== "") data[normAddr(k)] = String(v); }); Object.defineProperty(data, "__init", { value: true }); }
     const style = {};
     const each = (list, fn) => (Array.isArray(list) ? list : list ? [list] : []).forEach((ad) => { const R = addrRect(ad, cols, rows); if (!R) return; for (let r = R.r1; r <= Math.min(R.r2, rows); r++) for (let c = R.c1; c <= Math.min(R.c2, cols - 1); c++) fn(style[colName(c) + r] = style[colName(c) + r] || {}); });
-    each(spec.bold, (s) => { s.b = 1; }); each(spec.italic, (s) => { s.i = 1; });
+    each(spec.bold, (s) => { s.b = 1; }); each(spec.italic, (s) => { s.i = 1; }); each(spec.wrap, (s) => { s.wr = 1; }); // wrap: ["H1:O2"] -> chữ xuống dòng trong ô (Wrap Text)
     each(spec.comma, (s) => { s.cm = 1; }); // số có dấu phẩy ngăn cách hàng nghìn (8,000) như Excel
+    Object.entries(spec.pct || {}).forEach(([ad, v]) => each(ad, (s) => { s.pct = Math.max(0, Math.min(9, +v || 0)); })); // định dạng phần trăm: { "N3:N5": 1 } -> 0.905 hiện 90.5%
     Object.entries(spec.dec || {}).forEach(([ad, v]) => each(ad, (s) => { s.dec = Math.max(0, Math.min(9, +v || 0)); })); // số chữ số thập phân cố định: { "M4:M25": 2 } -> 14.00
     each(spec.center, (s) => { s.al = "center"; }); each(spec.right, (s) => { s.al = "right"; }); each(spec.left, (s) => { s.al = "left"; });
     Object.entries(spec.fill || {}).forEach(([ad, v]) => each(ad, (s) => { s.fill = v; }));
     Object.entries(spec.color || {}).forEach(([ad, v]) => each(ad, (s) => { s.color = v; }));
     Object.entries(spec.size || {}).forEach(([ad, v]) => each(ad, (s) => { s.size = v; }));
-    const W = []; let tw = 0.55; for (let c = 0; c < cols; c++) { W[c] = +((spec.widths || {})[colName(c)]) || 1; tw += W[c]; }
+    const HID = new Set([].concat(spec.hideCols || []).map((x) => colNum(String(x).toUpperCase()))); // cột ẩn: hideCols: ["A","B"] (công thức vẫn dùng được)
+    const W = []; let tw = 0.55; for (let c = 0; c < cols; c++) { W[c] = HID.has(c) ? 0 : +((spec.widths || {})[colName(c)]) || 1; tw += W[c]; }
+    const hidS = (c) => (HID.has(c) ? ' style="display:none"' : "");
     const root = el("div", "xsheet" + (editable ? " editable" : "") + (selectable ? " selectable" : ""));
     let body = "";
-    for (let r = 1; r <= rows; r++) { body += `<tr><th data-row="${r}">${r}</th>`; for (let c = 0; c < cols; c++) body += `<td data-c="${c}" data-r="${r}"></td>`; body += "</tr>"; }
+    for (let r = 1; r <= rows; r++) { body += `<tr><th data-row="${r}">${r}</th>`; for (let c = 0; c < cols; c++) body += `<td data-c="${c}" data-r="${r}"${hidS(c)}></td>`; body += "</tr>"; }
     root.innerHTML = (spec.title ? `<div class="xs-title">📗 ${esc(spec.title)}</div>` : "")
       + `<div class="xs-bar"><div class="xs-name" title="Hộp địa chỉ: địa chỉ ô hiện thời"></div><span class="xs-fx">fx</span><input class="xs-formula" title="Vùng nhập dữ liệu" ${editable ? "" : "readonly tabindex='-1'"}></div>`
-      + `<div class="xs-gridwrap"><table class="xs-grid"><colgroup><col style="width:${0.55 / tw * 100}%">${W.map((w) => `<col style="width:${w / tw * 100}%">`).join("")}</colgroup>`
-      + `<thead><tr><th class="xs-corner"></th>${W.map((_, c) => `<th data-col="${c}">${colName(c)}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>`
+      + `<div class="xs-gridwrap"><table class="xs-grid"><colgroup><col style="width:${0.55 / tw * 100}%">${W.map((w, c) => (HID.has(c) ? "" : `<col style="width:${w / tw * 100}%">`)).join("")}</colgroup>`
+      + `<thead><tr><th class="xs-corner"></th>${W.map((_, c) => `<th data-col="${c}"${hidS(c)}>${colName(c)}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>`
       + `<div class="xs-foot"><div class="xs-tabs">${(spec.sheets || ["Sheet1"]).map((n, i) => `<span class="xs-tab${i === (+spec.activeSheet || 0) ? " on" : ""}">${esc(n)}</span>`).join("")}</div>`
       + (editable ? `<button type="button" class="xs-tool" data-tool="edit">✏️ Nhập vào ô</button><button type="button" class="xs-tool" data-tool="copy">📋 Sao chép</button><button type="button" class="xs-tool" data-tool="paste">📥 Dán</button><button type="button" class="xs-tool" data-tool="del">🧽 Xóa vùng chọn</button>` : "") + `</div><div class="xs-selinfo"></div>`;
     const grid = root.querySelector(".xs-grid"), nameBox = root.querySelector(".xs-name"), fx = root.querySelector(".xs-formula"), info = root.querySelector(".xs-selinfo");
@@ -1247,10 +1309,11 @@
       const ad = colName(c) + r, raw = data[ad], s = style[ad] || {};
       const v = String(raw == null ? "" : raw).charAt(0) === "=" ? String(FX.fmt(FX.evalCell(data, ad))) : raw; // công thức -> hiện KẾT QUẢ
       const ty = cellType(v), err = String(v || "").charAt(0) === "#";
-      if (!(editing && editing.ad === ad)) t.textContent = (s.cm || s.dec != null) && ty === "num" && isFinite(+String(v).replace(/,/g, "")) ? (+String(v).replace(/,/g, "")).toLocaleString("en-US", s.dec != null ? { minimumFractionDigits: s.dec, maximumFractionDigits: s.dec, useGrouping: !!s.cm } : { maximumFractionDigits: 9 }) : v || "";
+      const pn = +String(v).replace(/,/g, "");
+      if (!(editing && editing.ad === ad)) t.textContent = s.pct != null && ty === "num" && !/%$/.test(String(v)) && isFinite(pn) ? (pn * 100).toLocaleString("en-US", { minimumFractionDigits: s.pct, maximumFractionDigits: s.pct }) + "%" : (s.cm || s.dec != null) && ty === "num" && isFinite(+String(v).replace(/,/g, "")) ? (+String(v).replace(/,/g, "")).toLocaleString("en-US", s.dec != null ? { minimumFractionDigits: s.dec, maximumFractionDigits: s.dec, useGrouping: !!s.cm } : { maximumFractionDigits: 9 }) : v || "";
       t.classList.toggle("num", !s.al && (ty === "num" || ty === "date"));
       t.classList.toggle("err", err);
-      t.style.textAlign = s.al || ""; t.style.fontWeight = s.b ? "700" : ""; t.style.fontStyle = s.i ? "italic" : "";
+      t.style.textAlign = s.al || ""; t.style.whiteSpace = s.wr ? "normal" : ""; t.style.fontWeight = s.b ? "700" : ""; t.style.fontStyle = s.i ? "italic" : "";
       t.style.backgroundColor = s.fill || ""; t.style.color = s.color || ""; t.style.fontSize = s.size ? (s.size / 11).toFixed(2) + "em" : "";
       t.classList.toggle("clip", c < cols - 1 && !!data[colName(c + 1) + r]); // chữ tràn sang ô trống bên phải như Excel
     }
@@ -1493,7 +1556,8 @@
       paintAll(); paint(); changed();
       info.innerHTML = "📥 Đã dán vào <b>" + addrOf(sel) + "</b>" + (clip.v.some((x) => String(x.raw || "").charAt(0) === "=") ? " — địa chỉ trong công thức đã tự điều chỉnh." : ".");
     }
-    function move(dc, dr) { const a0 = activeOf(sel || { a: { c: 0, r: 1 }, m: "cells" }); const c = clamp(a0.c + dc, 0, cols - 1), r = clamp(a0.r + dr, 1, rows); sel = { a: { c, r }, f: { c, r }, m: "cells" }; paint(); }
+    function move(dc, dr) { const a0 = activeOf(sel || { a: { c: 0, r: 1 }, m: "cells" }); let c = clamp(a0.c + dc, 0, cols - 1); const r = clamp(a0.r + dr, 1, rows);
+      while (HID.has(c) && dc && c > 0 && c < cols - 1) c += dc; if (HID.has(c)) c = a0.c; /* bỏ qua cột ẩn */ sel ={ a: { c, r }, f: { c, r }, m: "cells" }; paint(); }
     function startEdit(initial) {
       if (!editable || locked) return;
       if (!sel) sel = { a: { c: 0, r: 1 }, f: { c: 0, r: 1 }, m: "cells" };
@@ -2057,6 +2121,273 @@
     bReset.onclick = reset;
     bRand.onclick = () => { const pool = Math.random() < 0.8 ? vals : [1, 4, 7, 10, 12, 13, 14, 17, 19]; inp.value = pool[Math.floor(Math.random() * pool.length)]; reset(); };
     paint();
+    return box;
+  }
+
+// ---- MÁY IF TRỰC QUAN (activity.ifmachine) — kéo thanh giá trị, sơ đồ nhánh Đúng/Sai của IF / IF lồng nhau sáng lên ----
+  //  ifmachine: { title?, intro?, label, cell: "N3", pct?: true (giá trị tính bằng %), min, max, step, value, unit?, outCell?: "O3",
+  //               presets?: [{ label, value }], product?: { label, unit? } (kết quả là tỉ lệ % -> hiện giá trị × tỉ lệ),
+  //               modes: [{ name, formula, levels: [{ op?: ">", gt: 80, result: "Nhiều quá" }, …], otherwise: "Ít hơn" }] }
+  //  Điều kiện kiểm tra lần lượt từ trên xuống: điều kiện đầu tiên đúng -> trả về kết quả của nó; không điều kiện nào đúng -> otherwise. Không chấm.
+  function ifBox(a) {
+    const spec = a.ifmachine, modes = spec.modes || [], pct = !!spec.pct;
+    let mi = 0, val = +spec.value || 0;
+    const box = el("div", "sr-box if-box");
+    box.appendChild(el("h3", "sr-title", "🔀 " + esc(spec.title || "Máy IF trực quan")));
+    if (spec.intro) box.appendChild(el("p", "subtitle", esc(spec.intro)));
+    const seg = el("div", "so-seg if-modes");
+    const bs = modes.map((m, i) => { const b = el("button", "btn ghost", esc(m.name || "Chế độ " + (i + 1))); b.type = "button"; b.onclick = () => { mi = i; draw(); }; seg.appendChild(b); return b; });
+    if (modes.length > 1) box.appendChild(seg);
+    const row = el("div", "if-in"), rng = el("input"), num = el("input");
+    rng.type = "range"; num.type = "number";
+    [rng, num].forEach((x) => { x.min = spec.min != null ? spec.min : 0; x.max = spec.max != null ? spec.max : 100; x.step = spec.step || 1; });
+    row.appendChild(el("span", "if-lab", esc(spec.label || "Giá trị") + (spec.cell ? " (<b>" + esc(spec.cell) + "</b>)" : "") + ":"));
+    row.append(rng, num, el("span", "if-unit", esc(pct ? "%" : spec.unit || "")));
+    box.appendChild(row);
+    if ((spec.presets || []).length) {
+      const pr = el("div", "if-presets");
+      spec.presets.forEach((p) => { const b = el("button", "btn ghost if-chip", esc(p.label)); b.type = "button"; b.onclick = () => { val = +p.value; draw(); }; pr.appendChild(b); });
+      box.appendChild(pr);
+    }
+    const fxl = el("div", "if-fx"), flow = el("div", "if-flow"), out = el("div", "if-out");
+    box.append(fxl, flow, out);
+    const nf = (x) => (+x).toLocaleString("en-US", { maximumFractionDigits: 4 });
+    const show = (x) => nf(x) + (pct ? "%" : "");
+    const test = (lv) => { const op = lv.op || ">", g = +lv.gt; return op === ">" ? val > g : op === ">=" ? val >= g : op === "<" ? val < g : op === "<=" ? val <= g : op === "=" ? val === g : val !== g; };
+    const q = (r) => (typeof r === "string" && !/^[-+]?\d+(\.\d+)?%?$/.test(r) ? "“" + esc(r) + "”" : esc(r));
+    function draw() {
+      const m = modes[mi] || { levels: [] }, lv = m.levels || [];
+      bs.forEach((b, i) => b.classList.toggle("on", i === mi));
+      rng.value = val; num.value = val;
+      fxl.innerHTML = '<span class="xs-fx">fx</span><code>' + esc(m.formula || "") + "</code>";
+      let hit = lv.findIndex(test), h = "";
+      lv.forEach((l, i) => {
+        const st = hit < 0 || i < hit ? "no" : i === hit ? "yes" : "idle";
+        h += '<div class="if-row"><div class="if-dia ' + st + '"><span>' + esc(spec.cell || "x") + " " + esc(l.op || ">") + " " + esc(show(l.gt)) + " ?</span></div>"
+          + '<div class="if-arr ' + (st === "yes" ? "on" : "") + '">Đúng ➜</div><div class="if-res' + (st === "yes" ? " hit" : "") + '">' + q(l.result) + "</div></div>"
+          + '<div class="if-down ' + (st === "no" ? "on" : "") + '">⬇ Sai</div>';
+      });
+      h += '<div class="if-row"><div class="if-res else' + (hit < 0 ? " hit" : "") + '">' + q(m.otherwise) + "</div></div>";
+      flow.innerHTML = h;
+      const res = hit < 0 ? m.otherwise : lv[hit].result;
+      let o = "<span>" + esc(spec.cell || "x") + " = <b>" + esc(show(val)) + "</b></span> ➜ <span>" + esc(spec.outCell || "Kết quả") + " = <b class='if-big'>" + esc(res) + "</b></span>";
+      if (spec.product) { const r = parseFloat(String(res)) / (/%$/.test(String(res)) ? 100 : 1); if (isFinite(r)) o += "<span>" + esc(spec.product.label) + " = " + nf(val) + " × " + esc(res) + " = <b>" + nf(Math.round(val * r * 1e6) / 1e6) + "</b>" + (spec.product.unit ? " " + esc(spec.product.unit) : "") + "</span>"; }
+      out.innerHTML = o;
+    }
+    rng.oninput = () => { val = +rng.value; draw(); };
+    num.oninput = () => { const v = parseFloat(String(num.value).replace(",", ".")); if (isFinite(v)) { val = v; rng.value = v; const n0 = num.value; draw(); num.value = n0; } };
+    draw();
+    return box;
+  }
+
+// ---- MÊ CUNG ROBOT (activity.maze) — Tin 9 Bài 14 ----------------------------------------------------
+  //  maze: { title?, intro?, mode: "sim" | "race", mazes: [{ name, map: ["#####", "S...E", …], dir?: 1 }], rule?: "right" | "left",
+  //          allowRule?: true, teams?: ["Đội 1", "Đội 2"] }   — map: # tường · . lối đi · S lối vào · E lối ra; dir: 0 Bắc 1 Đông 2 Nam 3 Tây
+  //  "sim": robot chạy thuật toán bám tường (SGK Hình 14.3a) từng lần lặp; sáng dòng lệnh, báo quy tắc a/b/c, vẽ vệt đường đi,
+  //         phát hiện lặp mãi (trạng thái vị trí + hướng lặp lại). "race": mỗi đội bấm ← ↑ → ↓ điều khiển robot tới Lối ra. Không chấm.
+  const MZ_DR = [-1, 0, 1, 0], MZ_DC = [0, 1, 0, -1], MZ_ROT = [-90, 0, 90, 180];
+  function mazeGrid(map) {
+    const H = map.length, W = Math.max(...map.map((r) => r.length));
+    const g = el("div", "mz-grid"); g.style.gridTemplateColumns = "repeat(" + W + ",1fr)"; g.style.aspectRatio = W + " / " + H;
+    const cells = [];
+    for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+      const ch = map[r][c] || "#", d = el("div", "mz-c" + (ch === "#" ? " w" : ch === "S" ? " s" : ch === "E" ? " e" : ""));
+      if (ch === "S") d.textContent = "Vào"; if (ch === "E") d.textContent = "Ra";
+      g.appendChild(d); cells.push(d);
+    }
+    const bot = el("div", "mz-bot", '<span class="mz-arr">➤</span><span class="mz-face">🤖</span>'); g.appendChild(bot);
+    let start = null; map.forEach((row, r) => { const c = row.indexOf("S"); if (c >= 0) start = { r, c }; });
+    const wall = (r, c) => r < 0 || c < 0 || r >= H || c >= W || (map[r][c] || "#") === "#";
+    const place = (r, c, d) => { bot.style.left = (c / W * 100) + "%"; bot.style.top = (r / H * 100) + "%"; bot.style.width = (100 / W) + "%"; bot.style.height = (100 / H) + "%"; bot.querySelector(".mz-arr").style.transform = "rotate(" + MZ_ROT[d] + "deg)"; };
+    const cell = (r, c) => cells[r * W + c];
+    return { g, H, W, start, wall, place, cell, isExit: (r, c) => map[r][c] === "E" };
+  }
+  function mazeBox(a) {
+    const spec = a.maze, mazes = spec.mazes || [];
+    const box = el("div", "sr-box mz-box");
+    box.appendChild(el("h3", "sr-title", (spec.mode === "race" ? "🏁 " : "🤖 ") + esc(spec.title || "Mê cung robot")));
+    if (spec.intro) box.appendChild(el("p", "subtitle", esc(spec.intro)));
+    return spec.mode === "race" ? mazeRace(a, box, mazes[0] || { map: ["S.E"] }) : mazeSim(a, box, mazes);
+  }
+  function mazeSim(a, box, mazes) {
+    const spec = a.maze; let mi = 0, rule = spec.rule === "left" ? "left" : "right", timer = null;
+    const top = el("div", "sr-top");
+    const selM = el("div", "so-seg"), selR = el("div", "so-seg");
+    const mb = mazes.map((m, i) => { const b = el("button", "btn ghost", esc(m.name || "Mê cung " + (i + 1))); b.type = "button"; b.onclick = () => { mi = i; build(); }; selM.appendChild(b); return b; });
+    const rb = [["right", "👉 Bám tường phải (SGK)"], ["left", "👈 Bám tường trái"]].map(([k, t]) => { const b = el("button", "btn ghost", t); b.type = "button"; b.onclick = () => { rule = k; build(); }; selR.appendChild(b); return [k, b]; });
+    if (mazes.length > 1) top.appendChild(selM); if (spec.allowRule) top.appendChild(selR);
+    box.appendChild(top);
+    const ctrl = el("div", "sr-top"), bStep = el("button", "btn", "▶ Bước tiếp"), bRun = el("button", "btn ghost", "⏩ Chạy hết"), bReset = el("button", "btn ghost", "🔄 Làm lại");
+    ctrl.append(bStep, bRun, bReset); box.appendChild(ctrl);
+    const wrap = el("div", "mz-wrap"), stage = el("div", "mz-stage"), side = el("div", "mz-side");
+    wrap.append(stage, side); box.appendChild(wrap);
+    const code = el("pre", "mz-code"), sense = el("div", "mz-sense"), msg = el("div", "sr-msg mz-msg"), stat = el("div", "mz-stat");
+    side.append(code, sense, msg, stat);
+    let G, r, c, d, it, mv, seen, done;
+    const P = () => (rule === "right" ? ["phải", "trái"] : ["trái", "phải"]);
+    const lines = () => { const [x, y] = P(); return ["lặp lại động tác sau cho đến khi tìm thấy lối ra", "  nếu bên " + x + " không có tường thì", "    quay " + x + " 90°", "    tiến một bước", "  nếu không thì", "    nếu phía trước không có tường thì", "      tiến một bước", "    nếu không thì", "      quay " + y + " 90°"]; };
+    const HL = { a: [1, 2, 3], b: [4, 5, 6], c: [4, 7, 8], end: [0] };
+    const paintCode = (k) => { code.innerHTML = lines().map((t, i) => '<span class="' + ((HL[k] || []).includes(i) ? "on" : "") + '">' + esc(t) + "</span>").join("\n"); };
+    const sideDir = () => (rule === "right" ? (d + 1) % 4 : (d + 3) % 4), otherDir = () => (rule === "right" ? (d + 3) % 4 : (d + 1) % 4);
+    const paintSense = () => { const [x] = P(); const sw = G.wall(r + MZ_DR[sideDir()], c + MZ_DC[sideDir()]), fw = G.wall(r + MZ_DR[d], c + MZ_DC[d]); sense.innerHTML = "📡 Bên " + x + ": <b>" + (sw ? "có tường" : "không có tường") + "</b> · Phía trước: <b>" + (fw ? "có tường" : "không có tường") + "</b>"; };
+    const paintStat = () => { stat.innerHTML = "🔁 Lần lặp: <b>" + it + "</b> · 👣 Bước tiến: <b>" + mv + "</b>"; };
+    function build() {
+      stop(); mb.forEach((b, i) => b.classList.toggle("on", i === mi)); rb.forEach(([k, b]) => b.classList.toggle("on", k === rule));
+      const m = mazes[mi] || { map: ["S.E"] }; G = mazeGrid(m.map); stage.innerHTML = ""; stage.appendChild(G.g);
+      r = G.start.r; c = G.start.c; d = m.dir != null ? m.dir : 1; it = 0; mv = 0; seen = new Set(); done = false;
+      G.cell(r, c).classList.add("t1"); G.place(r, c, d); paintCode(""); paintSense(); paintStat();
+      msg.innerHTML = "Robot đứng ở Lối vào, quay mặt theo mũi tên ➤. Bấm ▶ Bước tiếp để thực hiện từng lần lặp.";
+      bStep.disabled = bRun.disabled = false;
+    }
+    function trail() { const x = G.cell(r, c); x.classList.add(x.classList.contains("t1") ? "t2" : "t1"); }
+    function step() {
+      if (done) return false;
+      if (G.isExit(r, c)) { done = true; paintCode("end"); msg.innerHTML = "🎉 Robot đã tìm thấy <b>Lối ra</b> sau " + it + " lần lặp, " + mv + " bước tiến."; sound("ok"); celebrate(); bStep.disabled = bRun.disabled = true; return false; }
+      const k = r + "," + c + "," + d;
+      if (seen.has(k)) { done = true; msg.innerHTML = "⚠️ Robot quay lại đúng vị trí và hướng đã đi qua — thuật toán sẽ <b>lặp mãi, không tìm thấy lối ra</b> ở mê cung này. Cần cải tiến giải pháp!"; sound("no"); bStep.disabled = bRun.disabled = true; return false; }
+      seen.add(k); it++;
+      const [x, y] = P(); let rk;
+      if (!G.wall(r + MZ_DR[sideDir()], c + MZ_DC[sideDir()])) { d = sideDir(); r += MZ_DR[d]; c += MZ_DC[d]; mv++; rk = "a"; msg.innerHTML = "a) Bên " + x + " không có tường → <b>quay " + x + " 90°, tiến một bước</b>."; trail(); }
+      else if (!G.wall(r + MZ_DR[d], c + MZ_DC[d])) { r += MZ_DR[d]; c += MZ_DC[d]; mv++; rk = "b"; msg.innerHTML = "b) Bên " + x + " có tường, phía trước không có → <b>tiến một bước</b>."; trail(); }
+      else { d = otherDir(); rk = "c"; msg.innerHTML = "c) Bên " + x + " và phía trước đều có tường → <b>quay " + y + " 90°</b>."; }
+      G.place(r, c, d); paintCode(rk); paintSense(); paintStat();
+      if (G.isExit(r, c)) step();
+      return !done;
+    }
+    function stop() { if (timer) { clearInterval(timer); timer = null; } bRun.textContent = "⏩ Chạy hết"; }
+    bStep.onclick = () => { stop(); step(); };
+    bRun.onclick = () => { if (timer) return stop(); bRun.textContent = "⏸ Tạm dừng"; timer = setInterval(() => { if (!box.isConnected || !step()) stop(); }, 260); };
+    bReset.onclick = build;
+    build();
+    return box;
+  }
+  function mazeRace(a, box, m) {
+    const teams = (a.maze.teams || ["Đội 1", "Đội 2"]).slice(0, 2);
+    let t0 = null, winner = null;
+    const wrap = el("div", "mz-race"), reset = el("button", "btn ghost", "🔄 Chơi lại"), banner = el("div", "sr-msg mz-msg");
+    const P = teams.map((name, ti) => {
+      const col = el("div", "mz-team"); col.appendChild(el("h4", null, (ti ? "🔴 " : "🔵 ") + esc(name)));
+      const G = mazeGrid(m.map), stage = el("div", "mz-stage"); stage.appendChild(G.g); col.appendChild(stage);
+      const pad = el("div", "mz-pad"), st = el("div", "mz-stat");
+      const S = { G, r: G.start.r, c: G.start.c, d: m.dir != null ? m.dir : 1, mv: 0, bump: 0, done: false, st };
+      [["↑", 0], ["←", 3], ["↓", 2], ["→", 1]].forEach(([t, d]) => { const b = el("button", "btn mz-k mz-k" + d, t); b.type = "button"; b.onclick = () => move(S, d); pad.appendChild(b); });
+      col.append(pad, st); wrap.appendChild(col); return S;
+    });
+    const show = (S) => { S.st.innerHTML = "👣 Bước: <b>" + S.mv + "</b> · 💥 Chạm tường: <b>" + S.bump + "</b>" + (S.done ? " · ⏱️ <b>" + S.time + " giây</b>" : ""); };
+    function move(S, d) {
+      if (S.done) return; if (!t0) t0 = Date.now();
+      S.d = d; const nr = S.r + MZ_DR[d], nc = S.c + MZ_DC[d];
+      if (S.G.wall(nr, nc)) { S.bump++; S.G.g.classList.remove("shake"); void S.G.g.offsetWidth; S.G.g.classList.add("shake"); sound("no"); }
+      else { S.r = nr; S.c = nc; S.mv++; const x = S.G.cell(nr, nc); x.classList.add(x.classList.contains("t1") ? "t2" : "t1"); }
+      S.G.place(S.r, S.c, S.d);
+      if (S.G.isExit(S.r, S.c)) { S.done = true; S.time = Math.round((Date.now() - t0) / 100) / 10; if (!winner) { winner = S; banner.innerHTML = "🏆 <b>" + esc(teams[P.indexOf(S)]) + "</b> thoát khỏi mê cung trước! (" + S.mv + " bước, " + S.time + " giây)"; sound("ok"); celebrate(); } }
+      show(S);
+    }
+    function init() { t0 = null; winner = null; banner.innerHTML = "Hai đội bấm ← ↑ → ↓ đưa robot từ Lối vào tới Lối ra. Đội nào thoát trước thắng!"; P.forEach((S) => { S.r = S.G.start.r; S.c = S.G.start.c; S.d = m.dir != null ? m.dir : 1; S.mv = 0; S.bump = 0; S.done = false; S.G.g.querySelectorAll(".t1,.t2").forEach((x) => x.classList.remove("t1", "t2")); S.G.place(S.r, S.c, S.d); show(S); }); }
+    reset.onclick = init;
+    const top = el("div", "sr-top"); top.appendChild(reset);
+    box.append(top, banner, wrap); init();
+    return box;
+  }
+
+// ---- MÁY CHẠY THUẬT TOÁN LIỆT KÊ CÁC BƯỚC (activity.algo) — Tin 9 Bài 15 (tính lương, tìm max, số nguyên tố…) ----
+  //  algo: { title?, intro?, vars?: ["max","x"] (thứ tự hiện trong bảng), samples?: [{ label, values: { x: [5, 12, 0] } }],
+  //    lines: [{ id?, n: "4.1.", text: "Nếu x > max thì", indent?: 1, op, next?: "id" }] }
+  //  op: "start" | "end" | "label" (chỉ hiển thị, bỏ qua) | "input" { v, prompt?, int?, min?, max?, list? (nhập dãy), len? } | "swap" { swap: ["a[j]", "a[j-1]"] } | "set" { sets: [["max", "x"], …] }
+  //      | "if" { c: "x > max", yes?: "id", no?: "id" } (thiếu yes/no = sang dòng kế) | "output" { e: "max" } hoặc { out: "Không có dữ liệu!" }
+  //      (out có thể chèn {tên_biến}); "goto" { next }. Biểu thức: số, biến, + - * / % mod ( ), so sánh = <> < > <= >=, and/or.
+  //  Mỗi lần bấm = một bước; bảng biến, nhật kí, đầu ra. Không chấm, không gửi.
+  function alEval(expr, vars) {
+    let e = " " + String(expr == null ? "" : expr) + " ", bad = false;
+    e = e.replace(/≤/g, "<=").replace(/≥/g, ">=").replace(/≠/g, "<>").replace(/×/g, "*").replace(/−/g, "-").replace(/\bmod\b/g, "%").replace(/\band\b/g, "&&").replace(/\bor\b/g, "||");
+    e = e.replace(/<>/g, "!=").replace(/([^<>!=])=(?!=)/g, "$1==");
+    e = e.replace(/([A-Za-z_][A-Za-z_0-9]*)\s*\[/g, (m, n) => (Array.isArray(vars[n]) ? "__A('" + n + "'," : ((bad = true), m))).replace(/\]/g, ")"); // a[j] -> phần tử thứ j (đánh số từ 1)
+    e = e.replace(/(__A\('[A-Za-z_][A-Za-z_0-9]*',)|([A-Za-z_][A-Za-z_0-9]*)/g, (m, keep, w) => (keep || (w in vars && !Array.isArray(vars[w]) ? "__V('" + w + "')" : ((bad = true), m))));
+    if (bad) return NaN;
+    try { const v = Function("__A", "__V", "return (" + e + ")")((n, i) => { const x = vars[n][i - 1]; if (x === undefined) throw 0; return x; }, (n) => Number(vars[n])); return typeof v === "boolean" ? v : Number(v); } catch (x) { return NaN; }
+  }
+  // Gán: "max" hoặc phần tử dãy "a[j]"
+  function alAssign(target, val, vars) {
+    const m = /^\s*([A-Za-z_][A-Za-z_0-9]*)\s*\[(.+)\]\s*$/.exec(target);
+    if (!m) { vars[target] = val; return target; }
+    const i = alEval(m[2], vars); if (Array.isArray(vars[m[1]]) && i >= 1 && i <= vars[m[1]].length) vars[m[1]][i - 1] = val;
+    return m[1];
+  }
+  const alFmt = (v) => (Array.isArray(v) ? v.map((x) => alFmt(x)).join(", ") : typeof v === "boolean" ? (v ? "Đúng" : "Sai") : typeof v === "number" && isFinite(v) ? (Math.round(v * 1000) / 1000).toLocaleString("en-US", { maximumFractionDigits: 3 }) : "?");
+  function algoBox(a) {
+    const spec = a.algo, L = spec.lines || [];
+    const idx = (id) => L.findIndex((l) => l.id === id);
+    const box = el("div", "sr-box al-box");
+    box.appendChild(el("h3", "sr-title", "⚙️ " + esc(spec.title || "Máy chạy thuật toán")));
+    if (spec.intro) box.appendChild(el("p", "subtitle", esc(spec.intro)));
+    const ctrl = el("div", "sr-top"), bStep = el("button", "btn", "▶ Bước tiếp"), bRun = el("button", "btn ghost", "⏩ Chạy hết"), bReset = el("button", "btn ghost", "🔄 Làm lại");
+    ctrl.append(bStep, bRun, bReset);
+    (spec.samples || []).forEach((sm) => { const b = el("button", "btn ghost al-sample", "📋 " + esc(sm.label)); b.type = "button"; b.onclick = () => { reset(); queue = JSON.parse(JSON.stringify(sm.values || {})); say("📋 Dùng dữ liệu mẫu: " + esc(sm.label)); }; ctrl.appendChild(b); });
+    box.appendChild(ctrl);
+    const wrap = el("div", "al-wrap"), list = el("div", "al-list"), side = el("div", "al-side");
+    const rows = L.map((l) => { const r = el("div", "al-line" + (l.op === "label" ? " lab" : ""), '<span class="al-n">' + esc(l.n || "") + "</span>" + esc(l.text)); r.style.paddingLeft = (10 + 26 * (l.indent || 0)) + "px"; list.appendChild(r); return r; });
+    const ask = el("div", "al-ask"), mem = el("div", "al-mem"), out = el("div", "al-out"), log = el("ol", "al-log");
+    side.append(ask, mem, out, log); wrap.append(list, side); box.appendChild(wrap);
+    let p, vars, steps, done, queue = {}, timer = null, waiting = null, outs;
+    const order = () => { const ks = (spec.vars || []).filter((k) => k in vars); Object.keys(vars).forEach((k) => { if (!ks.includes(k)) ks.push(k); }); return ks; };
+    const paint = () => {
+      rows.forEach((r, i) => { r.classList.toggle("on", i === p && !done); });
+      const ks = order(); mem.innerHTML = "<b>🧠 Bảng biến</b>" + (ks.length ? '<table class="al-vars"><tr>' + ks.map((k) => "<th>" + esc(k) + "</th>").join("") + "</tr><tr>" + ks.map((k) => "<td>" + alFmt(vars[k]) + "</td>").join("") + "</tr></table>" : ' <span class="rn-empty">(chưa có biến)</span>');
+      out.innerHTML = "<b>📤 Đầu ra</b>" + (outs.length ? outs.map((o) => '<div class="al-o">' + esc(o) + "</div>").join("") : ' <span class="rn-empty">(chưa có)</span>');
+      bStep.disabled = bRun.disabled = done; paintAsk();
+    };
+    function paintAsk() {
+      ask.innerHTML = ""; if (!waiting) return;
+      const W = waiting, lb = el("label", "sr-in"), inp = el("input"), ok = el("button", "btn", "✔ Nhập");
+      lb.appendChild(el("span", null, "⌨️ " + esc(W.prompt || "Nhập " + W.v) + " =")); if (W.list) { inp.placeholder = "VD: 3, 1, 2"; } else { inp.type = "number"; inp.step = "any"; } lb.appendChild(inp);
+      const go = () => { const r = alTake(W, inp.value); if (r.err) { alert(r.err); inp.focus(); return; } put(W, r.v); waiting = null; p = nextOf(L[p]); paint(); };
+      ok.onclick = go; inp.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); go(); } };
+      ask.append(lb, ok); setTimeout(() => inp.focus(), 0);
+    }
+    const say = (t) => { log.appendChild(el("li", null, t)); log.scrollTop = log.scrollHeight; };
+    // Nhận giá trị nhập: số (int?, min?, max?) hoặc dãy số (list: true, len: "N" = biến lưu số phần tử)
+    function alTake(l, raw) {
+      if (l.list) { const arr = (Array.isArray(raw) ? raw : String(raw).split(/[,;\s]+/)).filter((t) => String(t).trim() !== "").map((t) => parseFloat(String(t).replace(",", "."))); if (arr.length < 2 || arr.some((x) => !isFinite(x))) return { err: "Hãy nhập ít nhất 2 số, cách nhau bởi dấu phẩy." }; return { v: arr }; }
+      const v = parseFloat(String(raw).replace(",", ".")); if (!isFinite(v)) return { err: "Hãy nhập một số." };
+      if (l.int && !Number.isInteger(v)) return { err: "Hãy nhập số nguyên." };
+      if (l.min != null && v < l.min) return { err: "Hãy nhập số lớn hơn hoặc bằng " + l.min + "." };
+      if (l.max != null && v > l.max) return { err: "Hãy nhập số nhỏ hơn hoặc bằng " + l.max + "." };
+      return { v };
+    }
+    function put(l, v) { vars[l.v] = v; if (l.list && l.len) vars[l.len] = v.length; say("⌨️ " + esc(l.n || "") + " Nhập " + esc(l.v) + " = <b>" + alFmt(v) + "</b>" + (l.list && l.len ? " (" + esc(l.len) + " = " + v.length + ")" : "")); }
+    const nextOf = (l, jump) => { const t = jump != null ? jump : l.next; const i = t != null ? idx(t) : L.indexOf(l) + 1; return i < 0 ? L.length : i; };
+    function reset() { stop(); p = 0; vars = {}; steps = 0; done = false; waiting = null; outs = []; log.innerHTML = ""; paint(); }
+    function step() {
+      if (done || waiting) return false;
+      while (p < L.length && L[p].op === "label") p++;
+      if (p >= L.length) { done = true; paint(); return false; }
+      const l = L[p], tag = esc(l.n || ""); steps++;
+      if (steps > 5000) { done = true; say("⚠️ Quá nhiều bước — dừng lại."); paint(); return false; }
+      if (l.op === "input") {
+        const q = queue[l.v];
+        if (q && q.length) { const r = alTake(l, q.shift()); if (r.err) { waiting = l; paint(); return false; } put(l, r.v); p = nextOf(l); }
+        else { waiting = l; paint(); return false; }
+      } else if (l.op === "set") {
+        const shown = (l.sets || []).map(([v, ex]) => alAssign(v, alEval(ex, vars), vars));
+        say("⚙️ " + tag + " " + shown.map((v) => esc(v) + " = <b>" + alFmt(vars[v]) + "</b>").join(" · ")); p = nextOf(l);
+      } else if (l.op === "swap") {
+        const [x, y] = l.swap || [], vx = alEval(x, vars), vy = alEval(y, vars), n = alAssign(x, vy, vars); alAssign(y, vx, vars);
+        say("🔁 " + tag + " Đổi chỗ " + esc(x) + " và " + esc(y) + " → <b>" + esc(n) + " = " + alFmt(vars[n]) + "</b>"); p = nextOf(l);
+      } else if (l.op === "if") {
+        const r = alEval(l.c, vars), yes = r === true || (typeof r === "number" && r !== 0 && isFinite(r));
+        say("❓ " + tag + " " + esc(l.c) + " → <b>" + (yes ? "Đúng" : "Sai") + "</b>"); p = nextOf(l, yes ? l.yes : l.no);
+      } else if (l.op === "output") {
+        const o = l.out != null ? String(l.out).replace(/\{([A-Za-z_][A-Za-z_0-9]*)\}/g, (m, k) => (k in vars ? alFmt(vars[k]) : m)) : esc(l.e) + " = " + alFmt(alEval(l.e, vars));
+        outs.push(o); say("📤 " + tag + " Xuất: <b>" + esc(o) + "</b>"); p = nextOf(l);
+      } else if (l.op === "end") { say("🔴 " + tag + " Kết thúc (" + steps + " bước)"); done = true; sound("ok"); }
+      else { say((l.op === "start" ? "🟢 " : "➡️ ") + tag + " " + esc(l.text)); p = nextOf(l); }
+      paint(); return !done && !waiting;
+    }
+    function stop() { if (timer) { clearInterval(timer); timer = null; } bRun.textContent = "⏩ Chạy hết"; }
+    bStep.onclick = () => { stop(); step(); };
+    bRun.onclick = () => { if (timer) return stop(); bRun.textContent = "⏸ Tạm dừng"; timer = setInterval(() => { if (!box.isConnected || !step()) stop(); }, 220); };
+    bReset.onclick = () => { queue = {}; reset(); };
+    reset();
     return box;
   }
 
@@ -2635,6 +2966,67 @@
 .so-cards.shake{animation:so-shake .35s}
 @keyframes so-swap{0%{transform:translateY(0)}50%{transform:translateY(-16px) scale(1.12)}100%{transform:none}}
 @keyframes so-shake{0%,100%{transform:none}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+.al-wrap{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
+.al-list{flex:1 1 340px;background:#fff;border:2px solid #e2e8f0;border-radius:14px;padding:8px 0;font:600 1rem/1.5 Consolas,'Courier New',monospace}
+.al-line{padding:3px 10px;border-left:5px solid transparent;transition:background .15s}
+.al-line.on{background:#fef08a;border-left-color:#eab308}
+.al-line.lab{color:#64748b}
+.al-n{display:inline-block;min-width:2.6em;color:#7c3aed;font-weight:800}
+.al-side{flex:1 1 300px;min-width:260px;display:flex;flex-direction:column;gap:8px}
+.al-ask:not(:empty){display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;border:2px dashed #7c3aed;border-radius:12px;background:#f5f3ff}
+.al-ask input{width:120px}
+.al-vars{border-collapse:collapse;margin-top:4px;background:#fff}
+.al-vars th,.al-vars td{border:1px solid #cbd5e1;padding:4px 10px;text-align:center;font-family:Consolas,monospace}
+.al-vars th{background:#ede9fe}
+.al-o{font-size:1.2rem;font-weight:800;color:#15803d}
+.al-log{max-height:220px;overflow:auto;margin:0;padding-left:26px;line-height:1.55;font-size:.95rem;background:#f8fafc;border-radius:10px}
+.al-sample{font-size:.95rem}
+.mz-wrap{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
+.mz-stage{flex:1 1 360px;max-width:560px;min-width:260px}
+.mz-grid{position:relative;display:grid;width:100%;background:#fff;border-radius:8px;overflow:hidden}
+.mz-grid.shake{animation:so-shake .3s}
+.mz-c{display:flex;align-items:center;justify-content:center;font-size:.62rem;font-weight:800;color:#1d4ed8;min-width:0;transition:background .2s}
+.mz-c.w{background:#1f2937}.mz-c.s{background:#dbeafe}.mz-c.e{background:#fecaca;color:#b91c1c}
+.mz-c.t1:not(.s):not(.e){background:#fde68a}.mz-c.t2:not(.s):not(.e){background:#fb923c}
+.mz-bot{position:absolute;display:flex;align-items:center;justify-content:center;transition:left .22s,top .22s;pointer-events:none}
+.mz-face{font-size:min(3.4vw,1.3rem);line-height:1;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4))}
+.mz-arr{position:absolute;inset:0;display:flex;align-items:center;justify-content:flex-end;font-size:min(2.6vw,1rem);color:#dc2626;z-index:1;text-shadow:0 0 2px #fff,0 0 3px #fff;transition:transform .2s;transform-origin:center}
+.mz-side{flex:1 1 280px;min-width:250px}
+.mz-code{margin:0 0 8px;padding:10px 12px;background:#0f172a;color:#cbd5e1;border-radius:12px;font:600 .95rem/1.55 Consolas,'Courier New',monospace;white-space:pre-wrap}
+.mz-code span.on{background:#facc15;color:#1f2937;border-radius:4px}
+.mz-sense{font-weight:600;margin:4px 0}
+.mz-stat{font-weight:600;color:#475569;margin-top:4px}
+.mz-race{display:flex;flex-wrap:wrap;gap:18px;justify-content:center}
+.mz-team{flex:1 1 320px;max-width:520px;border:3px solid #e2e8f0;border-radius:16px;padding:10px;background:#f8fafc}
+.mz-team h4{margin:0 0 8px;font-size:1.15rem}
+.mz-team .mz-stage{max-width:none}
+.mz-pad{display:grid;grid-template-columns:repeat(3,64px);grid-template-rows:repeat(2,52px);gap:6px;justify-content:center;margin:10px 0 4px}
+.mz-k{font-size:1.5rem;padding:0}.mz-k0{grid-column:2;grid-row:1}.mz-k3{grid-column:1;grid-row:2}.mz-k2{grid-column:2;grid-row:2}.mz-k1{grid-column:3;grid-row:2}
+.ifc{display:flex;flex-direction:column;align-items:flex-start;margin-top:10px}
+.ifc-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.ifc .dropzone{min-width:230px;min-height:96px;margin:0}
+.ifc .ifc-cond{border:3px dashed #f59e0b;background:#fffbeb;border-radius:40px}
+.ifc .ifc-res{border:3px dashed #14b8a6;background:#f0fdfa}
+.ifc-yes{font-weight:800;color:#16a34a;font-size:1.1rem}
+.ifc-no{margin:4px 0 4px 96px;font-weight:800;color:#dc2626;font-size:1.1rem}
+.ifc .ifc-else{margin-left:40px}
+.if-in{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-weight:700;margin:6px 0}
+.if-in input[type=range]{flex:1 1 220px;accent-color:#7c3aed;height:28px}
+.if-in input[type=number]{font:inherit;width:120px;padding:6px 10px;border:2px solid #c4b5fd;border-radius:10px}
+.if-presets{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 10px}.if-chip{padding:4px 12px;font-size:.95rem}
+.if-fx{display:flex;gap:8px;align-items:center;background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:6px 10px;margin:6px 0 12px;overflow-x:auto}
+.if-fx code{font-family:Consolas,'Courier New',monospace;font-size:1.05rem;white-space:nowrap}
+.if-flow{display:flex;flex-direction:column;align-items:flex-start;gap:0}
+.if-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.if-dia{min-width:200px;min-height:78px;padding:0 36px;display:flex;align-items:center;justify-content:center;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);background:#fde68a;font-weight:800;font-family:Consolas,monospace;transition:all .25s}
+.if-dia.yes{background:#86efac}.if-dia.no{background:#fecaca}.if-dia.idle{background:#e5e7eb;color:#9ca3af}
+.if-arr{font-weight:800;color:#9ca3af}.if-arr.on{color:#16a34a}
+.if-down{margin-left:78px;font-weight:800;color:#9ca3af;padding:2px 0}.if-down.on{color:#dc2626}
+.if-res{padding:10px 18px;border-radius:12px;border:3px solid #cbd5e1;background:#fff;font-weight:800;min-width:120px;text-align:center;transition:all .25s}
+.if-res.else{margin-left:40px}
+.if-res.hit{border-color:#16a34a;background:#dcfce7;color:#166534;transform:scale(1.08);box-shadow:0 6px 16px rgba(22,163,74,.25)}
+.if-out{display:flex;flex-wrap:wrap;gap:8px 22px;align-items:center;margin-top:14px;padding:10px 14px;border-radius:12px;background:#f5f3ff;border:2px dashed #a78bfa;font-size:1.1rem}
+.if-big{font-size:1.5rem;color:#6d28d9}
 .fill select.fill-sel{font-size:1.15rem;padding:6px 10px;border:2px solid #c7d2fe;border-radius:10px;background:#fff;margin:2px 4px}
 .rn-box{margin:14px 0;border:3px solid #0ea5e9;border-radius:18px;background:#f8fafc;padding:12px 16px}
 .rn-title{margin:0 0 6px;color:#0369a1}

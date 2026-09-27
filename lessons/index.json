@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-09-27T10:42:45.016Z",
+ "generatedAt": "2026-09-27T15:58:45.663Z",
  "lessons": [
   {
    "id": "tin6-bai01-thong-tin-va-du-lieu",
@@ -440,6 +440,66 @@
    "activities": 14,
    "items": 37,
    "open": 3
+  },
+  {
+   "id": "tin9-bai12a-su-dung-ham-if",
+   "title": "Bài 12a: Sử dụng hàm IF",
+   "grade": "9",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4a — Sử dụng bảng tính điện tử nâng cao",
+   "activities": 19,
+   "items": 53,
+   "open": 2
+  },
+  {
+   "id": "tin9-bai13a-hoan-thien-bang-tinh-quan-li-tai-chinh-gia-dinh",
+   "title": "Bài 13a: Hoàn thiện bảng tính quản lí tài chính gia đình",
+   "grade": "9",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4a — Sử dụng bảng tính điện tử nâng cao",
+   "activities": 15,
+   "items": 45,
+   "open": 1
+  },
+  {
+   "id": "tin9-bai14-giai-quyet-van-de",
+   "title": "Bài 14: Giải quyết vấn đề",
+   "grade": "9",
+   "subject": "Tin học",
+   "unit": "Chủ đề 5 — Giải quyết vấn đề với sự trợ giúp của máy tính",
+   "activities": 13,
+   "items": 23,
+   "open": 1
+  },
+  {
+   "id": "tin9-bai15-bai-toan-tin-hoc",
+   "title": "Bài 15: Bài toán tin học",
+   "grade": "9",
+   "subject": "Tin học",
+   "unit": "Chủ đề 5 — Giải quyết vấn đề với sự trợ giúp của máy tính",
+   "activities": 15,
+   "items": 33,
+   "open": 1
+  },
+  {
+   "id": "tin9-bai16-thuc-hanh-lap-chuong-trinh-may-tinh",
+   "title": "Bài 16: Thực hành: Lập chương trình máy tính",
+   "grade": "9",
+   "subject": "Tin học",
+   "unit": "Chủ đề 5 — Giải quyết vấn đề với sự trợ giúp của máy tính",
+   "activities": 14,
+   "items": 32,
+   "open": 1
+  },
+  {
+   "id": "tin9-bai17-tin-hoc-va-the-gioi-nghe-nghiep",
+   "title": "Bài 17: Tin học và thế giới nghề nghiệp",
+   "grade": "9",
+   "subject": "Tin học",
+   "unit": "Chủ đề 6 — Hướng nghiệp với tin học",
+   "activities": 15,
+   "items": 30,
+   "open": 7
   }
  ]
 }

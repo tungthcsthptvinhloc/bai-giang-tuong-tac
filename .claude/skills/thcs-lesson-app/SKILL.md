@@ -193,6 +193,9 @@ const SHEET = { title: "Bảng điểm.xlsx", cols: 7, rows: 11, sheets: ["Sheet
   center: ["A3:A8"],                           // (right/left/italic tương tự)
   comma: ["D3:E6"],                            // số hiện dấu phẩy hàng nghìn: 8000 -> 8,000 (như hình Excel trong SGK)
   dec: { "F3:F7": 2 },                         // số chữ số thập phân cố định: 7.666… -> 7.67, 8 -> 8.00 (kết hợp comma được)
+  pct: { "N3:N5": 1 },                         // định dạng phần trăm: 0.905 -> 90.5% (số chữ số thập phân)
+  wrap: ["H1", "M2"],                          // chữ xuống dòng trong ô (Wrap Text) — tiêu đề dài "Tổng tiền (nghìn đồng)"
+  hideCols: ["A", "B", "C", "D", "E"],         // ẩn cột (công thức vẫn dùng được) — bảng bắt đầu ở cột F như hình SGK
   activeSheet: 2 };                            // tên trang tính đang mở trong `sheets` (mặc định 0 = trang đầu)
 { id: "dia-chi-o", type: "knowledge", sheet: SHEET, questions: [
   { type: "sheet", question: "Bấm vào ô ghi tên Bùi Lê Đình Anh.", answer: "B6", explanation: "...", level: "nhan-biet" },
@@ -226,7 +229,12 @@ const SHEET = { title: "Bảng điểm.xlsx", cols: 7, rows: 11, sheets: ["Sheet
   hoa/thường), kí tự đại diện "Y*" "?es", số 30, địa chỉ ô D2 (ô trống = 0); "" đếm ô trống. Vùng cả cột `B:B` (đến hàng 1000).
   COUNTIFS nhận nhiều cặp (vùng, điều kiện) cùng kích thước. Dùng cho Tin 9 Bài 10a.
 - **SUMIF**: =SUMIF(range, criteria, [sum_range]) — cùng kiểu điều kiện như COUNTIF; bỏ sum_range thì cộng chính các ô của
-  range; sum_range tính từ ô đầu, cùng kích thước range (như Excel). Dùng cho Tin 9 Bài 11a. Hàm mới (IF…) thêm vào FX ở CẢ HAI file.
+  range; sum_range tính từ ô đầu, cùng kích thước range (như Excel). Dùng cho Tin 9 Bài 11a. Hàm mới thêm vào FX ở CẢ HAI file.
+- **IF / IF lồng nhau**: =IF(logical_test, [value_if_true], [value_if_false]) — so sánh `= <> > < >= <=` (chữ không phân biệt
+  hoa/thường), số phần trăm `50%` (= 0.5; ô gõ 5% cũng là 0.05), nối chữ `&`, TRUE/FALSE; chỉ tính nhánh được chọn. Kết quả chữ
+  căn trái như Excel. Dùng cho Tin 9 Bài 12a. **Chấm IF**: đặt `tests: [{ N3: 0.5 }, { N3: 0.5001 }, …]` trong spec lưới — bộ dữ liệu
+  thử do GV đặt (ghi đè ô, kể cả ô công thức) để đặt đúng các mốc: sai `>`/`>=`, sai mốc, đảo thứ tự IF lồng nhau bị tính sai.
+  Kết quả chữ so khớp không phân biệt hoa/thường; trả về "5%" (chữ) khác 5% (số). Mỗi ô có mốc khác nhau (O3 50%, O4 30%) → mỗi ô một câu.
 - **Câu gõ công thức** (`mode: "formula"`): `{ type: "sheet", mode: "formula", target: "E4" | "E4:E6", answer: "=C4*D4" }`
   — HS chỉ nhập được vào ô `target` (tô vàng); `answer` là công thức của ô đầu, các ô sau tự suy ra khi sao chép.
   Chấm bằng cách thử đổi các ô số (FX.judge, dùng chung app.js và core.js): công thức tương đương (=D4*C4,
@@ -347,7 +355,24 @@ HS bấm ▶ Bước tiếp: thẻ đang xét sáng lên, bảng lần lặp t�
   allowDir? (nổi bọt: từ cuối dãy — SGK / từ đầu dãy — mở rộng), allowOrder? (tăng/giảm dần), practice? }` — mỗi bước = một lần
   so sánh, tô cặp đang so sánh, thẻ đổi chỗ, ghi dãy sau mỗi bước theo vòng lặp; đủ n − 1 vòng lặp như SGK.
   `practice: true`: HS tự bấm “Hoán đổi / Không hoán đổi”, máy báo sai ngay và đếm lỗi (không tính điểm).
-- **Emoji**: KHÔNG dùng emoji dải U+1FA70–U+1FAFF (🫧 🪜 🪣 🫖…) — Windows 10 hiện thành ô vuông. Thay bằng emoji cũ tương đương, ví dụ 🪜 → 🔢 (các bước), 🪣 → 🎨, 🫖 → ☕.
+- **Máy IF trực quan**: `ifmachine: { title, intro, label, cell: "N3", outCell: "O3", pct?: true, min, max, step, value, unit?,
+  presets?: [{ label, value }], product?: { label, unit } (kết quả % × giá trị: tiền thưởng), modes: [{ name, formula,
+  levels: [{ op?: ">", gt: 80, result: "Nhiều quá" }, …], otherwise: "Ít hơn" }] }` — HS kéo thanh/gõ số, sơ đồ nhánh Đúng/Sai
+  (hình thoi) sáng lên từ trên xuống, hiện kết quả. Không chấm. Dùng cho bài hàm IF, cấu trúc rẽ nhánh.
+- **Ghép sơ đồ IF (kéo thả)**: `dragdrop` thêm `layout: "ifchain"` — `groups` theo thứ tự [điều kiện 1, trả về khi đúng, điều kiện 2,
+  trả về khi đúng, …, trả về khi mọi điều kiện sai] → vùng thả xếp thành sơ đồ khối (Đúng ➜ sang phải, Sai ⬇ xuống).
+- **Mê cung robot**: `maze: { mode: "sim" | "race", title, intro?, mazes: [{ name, map: ["#####", "S...E", …], dir? }], rule?: "right" | "left",
+  allowRule?, teams? }` — map: `#` tường · `.` lối đi · `S` lối vào · `E` lối ra (mọi hàng dài bằng nhau). "sim": robot chạy thuật toán
+  bám tường (SGK Tin 9 Bài 14, Hình 14.3a) từng lần lặp, sáng dòng lệnh, báo quy tắc a/b/c, vệt đường đi, đếm lần lặp/bước tiến,
+  phát hiện lặp mãi (vị trí + hướng lặp lại). "race": 2 đội bấm ← ↑ → ↓ thi thoát mê cung. Hành lang rộng 1 ô (vùng trống rộng
+  làm robot quay vòng). Kiểm tra số liệu mê cung bằng script mô phỏng trước khi đưa vào câu hỏi.
+- **Máy chạy thuật toán liệt kê các bước** (có nhập, rẽ nhánh, lặp): `algo: { title, intro?, vars?: ["max","x"], samples?: [{ label, values: { x: [5, 12, 0], a: [[3, 1, 2]] } }],
+  lines: [{ id?, n: "4.1.", text, indent?, op, next?: "id" }] }` — op: `start` · `end` · `label` (chỉ hiện) · `input` { v, prompt?, int?, min?, max?,
+  list? (nhập dãy), len? (biến lưu số phần tử) } · `set` { sets: [["max", "x"], ["a[j]", "…"]] } · `if` { c: "x > max", yes?, no? } (thiếu = dòng kế) ·
+  `output` { e: "max" } | { out: "{N} là số nguyên tố" } · `swap` { swap: ["a[j]", "a[j-1]"] } · `goto` { next }. Biểu thức: + - * / mod, = <> < > <= >= ≤ ≥,
+  and/or, dãy a[j] đánh số từ 1. Máy hỏi giá trị khi gặp bước Nhập, sáng bước đang chạy, bảng biến, nhật kí. Dùng cho Tin 9 Bài 15, 16…
+  Luôn chạy thử bằng script mô phỏng các bộ dữ liệu mẫu trước khi viết câu hỏi dựa trên kết quả.
+- **Emoji**: KHÔNG dùng emoji dải U+1FA70–U+1FAFF (🫧 🪜 🪣 🫖 🪆…) — Windows 10 hiện thành ô vuông. Thay bằng emoji cũ tương đương, ví dụ 🪜 → 🔢 (các bước), 🪣 → 🎨, 🫖 → ☕.
 - **Trò chơi tìm số thẻ úp**: `guess: { title, intro, cards: [2, 3, 5, …] (tăng dần), target? }` — HS (bạn B) chọn thẻ, app
   (bạn A) trả lời “bằng nhau / lớn hơn / bé hơn”, nhắc khi thẻ chọn chưa phải thẻ ở giữa vùng còn lại.
 

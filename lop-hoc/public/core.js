@@ -91,7 +91,8 @@
   }
   const addrMatch = (answer, choice) => choice != null && choice !== "" && (Array.isArray(answer) ? answer : [answer]).some((x) => normAddr(x) === normAddr(choice));
   // ===== FORMULA LIB — CÔNG THỨC BẢNG TÍNH (giữ GIỐNG HỆT trong app.js và lop-hoc/public/core.js) =====
-  //  FX.evalCell(data, addr) -> số | "" | chữ | "#LỖI!"…   data = { "C4": "25", "E4": "=C4*D4" }
+  //  Hỗ trợ: + - * / ^ %, & (nối chữ), so sánh = <> > < >= <=, TRUE/FALSE, SUM/AVERAGE/MAX/MIN/COUNT/COUNTIF/COUNTIFS/SUMIF/IF (lồng nhau)
+  //  FX.evalCell(data, addr) -> số | "" | chữ | TRUE/FALSE | "#LỖI!"…   data = { "C4": "25", "E4": "=C4*D4" }
   //  FX.shift("=C4*D4", 1, 0) -> "=C5*D5" (sao chép công thức: giữ vị trí tương đối)
   //  FX.judge(answer, choice, spec, target) -> { ok, fraction } — chấm câu "gõ công thức" bằng cách thử đổi dữ liệu
   const FX = (function () {
@@ -109,7 +110,9 @@
         if ((m = /^\$?([A-Za-z]{1,3}):\$?([A-Za-z]{1,3})(?![\dA-Za-z(])/.exec(rest))) { out.push({ t: "rng", c1: colN(m[1]), r1: 1, c2: colN(m[2]), r2: 1000 }); i += m[0].length; continue; } // cả cột B:B
         if ((m = /^\$?([A-Za-z]{1,3})\$?(\d+)(?::\$?([A-Za-z]{1,3})\$?(\d+))?/.exec(rest))) { out.push(m[3] ? { t: "rng", c1: colN(m[1]), r1: +m[2], c2: colN(m[3]), r2: +m[4] } : { t: "ref", c: colN(m[1]), r: +m[2] }); i += m[0].length; continue; }
         if ((m = /^(\d+(?:\.\d+)?|\.\d+)/.exec(rest))) { out.push({ t: "num", v: parseFloat(m[1]) }); i += m[1].length; continue; }
-        if ("+-*/^(),;".includes(s[i])) { out.push({ t: s[i] === ";" ? "," : s[i] }); i++; continue; }
+        if ((m = /^(TRUE|FALSE)(?![A-Za-z\d(])/i.exec(rest))) { out.push({ t: "bool", v: m[1].toUpperCase() === "TRUE" }); i += m[0].length; continue; }
+        if ((m = /^(<=|>=|<>|<|>|=)/.exec(rest))) { out.push({ t: "cmp", v: m[1] }); i += m[1].length; continue; } // so sánh: N3>50%
+        if ("+-*/^(),;%&".includes(s[i])) { out.push({ t: s[i] === ";" ? "," : s[i] }); i++; continue; }
         ERR("#LỖI!");
       }
       return out;
@@ -121,17 +124,21 @@
       function term() { let a = power(); while (peek() === "*" || peek() === "/") { const op = tk[p++].t; a = { k: "bin", op, a, b: power() }; } return a; }
       function power() { let a = unary(); while (peek() === "^") { p++; a = { k: "bin", op: "^", a, b: unary() }; } return a; }
       function unary() { if (peek() === "-") { p++; return { k: "neg", a: unary() }; } if (peek() === "+") { p++; return unary(); } return prim(); }
-      function prim() {
+      function cmp() { let a = cat(); while (peek() === "cmp") { const op = tk[p++].v; a = { k: "cmp", op, a, b: cat() }; } return a; }
+      function cat() { let a = expr(); while (peek() === "&") { p++; a = { k: "cat", a, b: expr() }; } return a; }
+      function prim() { let a = atom(); while (peek() === "%") { p++; a = { k: "pct", a }; } return a; } // 50% = 0.5
+      function atom() {
         const x = tk[p];
         if (!x) ERR("#LỖI!");
         if (x.t === "num") { p++; return { k: "num", v: x.v }; }
         if (x.t === "str") { p++; return { k: "str", v: x.v }; }
         if (x.t === "ref") { p++; return { k: "ref", c: x.c, r: x.r }; }
-        if (x.t === "(") { p++; const e = expr(); eat(")"); return e; }
-        if (x.t === "fn") { p++; eat("("); const args = []; if (peek() !== ")") { do { if (peek() === "rng") { const r = tk[p++]; args.push({ k: "rng", ...r }); } else args.push(expr()); } while (peek() === "," && ++p); } eat(")"); return { k: "fn", name: x.v, args }; }
+        if (x.t === "bool") { p++; return { k: "bool", v: x.v }; }
+        if (x.t === "(") { p++; const e = cmp(); eat(")"); return e; }
+        if (x.t === "fn") { p++; eat("("); const args = []; if (peek() !== ")") { do { if (peek() === "rng") { const r = tk[p++]; args.push({ k: "rng", ...r }); } else args.push(cmp()); } while (peek() === "," && ++p); } eat(")"); return { k: "fn", name: x.v, args }; }
         ERR("#LỖI!");
       }
-      const e = expr(); if (p !== tk.length) ERR("#LỖI!"); return e;
+      const e = cmp(); if (p !== tk.length) ERR("#LỖI!"); return e;
     }
     // Điều kiện của COUNTIF: ">100", "Yes", "Y*" (* ? là kí tự đại diện), 30, ô D2… — chữ không phân biệt hoa/thường
     function critFn(cr) {
@@ -162,7 +169,7 @@
         if (x.k === "str") cr = x.v;
         else if (x.k === "ref") { cr = get(x.c, x.r); if (cr === "" || cr == null) cr = 0; else if (typeof cr === "string" && cr.charAt(0) === "#") ERR(cr); }
         else if (x.k === "rng") ERR("#VALUE!");
-        else cr = evalAst(x, get);
+        else cr = evalV(x, get);
         tests.push({ c1: Math.min(R.c1, R.c2), r1: Math.min(R.r1, R.r2), f: critFn(cr) });
       }
       let cnt = 0;
@@ -177,7 +184,7 @@
       if (x.k === "str") cr = x.v;
       else if (x.k === "ref") { cr = get(x.c, x.r); if (cr === "" || cr == null) cr = 0; else if (typeof cr === "string" && cr.charAt(0) === "#") ERR(cr); }
       else if (x.k === "rng") ERR("#VALUE!");
-      else cr = evalAst(x, get);
+      else cr = evalV(x, get);
       const f = critFn(cr); let sum = 0;
       for (let dr = 0; dr <= R.r2 - R.r1; dr++) for (let dc = 0; dc <= R.c2 - R.c1; dc++) {
         if (!f(get(R.c1 + dc, R.r1 + dr))) continue;
@@ -186,18 +193,48 @@
       }
       return sum;
     }
-    function evalAst(n, get) {
-      if (n.k === "num") return n.v;
-      if (n.k === "str") ERR("#VALUE!"); // chữ trong phép toán
-      if (n.k === "ref") { const v = get(n.c, n.r); if (v === "" || v == null) return 0; if (typeof v === "number") return v; if (String(v).charAt(0) === "#") ERR(v); ERR("#VALUE!"); }
-      if (n.k === "neg") return -evalAst(n.a, get);
+    const PCT = /^[-+]?(\d+(\.\d*)?|\.\d+)%$/;
+    // Giá trị -> số trong phép toán (chữ số "5", "5%" đổi được như Excel; chữ khác -> #VALUE!)
+    function toNum(v) {
+      if (typeof v === "number") return v; if (typeof v === "boolean") return v ? 1 : 0; if (v === "" || v == null) return 0;
+      const s = String(v).trim(); if (s.charAt(0) === "#") ERR(s);
+      if (isNum(s)) return parseFloat(s); if (PCT.test(s)) return parseFloat(s) / 100; ERR("#VALUE!");
+    }
+    // So sánh như Excel: số < chữ < TRUE/FALSE; chữ không phân biệt hoa/thường; ô trống = 0 hoặc ""
+    function cmpV(a, b, op) {
+      if (a === "" && typeof b === "number") a = 0; if (b === "" && typeof a === "number") b = 0;
+      if (a === "" && typeof b === "boolean") a = false; if (b === "" && typeof a === "boolean") b = false;
+      const rk = (v) => (typeof v === "number" ? 0 : typeof v === "string" ? 1 : 2);
+      let c = rk(a) - rk(b);
+      if (!c) c = typeof a === "number" ? (Math.abs(a - b) <= 1e-12 * Math.max(1, Math.abs(a), Math.abs(b)) ? 0 : a - b)
+        : typeof a === "string" ? String(a).normalize("NFC").localeCompare(String(b).normalize("NFC"), "vi", { sensitivity: "accent" }) : (a ? 1 : 0) - (b ? 1 : 0);
+      return op === "=" ? c === 0 : op === "<>" ? c !== 0 : op === ">" ? c > 0 : op === "<" ? c < 0 : op === ">=" ? c >= 0 : c <= 0;
+    }
+    const txtV = (v) => (typeof v === "boolean" ? (v ? "TRUE" : "FALSE") : typeof v === "number" ? String(Math.round(v * 1e9) / 1e9) : String(v == null ? "" : v));
+    const valOf = (n, get) => { const v = evalV(n, get); return v === "" && n.k === "ref" ? 0 : v; }; // =A1 (ô trống) -> 0
+    function evalV(n, get) {
+      if (n.k === "num" || n.k === "str" || n.k === "bool") return n.v;
+      if (n.k === "ref") { const v = get(n.c, n.r); if (typeof v === "string" && v.charAt(0) === "#") ERR(v); return v == null ? "" : v; }
+      if (n.k === "rng") ERR("#VALUE!");
+      if (n.k === "neg") return -toNum(evalV(n.a, get));
+      if (n.k === "pct") return toNum(evalV(n.a, get)) / 100;
+      if (n.k === "cat") return txtV(valOf(n.a, get)) + txtV(valOf(n.b, get));
+      if (n.k === "cmp") return cmpV(evalV(n.a, get), evalV(n.b, get), n.op);
       if (n.k === "bin") {
-        const a = evalAst(n.a, get), b = evalAst(n.b, get);
+        const a = toNum(evalV(n.a, get)), b = toNum(evalV(n.b, get));
         if (n.op === "+") return a + b; if (n.op === "-") return a - b; if (n.op === "*") return a * b;
         if (n.op === "/") { if (b === 0) ERR("#DIV/0!"); return a / b; }
         return Math.pow(a, b);
       }
       if (n.k === "fn") {
+        // =IF(logical_test, [value_if_true], [value_if_false]) — chỉ tính nhánh được chọn (IF lồng nhau)
+        if (n.name === "IF") {
+          const a = n.args; if (a.length < 2 || a.length > 3) ERR("#LỖI!");
+          const t = evalV(a[0], get); let ok;
+          if (typeof t === "boolean") ok = t; else if (typeof t === "number") ok = t !== 0; else if (t === "") ok = false;
+          else { const u = String(t).toUpperCase(); if (u !== "TRUE" && u !== "FALSE") ERR("#VALUE!"); ok = u === "TRUE"; }
+          return ok ? valOf(a[1], get) : a[2] ? valOf(a[2], get) : false;
+        }
         if (n.name === "COUNTIF" || n.name === "COUNTIFS") return countIf(n, get);
         if (n.name === "SUMIF") return sumIf(n, get);
         const nums = [];
@@ -215,17 +252,18 @@
       }
       ERR("#LỖI!");
     }
+    const evalAst = (n, get) => toNum(evalV(n, get)); // giá trị dùng trong phép toán
     // Giá trị hiển thị của 1 ô (tính công thức, phát hiện tham chiếu vòng)
     function evalCell(data, addr, seen) {
       const raw = data[addr]; if (raw == null || raw === "") return "";
       const s = String(raw);
-      if (s.charAt(0) !== "=") return isNum(s) ? parseFloat(s) : s;
+      if (s.charAt(0) !== "=") return isNum(s) ? parseFloat(s) : PCT.test(s.trim()) ? parseFloat(s) / 100 : s; // 5% -> 0.05 như Excel
       seen = seen || {}; if (seen[addr]) return "#VÒNG!";
       seen[addr] = 1;
-      try { const v = evalAst(parse(s.slice(1)), (c, r) => evalCell(data, colS(c) + r, seen)); delete seen[addr]; return isFinite(v) ? v : "#NUM!"; }
+      try { const ast = parse(s.slice(1)); let v = evalV(ast, (c, r) => evalCell(data, colS(c) + r, seen)); if (v === "" && ast.k === "ref") v = 0; delete seen[addr]; return typeof v === "number" && !isFinite(v) ? "#NUM!" : v; }
       catch (e) { delete seen[addr]; if (e && e.fxErr) return e.fxErr; throw e; }
     }
-    const fmt = (v) => (typeof v === "number" ? String(Math.round(v * 1e9) / 1e9) : v);
+    const fmt = (v) => (typeof v === "number" || typeof v === "boolean" ? txtV(v) : v);
     // Sao chép công thức: dời các địa chỉ theo (dr hàng, dc cột); địa chỉ có $ giữ nguyên
     function shift(src, dr, dc) {
       let bad = false;
@@ -262,7 +300,12 @@
           vcells.push(k); if (cells[k] != null && pool.indexOf(cells[k]) < 0) pool.push(cells[k]);
         }
       });
+      // spec.tests: bộ dữ liệu thử do GV đặt, VD ngưỡng của IF [{ B2: 10000, B3: 10001 }, …] -> sai điều kiện (> hay >=, sai mốc) sẽ lộ ra
+      [].concat((spec && spec.tests) || []).forEach((t) => { const d = Object.assign({}, cells); Object.entries(t || {}).forEach(([k, v]) => { d[String(k).toUpperCase()] = String(v); }); trials.push(d); });
       if (pool.length) [1, 2, 3].forEach(() => { const d = Object.assign({}, cells); vcells.forEach((k) => { d[k] = pool[rnd() % pool.length]; }); trials.push(d); });
+      const nt = (v) => String(v).normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
+      const sameV = (a, b) => (typeof a === "number" && typeof b === "number" ? Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(b))
+        : typeof a === "string" && typeof b === "string" ? a.charAt(0) !== "#" && b.charAt(0) !== "#" && nt(a) === nt(b) : typeof a === "boolean" && a === b); // IF trả về chữ: so khớp chữ
       let good = 0;
       list.forEach((x, i) => {
         const f = String(got[i] || "").trim(), ref = shift(answer, x.dr, x.dc);
@@ -273,7 +316,7 @@
           const ds = Object.assign({}, d), dr = Object.assign({}, d);
           list.forEach((y, j) => { ds[y.ad] = String(got[j] || "").trim(); dr[y.ad] = shift(answer, y.dr, y.dc); });
           const a = evalCell(ds, x.ad), b = evalCell(dr, x.ad);
-          return typeof a === "number" && typeof b === "number" && Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(b));
+          return sameV(a, b);
         });
         if (same) good++;
       });
