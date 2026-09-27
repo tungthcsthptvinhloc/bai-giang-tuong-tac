@@ -78,6 +78,8 @@
   // Thống kê địa chỉ HS chọn (câu bảng tính) -> [{label, n, right}] — vài lựa chọn nhiều nhất + "Khác"; luôn có dòng đáp án đúng
   // Câu trả lời ngắn (type "short"): bỏ dấu, hoa/thường, khoảng trắng — PHẢI khớp normShort trong app.js
   const normShort = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[đĐ]/g, "D").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  // Bàn tính ảo (type "abacus"): so theo giá trị số — PHẢI khớp abDigits trong app.js
+  const abDigits = (s) => String(s == null ? "" : s).replace(/\D/g, "").replace(/^0+/, "") || "0";
   function choiceDist(choices, answer, top, rightFn, normFn) {
     const nf = normFn || normAddr;
     const cnt = new Map(); (choices || []).forEach((c) => { const k = nf(c); if (k) cnt.set(k, (cnt.get(k) || 0) + 1); });
@@ -330,6 +332,7 @@
   function judgeQuestion(q, choice) {
     if (choice == null) return false;
     if (q.type === "sheet") return q.mode === "formula" ? FX.judge(q.answer, choice, q.sheet || {}, q.target).ok : addrMatch(q.answer, choice);
+    if (q.type === "abacus") return choice !== "" && abDigits(choice) === abDigits(q.answer);
     if (q.type === "short") return !!normShort(choice) && (Array.isArray(q.answer) ? q.answer : [q.answer]).some((x) => normShort(x) === normShort(choice));
     if (q.type === "true-false") return choice === q.answer;
     if (q.type === "multiple-select") { const c = Array.isArray(choice) ? choice : Object.values(choice); return JSON.stringify(c.map(Number).sort()) === JSON.stringify([...(q.answer || [])].sort()); }
@@ -596,6 +599,6 @@
   function loadManifest() { return fetch("/lessons/index.json", { cache: "no-store" }).then((r) => r.json()).then((m) => m.lessons || []); }
 
   return { NOT_QUIZ, WHOLE, clamp01, round1, esc, norm, fmt1, pad2, fmtDate, fmtTime, fmtClock, rid, splitKey, keyOf,
-    FX, lessonItems, judgeQuestion, judge, judgeWhole, normAddr, addrMatch, normShort, choiceDist, actState, actControl, followFixups, actClock, answerOf, scoreGroup, groupName, sortedEntries, memberNames, machineList,
+    FX, lessonItems, judgeQuestion, judge, judgeWhole, normAddr, addrMatch, normShort, abDigits, choiceDist, actState, actControl, followFixups, actClock, answerOf, scoreGroup, groupName, sortedEntries, memberNames, machineList,
     parseClassBook, classesSheet, sessionWorkbook, gradeOf, reportWorkbook, loadLesson, loadManifest };
 });

@@ -23,6 +23,12 @@
   // ======================== ĐĂNG NHẬP & KẾT NỐI ========================
   $("#modeBadge").textContent = DB.mode === "firebase" ? "🌐 Online" : "🖧 Offline (LAN)";
   DB.onConn((on) => $("#conn").classList.toggle("off", !on));
+  // Hỗ trợ & Góp ý (icon trên thanh tiêu đề) — hộp thoại thông tin liên hệ
+  const helpDlg = $("#helpDlg"), closeHelp = () => { helpDlg.hidden = true; };
+  $("#btnHelp").onclick = () => { helpDlg.hidden = false; $("#helpClose").focus(); };
+  $("#helpClose").onclick = closeHelp;
+  helpDlg.onclick = (e) => { if (e.target === helpDlg) closeHelp(); };
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !helpDlg.hidden) { closeHelp(); e.stopImmediatePropagation(); } }, true);
   DB.ready.then(() => DB.teacher.status()).then((s) => (s.ok ? start(s.info) : showLogin(s))).catch((e) => { document.body.insertAdjacentHTML("beforeend", `<p class="card" style="margin:20px">⚠️ ${esc(e.message || e)}</p>`); });
   function showLogin(s) {
     $("#login").hidden = false; $("#layout").hidden = true;
@@ -274,7 +280,7 @@ Kết quả hoạt động này của tất cả các nhóm sẽ bị xóa; máy
       const recs = gs.map((g) => ({ g, r: C.answerOf(sess, g.id, it) })), done = recs.filter((x) => x.r);
       const avg = done.length ? done.reduce((t, x) => t + C.judge(it, x.r).fraction, 0) / done.length : 0, cls = !done.length ? "" : avg >= 0.8 ? "good" : avg >= 0.5 ? "mid" : "low";
       let det = "";
-      if (it.q && (it.q.type === "sheet" || it.q.type === "short")) det = C.choiceDist(done.map((x) => x.r.choice), it.q.answer, 5, it.q.mode === "formula" || it.q.type === "short" ? (k) => C.judgeQuestion(it.q, k) : null, it.q.type === "short" ? C.normShort : null).map((d) => optRow(it.q.type === "short" ? "✍️" : "📍", d.label, d.n, gs.length, d.right)).join("");
+      if (it.q && (it.q.type === "sheet" || it.q.type === "short" || it.q.type === "abacus")) det = C.choiceDist(done.map((x) => x.r.choice), it.q.answer, 5, it.q.mode === "formula" || it.q.type === "short" || it.q.type === "abacus" ? (k) => C.judgeQuestion(it.q, k) : null, it.q.type === "short" ? C.normShort : it.q.type === "abacus" ? C.abDigits : null).map((d) => optRow(it.q.type === "short" ? "✍️" : it.q.type === "abacus" ? "🧮" : "📍", d.label, d.n, gs.length, d.right)).join("");
       else if (it.q && it.q.type !== "true-false") { const q = it.q; det = (q.options || []).map((o, k) => optRow(KEYS[k], o, done.filter((x) => { const c = x.r.choice; return Array.isArray(c) ? c.map(Number).includes(k) : c === k; }).length, gs.length, q.type === "multiple-select" ? (q.answer || []).includes(k) : q.answer === k)).join(""); }
       else if (it.q) det = [["Đúng", true], ["Sai", false]].map(([lb, v], k) => optRow(KEYS[k], lb, done.filter((x) => x.r.choice === v).length, gs.length, it.q.answer === v)).join("");
       else { const full = done.filter((x) => C.judge(it, x.r).ok).length; det = optRow("✓", "Đúng hết", full, gs.length, true) + optRow("~", "Có mục sai (tính theo tỉ lệ)", done.length - full, gs.length, false); }

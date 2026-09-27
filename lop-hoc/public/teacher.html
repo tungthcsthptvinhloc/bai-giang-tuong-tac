@@ -16,7 +16,8 @@
   <div class="brand">🏫 Lớp học tương tác <small>Bảng điều khiển giáo viên</small></div>
   <span class="mode" id="modeBadge"></span>
   <div class="sess" id="sessInfo"></div>
-  <button class="btn small ghost" id="btnLogout" hidden>Đăng xuất</button>
+  <button class="top-ico" id="btnHelp" title="Hỗ trợ & Góp ý" aria-label="Hỗ trợ và góp ý"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 14v-3a9 9 0 0 1 18 0v3"/><path d="M21 16a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2z"/><path d="M3 16a2 2 0 0 0 2 2h1v-6H5a2 2 0 0 0-2 2z"/></svg></button>
+  <button class="top-ico" id="btnLogout" title="Đăng xuất" aria-label="Đăng xuất" hidden><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
   <span class="conn off" id="conn" title="Kết nối máy chủ"></span>
 </header>
 
@@ -45,6 +46,21 @@
 </main>
 
 <div class="overlay" id="overlay" hidden></div>
+<div class="dlg-back" id="helpDlg" hidden>
+  <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="dlg-head"><h3 id="helpTitle">🤝 Hỗ trợ &amp; Góp ý</h3></div>
+    <div class="dlg-body">
+      <p class="hint">Cần hỗ trợ khi sử dụng hoặc muốn góp ý cho ứng dụng, thầy/cô vui lòng liên hệ:</p>
+      <div class="sup-card">
+        <div class="sup-name">Hạ Văn Tùng</div>
+        <div class="sup-row"><span class="sup-ico">📍</span>Xã Phú Hữu – Tỉnh An Giang</div>
+        <div class="sup-row"><span class="sup-ico">📞</span><a class="sup-tel" href="tel:0943996415">0943 996 415</a></div>
+        <div class="sup-row"><span class="sup-ico">✉️</span><a class="sup-mail" href="mailto:c3vinhloc-tunghv@angiang.edu.vn?subject=G%C3%B3p%20%C3%BD%20%E2%80%93%20L%E1%BB%9Bp%20h%E1%BB%8Dc%20t%C6%B0%C6%A1ng%20t%C3%A1c">c3vinhloc-tunghv@angiang.edu.vn</a></div>
+      </div>
+    </div>
+    <div class="dlg-foot"><button class="btn" id="helpClose">Đóng</button></div>
+  </div>
+</div>
 <div class="toast" id="toast" hidden></div>
 <input type="file" id="fileIn" accept=".xlsx,.csv,.txt" hidden>
 <script src="/static/teacher.js"></script>

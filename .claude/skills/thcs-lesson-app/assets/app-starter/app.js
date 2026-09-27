@@ -16,7 +16,7 @@
  *    báo mọi lần làm bài (onAttempt), câu trả lời tự luận (onText), chuyển
  *    hoạt động (onNavigate) và KHÓA các câu nhóm đã làm (getAttempt).
  *  - Mở file trực tiếp (không có hooks) thì chạy y như v2.
- *  - window.LessonApp = { go, rerender, resetActivity } cho máy chủ điều khiển.
+ *  - window.LessonApp = { go, rerender, resetActivity, classPause } cho máy chủ điều khiển.
  *
  * TÍNH NĂNG (v4) — THEO NHỊP GIÁO VIÊN (hook actState(aid)):
  *  - "free"     : HS tự làm, báo đúng/sai ngay, chỉ tính lần đầu (như v3).
@@ -82,6 +82,7 @@
     if (choice == null) return false;
     if (q.type === "sheet") return q.mode === "formula" ? FX.judge(q.answer, choice, q.sheet || {}, q.target).ok : addrMatch(q.answer, choice);
     if (q.type === "short") return shortMatch(q.answer, choice);
+    if (q.type === "abacus") return choice !== "" && abDigits(choice) === abDigits(q.answer);
     if (q.type === "true-false") return choice === q.answer;
     if (q.type === "multiple-select") return JSON.stringify([...(choice || [])].map(Number).sort()) === JSON.stringify([...(q.answer || [])].sort());
     return choice === q.answer;
@@ -91,6 +92,7 @@
     const t = st === "locked" ? (done ? "⏰ Hết giờ! Nhóm em đã " + (kind !== "whole" ? "trả lời" : "nộp bài") + " — chờ thầy/cô công bố kết quả." : "⏰ Hết giờ! Nhóm em chưa " + (kind !== "whole" ? "trả lời câu này" : "nộp bài") + " — tính là chưa hoàn thành.")
       : kind === "quiz" ? (done ? "✔ Đã ghi nhận. Có thể đổi đáp án đến khi thầy/cô kết thúc." : "👆 Chọn đáp án. Đúng/sai sẽ được công bố khi thầy/cô kết thúc.")
       : kind === "sheet" ? (done ? "✔ Đã ghi nhận lựa chọn. Có thể chọn lại đến khi thầy/cô kết thúc." : "👆 Thực hiện trên bảng tính. Đúng/sai sẽ được công bố khi thầy/cô kết thúc.")
+      : kind === "abacus" ? (done ? "✔ Đã ghi nhận. Có thể gẩy lại đến khi thầy/cô kết thúc." : "👆 Gẩy hạt trên bàn tính. Đúng/sai sẽ được công bố khi thầy/cô kết thúc.")
       : kind === "short" ? (done ? "✔ Đã ghi nhận câu trả lời. Có thể sửa đến khi thầy/cô kết thúc." : "✍️ Gõ câu trả lời rồi nhấn Enter. Đúng/sai sẽ được công bố khi thầy/cô kết thúc.")
       : (done ? "✔ Đã nộp. Có thể sửa và nộp lại đến khi thầy/cô kết thúc." : "📝 Làm xong toàn bộ rồi bấm Nộp bài. Kết quả công bố khi thầy/cô kết thúc.");
     return el("div", "defer-note " + st, t);
@@ -380,6 +382,7 @@
       <button class="btn ghost" id="btnPrev" title="Quay lại (←)">← Quay lại</button>
       <div class="score">⭐ <span id="score">0</span> <span class="streak" id="streak"></span></div>
       <div class="spacer"></div>
+      <button class="icon-btn" id="btnPauseClass" title="Tạm dừng cả lớp — che màn hình tất cả máy HS" hidden>⏸️</button>
       <button class="icon-btn" id="btnSound" title="Bật/tắt âm thanh">🔊</button>
       <button class="icon-btn" id="btnTimer" title="Đồng hồ đếm giờ">⏱️</button>
       <button class="icon-btn" id="btnPen" title="Bút vẽ (P) — bấm lại để thoát">✏️</button>
@@ -563,6 +566,8 @@
     if (a.maze) cardEl.appendChild(mazeBox(a));
     if (a.algo) cardEl.appendChild(algoBox(a));
     if (a.scratch) cardEl.appendChild(scratchBox(a));
+    if (a.abacus) cardEl.appendChild(abacusBox(a));
+    if (a.vonneumann) cardEl.appendChild(vnBox(a));
   }
   function appendRemember(items, cardOrView) {
     // "Em cần nhớ" — ẩn, bấm mới hiện
@@ -616,6 +621,7 @@
     card._key = qKey(a, a._qi); card._a = a;
     if (q.type === "sheet") return sheetQuestionFree(card, a, q, answered);
     if (q.type === "short") return shortQuestionFree(card, a, q, answered);
+    if (q.type === "abacus") return abacusQuestionFree(card, a, q, answered);
     if (q.type === "true-false") {
       const opts = el("div", "options");
       [["Đúng", true], ["Sai", false]].forEach(([label, val], i) => {
@@ -730,6 +736,7 @@
     if (q.image) { const im = el("div"); im.innerHTML = imageHTML(q.image, q.imageCaption); card.appendChild(im); }
     if (q.type === "sheet") return sheetQuestionDeferred(card, a, qs, q, key, rec, st);
     if (q.type === "short") return shortQuestionDeferred(card, a, qs, q, key, rec, st);
+    if (q.type === "abacus") return abacusQuestionDeferred(card, a, qs, q, key, rec, st);
     const opts = el("div", "options");
     const list = q.type === "true-false" ? [["Đúng", true], ["Sai", false]] : (q.options || []).map((o, i) => [optLabel(q, i), i]);
     list.forEach(([label, val], i) => { const b = el("button", "opt" + (q.optionImages ? " opt-img" : ""), `<span class="key">${KEYS[i]}</span> ${label}`); b.dataset.k = i; if (q.type === "true-false") b.dataset.v = val ? "1" : "0"; opts.appendChild(b); });
@@ -903,8 +910,15 @@
   }
   // Vùng thả của phân loại. a.layout "ifchain": groups = [điều kiện 1, kết quả khi đúng, điều kiện 2, kết quả khi đúng, …, kết quả khi mọi điều kiện sai]
   //  -> xếp thành sơ đồ khối IF / IF lồng nhau (Đúng ➜ sang phải, Sai ⬇ xuống điều kiện tiếp theo)
+  // a.layout "vonneumann": 4 nhóm [Thiết bị vào, Bộ xử lí, Bộ nhớ, Thiết bị ra] xếp như sơ đồ cấu trúc máy tính · "cols": các nhóm thành hàng cột
   function ddZones(a, make) {
     const groups = a.groups || [];
+    if (a.layout === "vonneumann") { // groups: [Thiết bị vào, Bộ xử lí, Bộ nhớ, Thiết bị ra] -> xếp như Hình 1.3 (Tin 8 Bài 1)
+      const w = el("div", "vn-sim vn-dd"), core = el("div", "vn-core");
+      core.append(make(groups[1], 1), el("div", "vn-bus", "<span>⬇</span><span>⬆</span>"), make(groups[2], 2));
+      w.append(make(groups[0], 0), el("div", "vn-arr", "➜"), core, el("div", "vn-arr", "➜"), make(groups[3], 3)); return w;
+    }
+    if (a.layout === "cols") { const w = el("div", "dd-cols"); groups.forEach((g, gi) => w.appendChild(make(g, gi))); return w; } // nhiều nhóm xếp thành hàng cột (bảng)
     if (a.layout !== "ifchain") { const w = el("div", "two-col"); groups.forEach((g, gi) => w.appendChild(make(g, gi))); return w; }
     const w = el("div", "ifc"), n = groups.length;
     for (let gi = 0; gi + 1 < n; gi += 2) {
@@ -2391,6 +2405,231 @@
     return box;
   }
 
+  // ---- BÀN TÍNH ẢO (Tin 8 Bài 1, Hình 1.1) — mỗi cột 2 hạt trên (mỗi hạt = 5) + 5 hạt dưới (mỗi hạt = 1); chỉ hạt gạt sát thanh ngang mới được tính ----
+  //  activity.abacus: { title?, intro?, cols: 10, value?: "6302715408", presets?: [{ label, value }], showDigits?: true } — bàn tính thử tự do (không chấm)
+  //  Câu hỏi { type: "abacus", question, answer: "1642", cols?: 4, mode?: "set" (HS gẩy hạt) | "read" (bàn tính hiện sẵn số, HS gõ số), showDigits? (hiện số dưới mỗi cột) }
+  //  Chấm theo GIÁ TRỊ trên bàn tính (mỗi cột = 5 × hạt trên + hạt dưới) — abDigits PHẢI khớp core.js.
+  const abDigits = (s) => String(s == null ? "" : s).replace(/\D/g, "").replace(/^0+/, "") || "0";
+  const abFmt = (s) => abDigits(s).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  function mountAbacus(cols, opt) {
+    opt = opt || {}; cols = Math.max(1, Math.min(13, cols || 10));
+    const U = new Array(cols).fill(0), D = new Array(cols).fill(0);
+    const CW = 64, BH = 22, BW = 50, PAD = 16, TOP = BH * 3.2, BAR = 12, BOT = BH * 6.4;
+    const W = cols * CW + 2 * PAD, yBar = PAD + TOP, yBot = yBar + BAR + BOT, H = yBot + PAD + (opt.showDigits ? 34 : 0);
+    const NS = "http://www.w3.org/2000/svg", mk = (t, at) => { const e = document.createElementNS(NS, t); for (const k in at) e.setAttribute(k, at[k]); return e; };
+    const wrap = el("div", "ab-wrap"), svg = mk("svg", { viewBox: `0 0 ${W} ${H}`, class: "ab-svg" });
+    wrap.style.maxWidth = Math.max(320, cols * 80) + "px"; // ít cột thì bàn tính nhỏ lại, không tràn màn chiếu
+    svg.appendChild(mk("rect", { x: 3, y: 3, width: W - 6, height: yBot + PAD - 6, rx: 12, class: "ab-frame" }));
+    svg.appendChild(mk("rect", { x: PAD - 4, y: PAD - 4, width: W - 2 * PAD + 8, height: yBot - PAD + 8, rx: 6, class: "ab-in" }));
+    const cx = (c) => PAD + c * CW + CW / 2, beads = [], digits = [];
+    for (let c = 0; c < cols; c++) svg.appendChild(mk("line", { x1: cx(c), x2: cx(c), y1: PAD - 4, y2: yBot + 4, class: "ab-rod" }));
+    svg.appendChild(mk("rect", { x: PAD - 4, y: yBar, width: W - 2 * PAD + 8, height: BAR, class: "ab-bar" }));
+    for (let c = 0; c < cols; c++) {
+      [["u", 2], ["d", 5]].forEach(([deck, n]) => {
+        for (let j = 0; j < n; j++) {
+          const b = mk("ellipse", { cx: 0, cy: 0, rx: BW / 2, ry: BH / 2 - 1.5, class: "ab-bead ab-" + deck });
+          b.onclick = () => { if (locked) return; const A = deck === "u" ? U : D; A[c] = j < A[c] ? j : j + 1; paint(); if (api.onChange) api.onChange(); };
+          svg.appendChild(b); beads.push({ b, c, j, deck });
+        }
+      });
+      if (opt.showDigits) { const t = mk("text", { x: cx(c), y: yBot + PAD + 24, class: "ab-dig" }); svg.appendChild(t); digits.push(t); }
+    }
+    let locked = false;
+    function paint() {
+      beads.forEach(({ b, c, j, deck }) => {
+        const on = j < (deck === "u" ? U : D)[c];
+        const y = deck === "u" ? (on ? yBar - (j + 0.5) * BH : PAD + (1 - j + 0.5) * BH) : on ? yBar + BAR + (j + 0.5) * BH : yBot - (5 - j - 0.5) * BH;
+        b.style.transform = `translate(${cx(c)}px,${y}px)`; b.classList.toggle("on", on);
+      });
+      digits.forEach((t, c) => { const v = 5 * U[c] + D[c]; t.textContent = v; t.classList.toggle("big", v > 9); });
+    }
+    const api = {
+      el: wrap, onChange: null,
+      value() { let s = 0; for (let c = 0; c < cols; c++) s = s * 10 + 5 * U[c] + D[c]; return String(s); },
+      set(v) { const d = abDigits(v).padStart(cols, "0").slice(-cols); for (let c = 0; c < cols; c++) { U[c] = +d[c] >= 5 ? 1 : 0; D[c] = +d[c] % 5; } paint(); },
+      lock() { locked = true; wrap.classList.add("locked"); },
+    };
+    wrap.appendChild(svg);
+    wrap.appendChild(el("div", "ab-legend", '<span class="ab-k ab-ku"></span> hạt trên = 5 · <span class="ab-k ab-kd"></span> hạt dưới = 1 · chỉ tính hạt gạt sát thanh ngang (màu đậm) · bấm vào hạt để gẩy'));
+    paint();
+    return api;
+  }
+  function abacusBox(a) {
+    const sp = a.abacus, box = el("div", "sr-box ab-box");
+    box.appendChild(el("h3", "sr-title", "🧮 " + esc(sp.title || "Bàn tính ảo")));
+    if (sp.intro) box.appendChild(el("p", "subtitle", esc(sp.intro)));
+    const ab = mountAbacus(sp.cols || 10, { showDigits: sp.showDigits !== false }), show = el("div", "ab-val");
+    const upd = () => { show.innerHTML = "Số trên bàn tính: <b>" + abFmt(ab.value()) + "</b>"; };
+    ab.onChange = upd;
+    const top = el("div", "sr-top"), clr = el("button", "btn ghost", "🔄 Gạt hết về 0");
+    clr.onclick = () => { ab.set("0"); upd(); }; top.appendChild(clr);
+    (sp.presets || []).forEach((p) => { const b = el("button", "btn ghost", "📋 " + esc(p.label || abFmt(p.value))); b.onclick = () => { ab.set(p.value); upd(); }; top.appendChild(b); });
+    if (sp.value != null) ab.set(sp.value);
+    box.append(top, ab.el, show); upd();
+    return box;
+  }
+  function abacusParts(card, q) {
+    const read = q.mode === "read", ab = mountAbacus(q.cols || Math.max(4, abDigits(q.answer).length), { showDigits: !!q.showDigits && !read });
+    if (read) { ab.set(q.answer); ab.lock(); }
+    card.appendChild(ab.el);
+    let input = null, row = null;
+    if (read) { row = el("div", "xs-answer short-answer", "<label>✍️ Số:</label>"); input = el("input"); input.inputMode = "numeric"; input.placeholder = "Gõ số bàn tính đang biểu diễn…"; input.autocomplete = "off"; row.appendChild(input); card.appendChild(row); }
+    return {
+      ab, input,
+      choice: () => (read ? (/\d/.test(input.value) ? abDigits(input.value) : "") : ab.value()),
+      set: (ch) => { if (ch == null) return; if (read) input.value = ch; else ab.set(ch); },
+      result(ch) {
+        ab.lock(); if (input) input.disabled = true;
+        const ok = ch != null && ch !== "" && abDigits(ch) === abDigits(q.answer);
+        ab.el.classList.add(ok ? "ab-ok" : "ab-no"); if (input) input.classList.add(ok ? "ok" : "no");
+        if (!ok) {
+          const t = el("div", "ab-ans", `📖 Đáp án: <b>${abFmt(q.answer)}</b> `);
+          if (!read) { const b = el("button", "btn ghost", "👀 Xem cách gẩy đúng"); b.onclick = () => { ab.set(q.answer); b.remove(); }; t.appendChild(b); }
+          card.appendChild(t);
+        }
+        return ok;
+      },
+    };
+  }
+  function abacusQuestionFree(card, a, q, answered) {
+    const P = abacusParts(card, q), btn = el("button", "btn", "✅ Kiểm tra");
+    if (P.input) { btn.disabled = true; P.input.oninput = () => { btn.disabled = answered.done || !P.choice(); }; P.input.onkeydown = (e) => { if (e.key === "Enter" && !btn.disabled) btn.click(); }; }
+    btn.onclick = () => { if (answered.done) return; const ch = P.choice(); if (!ch) return; answered.done = true; btn.disabled = true; afterAnswer(P.result(ch), q, card, ch); };
+    card.appendChild(wrapEl(btn));
+    if (q.hint) card.appendChild(revealBox("💡 Gợi ý", () => el("div", "hint-box", "💡 " + esc(q.hint))));
+    card._answered = answered; card._q = q;
+    const done = ask("getAttempt", card._key);
+    if (done) { answered.done = true; btn.disabled = true; P.set(done.choice); answerFeedback(P.result(done.choice), q, card, true); }
+    else if (state.showAnswers) card.appendChild(el("div", "xs-expect", "📖 Đáp án: " + abFmt(q.answer)));
+  }
+  function abacusQuestionDeferred(card, a, qs, q, key, rec, st) {
+    const P = abacusParts(card, q), kind = q.mode === "read" ? "short" : "abacus";
+    if (st === "revealed") {
+      if (rec && rec.choice != null) { P.set(rec.choice); answerFeedback(P.result(rec.choice), q, card, true); }
+      else { P.result(""); const fb = el("div", "feedback no"); fb.innerHTML = `⏳ Nhóm em chưa trả lời câu này.<div class="explain">${esc(q.explanation || "")}</div>`; card.appendChild(fb); quizNav(card, a, qs); }
+      return;
+    }
+    if (rec) P.set(rec.choice);
+    let note = deferNote(st, !!rec, kind), last = rec ? rec.choice : null;
+    const send = () => {
+      const ch = P.choice(); if (!ch || ch === last) return; last = ch;
+      const ok = abDigits(ch) === abDigits(q.answer);
+      emit("onAttempt", { key, activityId: aid(a._parent || a), ok, fraction: ok ? 1 : 0, choice: ch });
+      const n2 = deferNote(st, true, kind); note.replaceWith(n2); note = n2;
+      const pill = card.querySelector(".q-pill.cur"); if (pill) pill.classList.add("done");
+    };
+    if (st === "open") {
+      let t = null;
+      if (P.input) { P.input.oninput = () => { clearTimeout(t); t = setTimeout(send, 900); }; P.input.onchange = () => { clearTimeout(t); send(); }; P.input.onkeydown = (e) => { if (e.key === "Enter") { clearTimeout(t); send(); } }; }
+      else P.ab.onChange = () => { clearTimeout(t); t = setTimeout(send, 600); };
+    } else { P.ab.lock(); if (P.input) P.input.disabled = true; }
+    card.appendChild(note);
+    if (q.hint && st === "open") card.appendChild(revealBox("💡 Gợi ý", () => el("div", "hint-box", "💡 " + esc(q.hint))));
+    quizNav(card, a, qs);
+  }
+
+  // ---- MÔ PHỎNG KIẾN TRÚC VON NEUMANN — “chương trình được lưu trữ” (Tin 8 Bài 1, Hình 1.3) ----
+  //  activity.vonneumann: { title?, intro?, programs: [{ name, inputs: { a: 7, b: 5 }, code: [
+  //    { op: "in", v: "a", text: "Nhận số a từ bàn phím" }, { op: "calc", v: "c", e: "a + b", text: "Tính c = a + b" },
+  //    { op: "out", e: "c", label: "Tổng", text: "Đưa c ra màn hình" }, { op: "end", text: "Dừng" } ] }] }
+  //  💾 Tải chương trình: các lệnh vào bộ nhớ (nằm cùng dữ liệu). Mỗi lần ▶ Bước tiếp = 1 pha: ① NẠP lệnh từ bộ nhớ vào bộ xử lí,
+  //  ② THỰC HIỆN lệnh (Thiết bị vào → Bộ nhớ, Bộ nhớ ⇄ Bộ xử lí, Bộ nhớ → Thiết bị ra); xong lệnh này mới nạp lệnh tiếp (tuần tự). Không chấm.
+  function vnBox(a) {
+    const spec = a.vonneumann, progs = spec.programs || [];
+    const box = el("div", "sr-box vn-box");
+    box.appendChild(el("h3", "sr-title", "🖥️ " + esc(spec.title || "Máy tính theo kiến trúc Von Neumann")));
+    if (spec.intro) box.appendChild(el("p", "subtitle", esc(spec.intro)));
+    const top = el("div", "sr-top"), loadBtns = progs.map((p, i) => { const b = el("button", "btn ghost vn-load", "💾 Tải chương trình: " + esc(p.name)); b.onclick = () => load(i); top.appendChild(b); return b; });
+    const ctrl = el("div", "sr-top"), bStep = el("button", "btn", "▶ Bước tiếp"), bRun = el("button", "btn ghost", "⏩ Chạy hết"), bReset = el("button", "btn ghost", "🔄 Chạy lại từ đầu");
+    ctrl.append(bStep, bRun, bReset);
+    const sim = el("div", "vn-sim");
+    const dIn = el("div", "vn-dev vn-in", "<h4>⌨️ Thiết bị vào</h4>"), inBox = el("div", "vn-inputs"); dIn.appendChild(inBox);
+    const aIn = el("div", "vn-arr", "➜"), aOut = el("div", "vn-arr", "➜");
+    const core = el("div", "vn-core"), cpu = el("div", "vn-cpu", "<h4>⚙️ Bộ xử lí</h4>"), ir = el("div", "vn-ir"); cpu.appendChild(ir);
+    const bus = el("div", "vn-bus"), down = el("span", "vn-down", "⬇"), up = el("span", "vn-up", "⬆"); bus.append(down, up);
+    const mem = el("div", "vn-mem", "<h4>🧠 Bộ nhớ</h4>"), memT = el("div", "vn-cells"); mem.appendChild(memT);
+    core.append(cpu, bus, mem);
+    const dOut = el("div", "vn-dev vn-out", "<h4>🖥️ Thiết bị ra</h4>"), scr = el("div", "vn-screen"); dOut.appendChild(scr);
+    sim.append(dIn, aIn, core, aOut, dOut);
+    const msg = el("div", "vn-msg"), log = el("ol", "al-log vn-log");
+    box.append(top, ctrl, sim, msg, log);
+    let P = null, pc = 0, phase = "fetch", vars = {}, done = false, timer = null, loading = null, inputs = {};
+    const vlist = () => { const vs = []; (P ? P.code : []).forEach((l) => { if (l.v && !vs.includes(l.v)) vs.push(l.v); }); return vs; };
+    function hl(parts) { [dIn, aIn, cpu, down, up, aOut, dOut].forEach((x) => x.classList.remove("on")); parts.forEach((x) => x.classList.add("on")); }
+    function drawMem(shown, hot) {
+      memT.innerHTML = "";
+      if (!P) { memT.appendChild(el("div", "rn-empty", "(trống — hãy tải một chương trình)")); return; }
+      memT.appendChild(el("div", "vn-sec", "📜 Chương trình (các lệnh)"));
+      P.code.forEach((l, i) => { if (shown != null && i >= shown) return; memT.appendChild(el("div", "vn-cell lenh" + (hot === "L" + i ? " hot" : "") + (!done && i === pc && shown == null ? " pc" : ""), `<span class="vn-ad">${i + 1}</span>${esc(l.text)}`)); });
+      memT.appendChild(el("div", "vn-sec", "📦 Dữ liệu"));
+      vlist().forEach((v) => memT.appendChild(el("div", "vn-cell du-lieu" + (hot === "D" + v ? " hot" : ""), `<span class="vn-ad">${esc(v)}</span>${v in vars ? "<b>" + alFmt(vars[v]) + "</b>" : '<span class="rn-empty">…</span>'}`)));
+    }
+    function drawInputs() {
+      inBox.innerHTML = ""; inputs = {};
+      const ins = P ? P.code.filter((l) => l.op === "in") : [];
+      if (!ins.length) { inBox.appendChild(el("div", "rn-empty", P ? "(chương trình không cần nhập)" : "…")); return; }
+      ins.forEach((l) => { const lb = el("label", "rn-in", esc(l.v) + " = "), inp = el("input"); inp.type = "number"; inp.step = "any"; inp.value = (P.inputs || {})[l.v] != null ? P.inputs[l.v] : 1; lb.appendChild(inp); inBox.appendChild(lb); inputs[l.v] = inp; });
+    }
+    const say = (t) => { msg.innerHTML = t; log.appendChild(el("li", null, t)); log.scrollTop = log.scrollHeight; };
+    function stop() { if (timer) { clearInterval(timer); timer = null; } bRun.textContent = "⏩ Chạy hết"; }
+    function restart(quiet) {
+      stop(); pc = 0; phase = "fetch"; vars = {}; done = false; scr.innerHTML = ""; log.innerHTML = ""; ir.innerHTML = '<span class="rn-empty">(chưa có lệnh)</span>'; hl([]);
+      Object.values(inputs).forEach((x) => (x.disabled = false));
+      drawMem(); bStep.disabled = bRun.disabled = !P;
+      if (!quiet && P) say("🔄 Chạy lại chương trình “" + esc(P.name) + "” từ lệnh 1.");
+    }
+    function load(i) {
+      if (loading) clearInterval(loading); stop();
+      P = progs[i]; loadBtns.forEach((b, k) => b.classList.toggle("sel", k === i));
+      drawInputs(); restart(true); log.innerHTML = "";
+      let k = 0; bStep.disabled = bRun.disabled = true; hl([]); drawMem(0);
+      msg.innerHTML = "💾 Đang tải chương trình vào bộ nhớ…";
+      loading = setInterval(() => {
+        k++; if (!box.isConnected) return clearInterval(loading);
+        if (k <= P.code.length) { drawMem(k); return; }
+        clearInterval(loading); loading = null; drawMem(); bStep.disabled = bRun.disabled = false;
+        say("💾 Đã tải chương trình “" + esc(P.name) + "” vào bộ nhớ: các lệnh được lưu trong bộ nhớ giống như dữ liệu.");
+      }, 180);
+    }
+    function step() {
+      if (!P || done || loading) return false;
+      const l = P.code[pc];
+      if (!l) { done = true; return false; }
+      if (phase === "fetch") {
+        ir.innerHTML = `<span class="vn-ad">${pc + 1}</span>${esc(l.text)}`;
+        hl([up, cpu]); drawMem(null, "L" + pc);
+        say(`① Nạp lệnh ${pc + 1} từ bộ nhớ vào bộ xử lí: <b>${esc(l.text)}</b>`);
+        phase = "exec"; return true;
+      }
+      phase = "fetch";
+      if (l.op === "in") {
+        const inp = inputs[l.v], v = parseFloat(String(inp ? inp.value : "").replace(",", "."));
+        if (!isFinite(v)) { phase = "exec"; msg.innerHTML = "⚠️ Hãy nhập một số cho " + esc(l.v) + " ở Thiết bị vào."; if (inp) inp.focus(); return false; }
+        vars[l.v] = v; if (inp) inp.disabled = true;
+        hl([dIn, aIn, down]); drawMem(null, "D" + l.v);
+        say(`② Thực hiện: nhận <b>${esc(l.v)} = ${alFmt(v)}</b> từ thiết bị vào, lưu vào bộ nhớ.`);
+      } else if (l.op === "calc") {
+        const v = alEval(l.e, vars); vars[l.v] = v;
+        hl([up, cpu, down]); drawMem(null, "D" + l.v);
+        say(`② Thực hiện: bộ xử lí lấy dữ liệu từ bộ nhớ, tính <b>${esc(l.e)} = ${alFmt(v)}</b>, ghi <b>${esc(l.v)}</b> vào bộ nhớ.`);
+      } else if (l.op === "out") {
+        const v = alEval(l.e, vars); scr.appendChild(el("div", "vn-line", (l.label ? esc(l.label) + ": " : "") + "<b>" + alFmt(v) + "</b>"));
+        hl([up, cpu, aOut, dOut]); drawMem(null);
+        say(`② Thực hiện: lấy <b>${esc(l.e)}</b> từ bộ nhớ, đưa ra thiết bị ra.`);
+      } else {
+        done = true; hl([cpu]); ir.innerHTML += ' <span class="vn-stop">⏹</span>'; drawMem();
+        say("⏹ Chương trình kết thúc. Muốn máy làm nhiệm vụ khác, chỉ cần tải chương trình khác vào bộ nhớ.");
+        bStep.disabled = bRun.disabled = true; sound("ok"); stop(); return false;
+      }
+      pc++; drawMem(null, l.op === "in" || l.op === "calc" ? "D" + l.v : null); return true;
+    }
+    bStep.onclick = () => { stop(); step(); };
+    bRun.onclick = () => { if (timer) return stop(); bRun.textContent = "⏸ Tạm dừng"; timer = setInterval(() => { if (!box.isConnected || !step()) stop(); }, 1100); };
+    bReset.onclick = () => restart();
+    drawInputs(); restart(true); msg.innerHTML = "👆 Chọn một chương trình để tải vào bộ nhớ.";
+    return box;
+  }
+
   // ---- MÁY MÔ PHỎNG SẮP XẾP (activity.sorter) — nổi bọt / sắp xếp chọn như SGK Tin 7 Bài 16 ----
   //  sorter: { title?, intro?, algo: "bubble" | "selection", items: [3, 5, 4, 1, 2], editItems?, allowAlgo? (nút đổi thuật toán),
   //            allowDir? (nổi bọt: "Từ cuối dãy (SGK)" | "Từ đầu dãy (mở rộng)"), allowOrder? (tăng / giảm dần), practice? (HS tự quyết định) }
@@ -2981,6 +3220,49 @@
 .al-o{font-size:1.2rem;font-weight:800;color:#15803d}
 .al-log{max-height:220px;overflow:auto;margin:0;padding-left:26px;line-height:1.55;font-size:.95rem;background:#f8fafc;border-radius:10px}
 .al-sample{font-size:.95rem}
+.ab-box{border-color:#d97706;background:#fffbeb}.ab-box .sr-title{color:#b45309}
+.ab-wrap{margin:8px auto;max-width:860px}
+.ab-svg{width:100%;height:auto;display:block;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.ab-frame{fill:#92400e;stroke:#78350f;stroke-width:3}.ab-in{fill:#fef3c7}
+.ab-rod{stroke:#a8a29e;stroke-width:4}.ab-bar{fill:#78350f}
+.ab-bead{cursor:pointer;stroke-width:2;transition:transform .18s ease,fill .18s}
+.ab-u{fill:#fed7aa;stroke:#fdba74}.ab-u.on{fill:#ea580c;stroke:#9a3412}
+.ab-d{fill:#bfdbfe;stroke:#93c5fd}.ab-d.on{fill:#2563eb;stroke:#1e3a8a}
+.ab-wrap.locked .ab-bead{cursor:default}
+.ab-dig{font:800 24px/1 "Segoe UI",Arial,sans-serif;fill:#15803d;text-anchor:middle}.ab-dig.big{fill:#dc2626}
+.ab-legend{text-align:center;color:#57534e;font-size:.95rem;margin-top:4px}
+.ab-k{display:inline-block;width:22px;height:12px;border-radius:50%;vertical-align:middle}.ab-ku{background:#ea580c}.ab-kd{background:#2563eb}
+.ab-val{text-align:center;font-size:1.35rem;margin-top:6px}.ab-val b{color:#b45309;font-size:1.7rem;letter-spacing:1px}
+.ab-wrap.ab-ok .ab-frame{stroke:#16a34a;stroke-width:8}.ab-wrap.ab-no .ab-frame{stroke:#dc2626;stroke-width:8}
+.ab-ans{margin:8px 0;font-size:1.15rem;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.vn-box{border-color:#0891b2;background:#ecfeff}.vn-box .sr-title{color:#0e7490}
+.vn-load.sel{background:#0891b2;color:#fff;border-color:#0891b2}
+.vn-sim{display:grid;grid-template-columns:minmax(150px,1fr) auto minmax(260px,1.7fr) auto minmax(150px,1fr);gap:8px;align-items:center;margin:8px 0}
+.vn-sim h4{margin:0 0 6px;font-size:1.05rem}
+.vn-dev,.vn-cpu,.vn-mem,.vn-dd .dropzone{background:#fff;border:3px solid #38bdf8;border-radius:12px;padding:8px 10px;transition:box-shadow .2s,border-color .2s}
+.vn-core{background:#bae6fd;border:3px solid #0ea5e9;border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:4px}
+.vn-bus{display:flex;justify-content:center;gap:34px;font-size:1.5rem;font-weight:900;color:#0284c7;line-height:1}
+.vn-arr{font-size:1.9rem;font-weight:900;color:#0284c7;text-align:center}
+.vn-sim .on{border-color:#f59e0b;box-shadow:0 0 0 4px #fde68a}
+.vn-arr.on,.vn-bus span.on{color:#ea580c;animation:vn-pulse .6s ease infinite alternate;box-shadow:none}
+@keyframes vn-pulse{from{transform:scale(1)}to{transform:scale(1.35)}}
+.vn-inputs{display:flex;flex-direction:column;gap:6px}.vn-inputs input{width:5em}
+.vn-ir{min-height:2.2em;font-weight:700;background:#f0f9ff;border-radius:8px;padding:6px 8px}
+.vn-cells{display:flex;flex-direction:column;gap:3px;max-height:320px;overflow:auto}
+.vn-sec{font-size:.85rem;font-weight:800;color:#475569;margin-top:4px}
+.vn-cell{display:flex;gap:8px;align-items:center;border-radius:6px;padding:3px 8px;font-size:.98rem;transition:background .2s}
+.vn-cell.lenh{background:#e0f2fe}.vn-cell.du-lieu{background:#dcfce7}
+.vn-cell.pc{outline:2px dashed #0284c7}.vn-cell.hot{background:#fde047;box-shadow:0 0 0 3px #facc15}
+.vn-ad{flex:0 0 auto;min-width:1.8em;text-align:center;font-weight:900;color:#0369a1;background:#fff;border-radius:6px;padding:0 4px}
+.vn-screen{min-height:4em;background:#0f172a;color:#86efac;border-radius:8px;padding:8px 10px;font:700 1.1rem Consolas,'Courier New',monospace}
+.vn-stop{color:#dc2626}
+.vn-msg{margin:6px 0;padding:10px 14px;border-radius:12px;background:#fff;border:2px dashed #0891b2;font-size:1.12rem;min-height:1.5em}
+.vn-log{max-height:150px}
+.vn-dd{margin-top:10px}.vn-dd .dropzone{margin:0;min-height:110px}.vn-dd .vn-core .dropzone{min-height:90px}
+.dd-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}.dd-cols .dropzone{margin:0}
+@media (max-width:760px){.vn-sim{grid-template-columns:1fr}.vn-arr{transform:rotate(90deg)}.vn-arr.on{animation:none}}
+.icon-btn.lh-paused{background:#d97706;color:#fff;animation:lh-pz 1.2s ease-in-out infinite}
+@keyframes lh-pz{50%{box-shadow:0 0 0 6px rgba(217,119,6,.3)}}
 .mz-wrap{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
 .mz-stage{flex:1 1 360px;max-width:560px;min-width:260px}
 .mz-grid{position:relative;display:grid;width:100%;background:#fff;border-radius:8px;overflow:hidden}
@@ -3681,13 +3963,15 @@
   zoomLayer.addEventListener("touchstart", zlDown, { passive: false }); zoomLayer.addEventListener("touchmove", zlMove, { passive: false }); zoomLayer.addEventListener("touchend", zlUp);
 
   function openMagnify(rect) {
-    const vw = window.innerWidth, vh = window.innerHeight;
+    const de = document.documentElement, vw = de.clientWidth || window.innerWidth, vh = de.clientHeight || window.innerHeight; // vùng nhìn thấy (không tính thanh cuộn)
     const scale = rect.w >= rect.h ? vw / rect.w : vh / rect.h; // chiều dài nhất lấp đầy màn hình
     const overlay = el("div", "magnify-overlay");
     const wrap = el("div", "magnify-wrap");
-    const clone = document.getElementById("app").cloneNode(true);
+    const app = document.getElementById("app"), ar = app.getBoundingClientRect(), clone = app.cloneNode(true);
     ["#penCanvas", "#confetti", ".controls", ".topbar", "#teacherBar", "#timerPanel", "#lightbox", "#spotlight", "#zoomLayer"].forEach((sel) => { const n = clone.querySelector(sel); if (n) n.style.visibility = "hidden"; });
-    Object.assign(clone.style, { position: "absolute", top: "0", left: "0", width: vw + "px", minHeight: vh + "px", margin: "0" });
+    // Đặt bản sao đúng chỗ trang đang hiển thị (ar.top âm khi đã cuộn xuống) — trước đây luôn đặt ở đầu trang nên phóng sai vùng
+    Object.assign(clone.style, { position: "absolute", top: ar.top + "px", left: ar.left + "px", width: ar.width + "px", minHeight: ar.height + "px", margin: "0" });
+    const scrolled = []; [app, ...app.querySelectorAll("*")].forEach((n, i) => { if (n.scrollTop || n.scrollLeft) scrolled.push([i, n.scrollTop, n.scrollLeft]); }); // khung cuộn bên trong (bảng dài, danh sách…)
     wrap.appendChild(clone); overlay.appendChild(wrap);
     const sw = rect.w * scale, sh = rect.h * scale;
     const tx = (vw - sw) / 2 - rect.x * scale, ty = (vh - sh) / 2 - rect.y * scale;
@@ -3695,6 +3979,7 @@
     overlay.appendChild(el("div", "magnify-hint", "Bấm để đóng · Esc"));
     overlay.onclick = () => overlay.remove();
     document.body.appendChild(overlay); focus.magEl = overlay;
+    if (scrolled.length) { const all = [clone, ...clone.querySelectorAll("*")]; scrolled.forEach(([i, t, l]) => { const n = all[i]; if (n) { n.scrollTop = t; n.scrollLeft = l; } }); }
   }
 
   // ---- utils -------------------------------------------------------------
@@ -3847,7 +4132,15 @@ Kết quả hoạt động này của tất cả các nhóm sẽ bị xóa; máy
     current: () => (state.view === "home" ? -1 : state.idx),
     celebrate, // pháo giấy (dùng cho màn cổ vũ / vinh danh của lớp học)
     fanfare: () => { if (S.sound) fanfare(); }, // kèn chiến thắng + vỗ tay (theo nút 🔊)
+    // Nút ⏸️ Tạm dừng cả lớp: null = ẩn (chưa nối tiết học) · true = cả lớp đang tạm dừng · false = đang học
+    classPause(on) {
+      const b = $("#btnPauseClass"); if (!b) return;
+      b.hidden = on == null; b.classList.toggle("lh-paused", !!on);
+      b.textContent = on ? "▶️" : "⏸️";
+      b.title = on ? "Cả lớp đang tạm dừng — bấm để cho HS học tiếp" : "Tạm dừng cả lớp — che màn hình tất cả máy HS";
+    },
   };
+  $("#btnPauseClass").onclick = () => { const h = HOOK.classPause; if (h && typeof h.toggle === "function") Promise.resolve(h.toggle()).catch((e) => console.warn(e)); };
 
   // ---- controls & keyboard ----------------------------------------------
   $("#btnNext").onclick = next; $("#btnPrev").onclick = prev;

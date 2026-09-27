@@ -116,6 +116,11 @@ function checkQuestion({ q, activity }, ids, answerPositions, levelCount) {
       err(`${where}: sheet cần \`answer\` là địa chỉ hợp lệ (VD "B6", "B4:E11", "D" = cả cột, "6" = cả hàng).`);
     if (!q.sheet && !activity.sheet) err(`${where}: thiếu lưới \`sheet\` (đặt ở hoạt động hoặc ở câu hỏi).`);
     if (q.mode === "type" && !q.highlight) err(`${where}: mode "type" cần \`highlight\` (vùng được tô để HS gõ địa chỉ).`);
+  } else if (q.type === "abacus") {
+    const d = String(q.answer == null ? "" : q.answer).replace(/\s/g, ""), n = d.replace(/^0+/, "").length;
+    if (!/^\d+$/.test(d)) err(`${where}: abacus cần \`answer\` là số tự nhiên (VD "1642").`);
+    else if ((q.cols && q.cols < n) || (q.cols || 0) > 13 || n > 13) err(`${where}: abacus \`cols\` phải đủ chỗ cho số và không quá 13 cột.`);
+    if (q.mode && !["set", "read"].includes(q.mode)) err(`${where}: abacus \`mode\` chỉ nhận "set" hoặc "read".`);
   } else if (q.type === "short") {
     const ans = Array.isArray(q.answer) ? q.answer : [q.answer];
     if (!ans.length || ans.some((x) => !normShort(x))) err(`${where}: short cần \`answer\` là chữ (hoặc mảng các cách viết được chấp nhận).`);
@@ -242,6 +247,31 @@ function checkMindmapsChecklists(L) {
         if (l.op === "input" && !l.v) err(`${where}: dòng ${i + 1} (input) thiếu \`v\`.`);
         if (l.op === "if" && !l.c) err(`${where}: dòng ${i + 1} (if) thiếu điều kiện \`c\`.`);
       });
+    }
+    if (a.abacus) { // bàn tính ảo
+      const v = a.abacus.value;
+      if (v != null && !/^\d+$/.test(String(v).replace(/\s/g, ""))) err(`HĐ "${a.id}" abacus: \`value\` phải là số tự nhiên.`);
+      if ((a.abacus.cols || 10) > 13) err(`HĐ "${a.id}" abacus: tối đa 13 cột.`);
+    }
+    if (a.vonneumann) { // mô phỏng kiến trúc Von Neumann
+      const where = `HĐ "${a.id}" vonneumann`, ps = a.vonneumann.programs || [];
+      if (!ps.length) err(`${where}: cần \`programs\` (ít nhất 1 chương trình).`);
+      ps.forEach((p, i) => {
+        const c = p.code || [];
+        if (!p.name || !c.length) err(`${where}: chương trình ${i + 1} cần \`name\` và \`code\`.`);
+        if (c.length && c[c.length - 1].op !== "end") err(`${where}: chương trình ${i + 1} phải kết thúc bằng lệnh op "end".`);
+        c.forEach((l, k) => {
+          const at = `${where}: chương trình ${i + 1}, lệnh ${k + 1}`;
+          if (!["in", "calc", "out", "end"].includes(l.op)) err(`${at} có op "${l.op}" không hợp lệ (in/calc/out/end).`);
+          if (!l.text) err(`${at} thiếu \`text\`.`);
+          if ((l.op === "in" || l.op === "calc") && !l.v) err(`${at} thiếu \`v\` (tên ô nhớ).`);
+          if ((l.op === "calc" || l.op === "out") && !l.e) err(`${at} thiếu biểu thức \`e\`.`);
+        });
+      });
+    }
+    if (a.type === "dragdrop" && a.layout) {
+      if (!["ifchain", "vonneumann", "cols"].includes(a.layout)) err(`HĐ "${a.id}": layout "${a.layout}" không hợp lệ (ifchain / vonneumann / cols).`);
+      else if (a.layout === "vonneumann" && (a.groups || []).length !== 4) err(`HĐ "${a.id}": layout vonneumann cần đúng 4 nhóm [Thiết bị vào, Bộ xử lí, Bộ nhớ, Thiết bị ra].`);
     }
     if (a.maze) { // mê cung robot
       const where = `HĐ "${a.id}" maze`;

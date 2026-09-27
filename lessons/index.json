@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-09-27T15:58:45.663Z",
+ "generatedAt": "2026-09-27T16:51:58.187Z",
  "lessons": [
   {
    "id": "tin6-bai01-thong-tin-va-du-lieu",
@@ -330,6 +330,16 @@
    "activities": 16,
    "items": 34,
    "open": 2
+  },
+  {
+   "id": "tin8-bai01-luoc-su-cong-cu-tinh-toan",
+   "title": "Bài 1: Lược sử công cụ tính toán",
+   "grade": "8",
+   "subject": "Tin học",
+   "unit": "Chủ đề 1 — Máy tính và cộng đồng",
+   "activities": 21,
+   "items": 41,
+   "open": 7
   },
   {
    "id": "tin9-bai01-the-gioi-ki-thuat-so",

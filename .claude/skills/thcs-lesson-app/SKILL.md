@@ -148,6 +148,12 @@ Hệ thống đã có sẵn (không cần làm gì trong bài, chỉ cần biế
 - **Chế độ giáo viên** (phím T) nằm **góc trái**; "Làm lại hoạt động" khi nối tiết học xóa kết
   quả hoạt động đó của **cả lớp** (hook `classMode()/resetActivity(aid)`); bảng GV có nút
   "🔄 Cả lớp làm lại".
+- **⏸️ Tạm dừng cả lớp ngay trên thanh công cụ bài giảng** (màn trình chiếu nối tiết học của bài này): cùng cờ
+  `live/paused` với nút "⏸ Tạm dừng cả lớp" của bảng GV — che màn hình mọi máy HS; đang dừng thì nút đổi ▶️ nhấp
+  nháy cam, bấm lại cho HS học tiếp. Engine: nút `#btnPauseClass` + `LessonApp.classPause(null|true|false)`; hook
+  `classPause.toggle()`. Mở file trực tiếp / chưa nối tiết học thì nút ẩn.
+- **Bảng điều khiển GV**: thanh tiêu đề có icon 🎧 **Hỗ trợ & Góp ý** (hộp thoại thông tin liên hệ — sửa trong
+  `lop-hoc/public/teacher.html` #helpDlg) và icon đăng xuất (chỉ hiện khi có đăng nhập).
 - **Cổ vũ khi GV bấm Kết thúc**: máy nhóm đúng hoàn toàn hiện màn chúc mừng + pháo giấy (không
   âm thanh), nhóm chưa đúng được động viên; màn trình chiếu hiện **🏆 Bảng vinh danh** + kèn
   chiến thắng/vỗ tay (theo nút 🔊). Engine cung cấp `LessonApp.celebrate()` / `fanfare()`.
@@ -361,6 +367,17 @@ HS bấm ▶ Bước tiếp: thẻ đang xét sáng lên, bảng lần lặp t�
   (hình thoi) sáng lên từ trên xuống, hiện kết quả. Không chấm. Dùng cho bài hàm IF, cấu trúc rẽ nhánh.
 - **Ghép sơ đồ IF (kéo thả)**: `dragdrop` thêm `layout: "ifchain"` — `groups` theo thứ tự [điều kiện 1, trả về khi đúng, điều kiện 2,
   trả về khi đúng, …, trả về khi mọi điều kiện sai] → vùng thả xếp thành sơ đồ khối (Đúng ➜ sang phải, Sai ⬇ xuống).
+- **Sơ đồ cấu trúc máy tính (kéo thả)**: `dragdrop` thêm `layout: "vonneumann"` — đúng 4 `groups` theo thứ tự [Thiết bị vào, Bộ xử lí,
+  Bộ nhớ, Thiết bị ra] → vùng thả xếp như Hình 1.3 Tin 8 (vào ➜ [xử lí ⇅ nhớ] ➜ ra). Nên ghi nhiệm vụ vào tên nhóm (ô trên/dưới ở giữa
+  đối xứng, HS cần căn cứ để phân biệt). `layout: "cols"`: 3–6 nhóm xếp thành hàng cột như bảng (phiếu học tập nhiều cột).
+- **Bàn tính ảo** (Tin 8 Bài 1, Hình 1.1 — mỗi cột 2 hạt trên = 5, 5 hạt dưới = 1, chỉ tính hạt sát thanh ngang):
+  thử tự do `abacus: { title, intro, cols: 10, value?: "6302715408", presets?: [{ label, value }], showDigits?: true }` (không chấm);
+  câu chấm điểm `{ type: "abacus", question, answer: "1642", cols?: 4, mode?: "set" (HS gẩy hạt) | "read" (bàn tính hiện sẵn số, HS gõ
+  số), showDigits? }` — chấm theo giá trị số (bỏ dấu cách, số 0 đầu); có ở máy chiếu, máy HS (theo nhịp GV) và bảng GV (🧮). Tối đa 13 cột.
+- **Mô phỏng máy tính Von Neumann — “chương trình được lưu trữ”**: `vonneumann: { title, intro, programs: [{ name, inputs: { a: 7 },
+  code: [{ op: "in", v: "a", text }, { op: "calc", v: "t", e: "a + b", text }, { op: "out", e: "t", label: "Tổng", text }, { op: "end", text }] }] }` —
+  💾 tải chương trình vào bộ nhớ (lệnh nằm cùng dữ liệu), mỗi ▶ Bước tiếp = 1 pha (① nạp lệnh từ bộ nhớ vào bộ xử lí · ② thực hiện),
+  bộ phận/mũi tên đang hoạt động sáng lên; nhiều chương trình = minh hoạ “chỉ cần tải chương trình khác”. Không chấm.
 - **Mê cung robot**: `maze: { mode: "sim" | "race", title, intro?, mazes: [{ name, map: ["#####", "S...E", …], dir? }], rule?: "right" | "left",
   allowRule?, teams? }` — map: `#` tường · `.` lối đi · `S` lối vào · `E` lối ra (mọi hàng dài bằng nhau). "sim": robot chạy thuật toán
   bám tường (SGK Tin 9 Bài 14, Hình 14.3a) từng lần lặp, sáng dòng lệnh, báo quy tắc a/b/c, vệt đường đi, đếm lần lặp/bước tiến,
@@ -449,7 +466,8 @@ trường dữ liệu để kích hoạt — đây là yêu cầu chuẩn, khôn
 - **Khung phóng to (🔲):** bấm rồi kéo một khung chữ nhật quanh vùng cần soi →
   vùng đó phóng to lấp đầy màn hình theo chiều dài nhất (ngang lớn hơn thì lấp đầy
   chiều ngang, giữ tỉ lệ; và ngược lại). Bấm hoặc `Esc` để đóng. Dùng để phóng to
-  bảng, sơ đồ, đoạn chữ ngay trên màn giảng.
+  bảng, sơ đồ, đoạn chữ ngay trên màn giảng. Phóng đúng vùng cả khi trang đã cuộn xuống (bản sao đặt theo vị
+  trí hiện tại của trang, giữ vị trí cuộn của các khung bên trong).
 - **Hiệu ứng đúng/sai bắt mắt:** trả lời đúng → pháo giấy 🎉 + huy hiệu ✓ + cộng
   điểm; sai → rung + huy hiệu ✗. Áp dụng cho mọi loại câu/trò chơi.
 - **Âm thanh (🔊):** đúng → chuông vui (chuỗi nốt đi lên), sai → tiếng trầm ngắn

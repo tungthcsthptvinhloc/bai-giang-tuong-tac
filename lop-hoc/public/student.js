@@ -234,6 +234,8 @@
         act(action, sec) { const c = ctx(); if (!c) return Promise.resolve(); return C.actControl(DB, sid, c.live, c.aid, action, sec != null ? sec : c.a.time || 60); },
       },
       classMode: () => !!(sess && mine()),
+      // Nút ⏸️ trên thanh công cụ bài giảng = nút "Tạm dừng cả lớp" của bảng GV (cùng live/paused)
+      classPause: { toggle() { if (!sess || !mine() || !window.DB) return Promise.resolve(); return DB.set(`sessions/${sid}/live/paused`, !(sess.live || {}).paused); } },
       // Bài dạng chữ các nhóm đã gửi (sơ đồ tư duy, phiếu tự đánh giá) -> [{ name, text, at }]; null nếu chưa nối tiết học
       groupTexts(key) {
         if (!sess || !mine()) return null;
@@ -257,6 +259,7 @@
     const clockTxt = (k, a) => (k.st === "revealed" ? "🏁" : k.st === "locked" || k.over ? "⏰ 0:00" : "⏱ " + C.fmtClock(k.running ? k.left : k.left || (a && a.time) || 60));
     let lastAid = null;
     function draw() {
+      if (window.LessonApp && window.LessonApp.classPause) window.LessonApp.classPause(mine() ? !!(sess.live || {}).paused : null);
       if (!panel) return;
       const body = panel.querySelector(".lh-pp-body"), head = panel.querySelector(".lh-pp-head span");
       panel.classList.toggle("closed", !open);
@@ -284,8 +287,8 @@
       html += `</div>`;
       if (!follow) html += `<p class="lh-pp-hint">HS tự làm: đồng hồ hiện trên máy HS, hết giờ chỉ báo. Bật <b>👣 theo nhịp GV</b> để khóa khi hết giờ và công bố kết quả cùng lúc.</p>`;
       const show = st === "revealed";
-      if (it.q && (it.q.type === "sheet" || it.q.type === "short")) { // bảng tính / trả lời ngắn: các câu trả lời nhiều nhất
-        const max = Math.max(1, groups.length), dist = C.choiceDist(done.map((x) => x.r.choice), it.q.answer, 4, it.q.mode === "formula" || it.q.type === "short" ? (k) => C.judgeQuestion(it.q, k) : null, it.q.type === "short" ? C.normShort : null);
+      if (it.q && (it.q.type === "sheet" || it.q.type === "short" || it.q.type === "abacus")) { // bảng tính / trả lời ngắn: các câu trả lời nhiều nhất
+        const max = Math.max(1, groups.length), dist = C.choiceDist(done.map((x) => x.r.choice), it.q.answer, 4, it.q.mode === "formula" || it.q.type === "short" || it.q.type === "abacus" ? (k) => C.judgeQuestion(it.q, k) : null, it.q.type === "short" ? C.normShort : it.q.type === "abacus" ? C.abDigits : null);
         html += `<div class="lh-pp-bars">` + dist.map((d) => `<div class="lh-bar ${show && d.right ? "right" : ""}"><b>📍</b><span class="t">${esc(d.label)}</span><span class="b"><i style="width:${d.n / max * 100}%"></i></span><span class="n">${d.n}</span></div>`).join("")
           + `<div class="lh-bar none"><b>–</b><span class="t">Chưa làm</span><span class="b"><i style="width:${none.length / max * 100}%"></i></span><span class="n">${none.length}</span></div></div>`;
       } else if (it.q) {
