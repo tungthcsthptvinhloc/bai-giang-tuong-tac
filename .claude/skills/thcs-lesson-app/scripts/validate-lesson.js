@@ -208,6 +208,32 @@ function checkMindmapsChecklists(L) {
         if (b.op === "repeat") walk(b.body || []);
       }); })(a.scratch.script);
     }
+    if (a.search) { // máy tìm kiếm tuần tự
+      const r = a.search, where = `HĐ "${a.id}" search`;
+      if (!Array.isArray(r.items) || r.items.length < 2) err(`${where}: cần \`items\` (ít nhất 2 phần tử).`);
+      if (r.details && (!Array.isArray(r.details) || r.details.length !== (r.items || []).length)) err(`${where}: \`details\` phải có cùng số phần tử với \`items\`.`);
+      if (r.mode === "binary" && !r.editItems && Array.isArray(r.items)) { // tìm kiếm nhị phân cần danh sách đã sắp xếp
+        const coll = new Intl.Collator("vi", { sensitivity: "base", numeric: true }), num = (x) => /^\s*-?\d+(\.\d+)?\s*$/.test(String(x));
+        const cmp = (x, y) => (num(x) && num(y) ? parseFloat(x) - parseFloat(y) : coll.compare(String(x), String(y)));
+        if (!r.items.every((x, i) => i === 0 || cmp(r.items[i - 1], x) <= 0)) err(`${where}: mode "binary" cần \`items\` đã sắp xếp tăng dần.`);
+      }
+    }
+    if (a.sorter) { // máy mô phỏng sắp xếp
+      const r = a.sorter, where = `HĐ "${a.id}" sorter`;
+      if (!["bubble", "selection"].includes(r.algo)) err(`${where}: \`algo\` phải là "bubble" hoặc "selection".`);
+      if (!Array.isArray(r.items) || r.items.length < 2) err(`${where}: cần \`items\` (ít nhất 2 phần tử).`);
+    }
+    if (a.guess) { // trò chơi tìm số (thẻ úp)
+      const g = a.guess.cards;
+      if (!Array.isArray(g) || g.length < 3 || !g.every((x, i) => typeof x === "number" && (i === 0 || g[i - 1] < x))) err(`HĐ "${a.id}" guess: \`cards\` phải là dãy số tăng dần (ít nhất 3 thẻ).`);
+    }
+    if (a.type === "fillblank" && a.choices) { // ô trống dạng chọn: đáp án đúng phải có trong danh sách chọn
+      (a.answers || []).forEach((ans, i) => {
+        const ch = Array.isArray(a.choices[0]) ? a.choices[i] : a.choices;
+        if (!Array.isArray(ch) || !ch.length) err(`HĐ "${a.id}": ô trống ${i + 1} thiếu danh sách \`choices\`.`);
+        else if (!ch.includes((ans || [])[0])) err(`HĐ "${a.id}": đáp án ô ${i + 1} ("${(ans || [])[0]}") không có trong \`choices\`.`);
+      });
+    }
     if (a.runner) { // máy chạy thử thuật toán
       const r = a.runner, where = `HĐ "${a.id}" runner`, names = (r.inputs || []).map((f) => f.name);
       if (!Array.isArray(r.steps) || r.steps.length < 3) err(`${where}: cần \`steps\` (ít nhất Bắt đầu, một bước, Kết thúc).`);

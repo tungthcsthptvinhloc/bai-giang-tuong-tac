@@ -513,6 +513,9 @@
     if (a.mail) cardEl.appendChild(mailBox(a));
     if (a.password) cardEl.appendChild(passwordBox(a));
     if (a.runner) cardEl.appendChild(runnerBox(a));
+    if (a.search) cardEl.appendChild(a.search.mode === "binary" ? binaryBox(a) : searchBox(a));
+    if (a.guess) cardEl.appendChild(guessBox(a));
+    if (a.sorter) cardEl.appendChild(sorterBox(a));
     if (a.scratch) cardEl.appendChild(scratchBox(a));
   }
   function appendRemember(items, cardOrView) {
@@ -928,6 +931,12 @@
   // Đoạn chữ của câu điền khuyết: gộp khoảng trắng, "\n" = xuống dòng
   const fillSegHTML = (seg) => String(seg).split("\n").map((t) => esc(t.replace(/[ \t\r]+/g, " "))).join("<br>");
   const fillSegNodes = (p, seg) => String(seg).split("\n").forEach((t, k) => { if (k) p.appendChild(document.createElement("br")); p.appendChild(document.createTextNode(t.replace(/[ \t\r]+/g, " "))); });
+  // Ô trống dạng chọn: a.choices = ["Đúng","Sai"] (dùng chung) hoặc [[…],[…]] (từng ô); không có -> ô gõ chữ
+  function blankInput(a, i) {
+    const ch = a.choices && (Array.isArray(a.choices[0]) ? a.choices[i] : a.choices);
+    if (!ch || !ch.length) return el("input");
+    const s = el("select", "fill-sel"); s.innerHTML = '<option value="">— chọn —</option>' + ch.map((o) => `<option>${esc(o)}</option>`).join(""); return s;
+  }
   function fillblankUI(a, parts) {
     const n = parts.length - 1, good = (v, i) => (a.answers[i] || []).map(norm).includes(norm(v));
     return {
@@ -942,7 +951,7 @@
       },
       draw(box, d, en, redraw, changed) {
         const p = el("p", "prompt");
-        parts.forEach((seg, i) => { fillSegNodes(p, seg); if (i < n) { const inp = el("input"); inp.value = d[i]; inp.disabled = !en; inp.oninput = () => { d[i] = inp.value; changed(); }; p.appendChild(inp); } });
+        parts.forEach((seg, i) => { fillSegNodes(p, seg); if (i < n) { const inp = blankInput(a, i); inp.value = d[i]; inp.disabled = !en; inp.oninput = inp.onchange = () => { d[i] = inp.value; changed(); }; p.appendChild(inp); } });
         box.appendChild(p);
       },
     };
@@ -995,7 +1004,7 @@
     if (STUDENT) return renderWholeStudent(c, a, key, actStateOf(a), answerHTML, fillblankUI(a, parts));
     const p = el("p", "prompt");
     const inputs = [];
-    parts.forEach((seg, i) => { fillSegNodes(p, seg); if (i < parts.length - 1) { const inp = el("input"); inputs.push(inp); p.appendChild(inp); } });
+    parts.forEach((seg, i) => { fillSegNodes(p, seg); if (i < parts.length - 1) { const inp = blankInput(a, i); inputs.push(inp); p.appendChild(inp); } });
     c.appendChild(p);
     const btn = el("button", "btn", "Kiểm tra");
     btn.onclick = () => {
@@ -1212,6 +1221,7 @@
     const each = (list, fn) => (Array.isArray(list) ? list : list ? [list] : []).forEach((ad) => { const R = addrRect(ad, cols, rows); if (!R) return; for (let r = R.r1; r <= Math.min(R.r2, rows); r++) for (let c = R.c1; c <= Math.min(R.c2, cols - 1); c++) fn(style[colName(c) + r] = style[colName(c) + r] || {}); });
     each(spec.bold, (s) => { s.b = 1; }); each(spec.italic, (s) => { s.i = 1; });
     each(spec.comma, (s) => { s.cm = 1; }); // số có dấu phẩy ngăn cách hàng nghìn (8,000) như Excel
+    Object.entries(spec.dec || {}).forEach(([ad, v]) => each(ad, (s) => { s.dec = Math.max(0, Math.min(9, +v || 0)); })); // số chữ số thập phân cố định: { "M4:M25": 2 } -> 14.00
     each(spec.center, (s) => { s.al = "center"; }); each(spec.right, (s) => { s.al = "right"; }); each(spec.left, (s) => { s.al = "left"; });
     Object.entries(spec.fill || {}).forEach(([ad, v]) => each(ad, (s) => { s.fill = v; }));
     Object.entries(spec.color || {}).forEach(([ad, v]) => each(ad, (s) => { s.color = v; }));
@@ -1224,7 +1234,7 @@
       + `<div class="xs-bar"><div class="xs-name" title="Hộp địa chỉ: địa chỉ ô hiện thời"></div><span class="xs-fx">fx</span><input class="xs-formula" title="Vùng nhập dữ liệu" ${editable ? "" : "readonly tabindex='-1'"}></div>`
       + `<div class="xs-gridwrap"><table class="xs-grid"><colgroup><col style="width:${0.55 / tw * 100}%">${W.map((w) => `<col style="width:${w / tw * 100}%">`).join("")}</colgroup>`
       + `<thead><tr><th class="xs-corner"></th>${W.map((_, c) => `<th data-col="${c}">${colName(c)}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>`
-      + `<div class="xs-foot"><div class="xs-tabs">${(spec.sheets || ["Sheet1"]).map((n, i) => `<span class="xs-tab${i ? "" : " on"}">${esc(n)}</span>`).join("")}</div>`
+      + `<div class="xs-foot"><div class="xs-tabs">${(spec.sheets || ["Sheet1"]).map((n, i) => `<span class="xs-tab${i === (+spec.activeSheet || 0) ? " on" : ""}">${esc(n)}</span>`).join("")}</div>`
       + (editable ? `<button type="button" class="xs-tool" data-tool="edit">✏️ Nhập vào ô</button><button type="button" class="xs-tool" data-tool="copy">📋 Sao chép</button><button type="button" class="xs-tool" data-tool="paste">📥 Dán</button><button type="button" class="xs-tool" data-tool="del">🧽 Xóa vùng chọn</button>` : "") + `</div><div class="xs-selinfo"></div>`;
     const grid = root.querySelector(".xs-grid"), nameBox = root.querySelector(".xs-name"), fx = root.querySelector(".xs-formula"), info = root.querySelector(".xs-selinfo");
     const tds = {}, hcol = [], hrow = [];
@@ -1237,7 +1247,7 @@
       const ad = colName(c) + r, raw = data[ad], s = style[ad] || {};
       const v = String(raw == null ? "" : raw).charAt(0) === "=" ? String(FX.fmt(FX.evalCell(data, ad))) : raw; // công thức -> hiện KẾT QUẢ
       const ty = cellType(v), err = String(v || "").charAt(0) === "#";
-      if (!(editing && editing.ad === ad)) t.textContent = s.cm && ty === "num" && isFinite(+v) ? (+v).toLocaleString("en-US", { maximumFractionDigits: 9 }) : v || "";
+      if (!(editing && editing.ad === ad)) t.textContent = (s.cm || s.dec != null) && ty === "num" && isFinite(+String(v).replace(/,/g, "")) ? (+String(v).replace(/,/g, "")).toLocaleString("en-US", s.dec != null ? { minimumFractionDigits: s.dec, maximumFractionDigits: s.dec, useGrouping: !!s.cm } : { maximumFractionDigits: 9 }) : v || "";
       t.classList.toggle("num", !s.al && (ty === "num" || ty === "date"));
       t.classList.toggle("err", err);
       t.style.textAlign = s.al || ""; t.style.fontWeight = s.b ? "700" : ""; t.style.fontStyle = s.i ? "italic" : "";
@@ -1878,6 +1888,267 @@
     return box;
   }
 
+  // ---- MÁY TÌM KIẾM TUẦN TỰ (activity.search) — xét lần lượt từng thẻ, trả lời 2 câu hỏi của sơ đồ khối, tự điền bảng lần lặp ----
+  //  search: { title?, intro?, items: ["Nguyễn An", …], details?: ["Số 48 …", …], target: "Thanh Trúc", editTarget?: false,
+  //            col?: "Tên khách hàng", q1?: "Có đúng khách hàng cần tìm không?", q2?: "Có đúng là đã hết danh sách không?",
+  //            editItems?: true (HS tự gõ danh sách, cách nhau bởi dấu phẩy — dùng cho Vận dụng) }
+  //  So khớp không phân biệt hoa/thường, khoảng trắng. Không chấm điểm, không gửi.
+  function searchBox(a) {
+    const spec = a.search; let items = (spec.items || []).slice(), det = spec.details || [];
+    const box = el("div", "sr-box");
+    if (spec.title) box.appendChild(el("h3", "sr-title", "🔎 " + esc(spec.title)));
+    if (spec.intro) box.appendChild(el("p", "subtitle", esc(spec.intro)));
+    const top = el("div", "sr-top"), lb = el("label", "sr-in"), inp = el("input");
+    lb.appendChild(el("span", null, "🎯 Cần tìm:")); inp.value = spec.target || ""; if (spec.editTarget === false) inp.readOnly = true; lb.appendChild(inp);
+    const bNext = el("button", "btn", "▶ Bước tiếp"), bAll = el("button", "btn ghost", "⏩ Chạy hết"), bReset = el("button", "btn ghost", "🔄 Làm lại");
+    let listIn = null;
+    if (spec.editItems) {
+      const ll = el("label", "sr-in sr-list"); ll.appendChild(el("span", null, "📋 Danh sách:")); listIn = el("input"); listIn.value = items.join(", ");
+      listIn.placeholder = "Gõ các phần tử, cách nhau bởi dấu phẩy"; ll.appendChild(listIn); box.appendChild(ll);
+    }
+    top.append(lb, bNext, bAll, bReset); box.appendChild(top);
+    const cards = el("div", "sr-cards"); let cs = [];
+    const build = () => { cards.innerHTML = ""; cs = items.map((t, i) => { const c = el("div", "sr-card", `<span class="sr-no">${i + 1}</span>${esc(t)}`); cards.appendChild(c); return c; }); };
+    build();
+    if (listIn) listIn.oninput = () => { items = listIn.value.split(/[,;]/).map((x) => x.trim()).filter(Boolean); det = []; build(); };
+    const msg = el("div", "sr-msg"), tw = el("div", "sr-tablewrap"), tb = el("table", "sr-table");
+    tb.innerHTML = `<thead><tr><th>Lần lặp</th><th>${esc(spec.col || "Giá trị đang xét")}</th><th>${esc(spec.q1 || "Có đúng giá trị cần tìm không?")}</th><th>${esc(spec.q2 || "Có đúng là đã hết danh sách không?")}</th><th>Đầu ra</th></tr></thead><tbody></tbody>`;
+    tw.appendChild(tb); box.append(cards, msg, tw);
+    const body = tb.querySelector("tbody");
+    let i = 0, done = false;
+    const step = () => {
+      if (done) return;
+      if (!items.length) { alert("Danh sách đang trống."); return; }
+      const want = inp.value.trim();
+      if (!want) { alert("Hãy nhập giá trị cần tìm."); inp.focus(); return; }
+      inp.disabled = true; if (listIn) listIn.disabled = true;
+      const hit = norm(items[i]) === norm(want), last = i === items.length - 1;
+      cs.forEach((c) => c.classList.remove("cur")); cs[i].classList.add("cur", hit ? "hit" : "seen");
+      const out = hit ? `Tìm thấy ở vị trí số ${i + 1}` + (det[i] ? ` — ${det[i]}` : "") : last ? "Không tìm thấy" : "";
+      const tr = el("tr", hit ? "sr-found" : last ? "sr-miss" : "");
+      tr.innerHTML = `<td>${i + 1}</td><td>${esc(items[i])}</td><td class="${hit ? "yes" : "no"}">${hit ? "Đúng" : "Sai"}</td><td class="${!hit && last ? "yes" : "no"}">${hit ? "–" : last ? "Đúng" : "Sai"}</td><td>${esc(out)}</td>`;
+      body.appendChild(tr);
+      msg.innerHTML = hit ? `✅ Lần lặp ${i + 1}: “${esc(items[i])}” đúng là giá trị cần tìm → <b>${esc(out)}</b>. Kết thúc.`
+        : last ? `❌ Lần lặp ${i + 1}: “${esc(items[i])}” không phải, và đã hết danh sách → <b>Không tìm thấy “${esc(want)}”</b>. Kết thúc.`
+        : `Lần lặp ${i + 1}: “${esc(items[i])}” không phải “${esc(want)}”, chưa hết danh sách → xét phần tử tiếp theo.`;
+      if (hit || last) { done = true; sound(hit ? "ok" : "no"); if (hit) celebrate(); } else i++;
+      bNext.disabled = bAll.disabled = done;
+    };
+    bNext.onclick = step;
+    bAll.onclick = () => { let g = 0; while (!done && g++ < 500) { const k = i; step(); if (!done && i === k) break; } };
+    bReset.onclick = () => { i = 0; done = false; body.innerHTML = ""; msg.innerHTML = ""; inp.disabled = false; if (listIn) listIn.disabled = false; cs.forEach((c) => c.classList.remove("cur", "hit", "seen")); bNext.disabled = bAll.disabled = false; };
+    return box;
+  }
+
+  // ---- MÁY TÌM KIẾM NHỊ PHÂN (activity.search với mode: "binary") — mũi tên "vị trí giữa", nửa bị loại mờ đi (Hình 15.1 SGK Tin 7) ----
+  //  search: { mode: "binary", title?, intro?, items (đã sắp xếp), details?, target, col?, editItems? (kèm nút 🔤 Sắp xếp) }
+  //  Vị trí giữa = phần nguyên của (đầu + cuối)/2; mỗi lần bấm = 1 bước lặp (1 lần so sánh). Chữ so theo bảng chữ cái tiếng Việt, số so theo giá trị.
+  const viColl = typeof Intl !== "undefined" && Intl.Collator ? new Intl.Collator("vi", { sensitivity: "base", numeric: true }) : null;
+  const isNumStr = (x) => /^\s*-?\d+(\.\d+)?\s*$/.test(String(x));
+  function cmpVal(x, y) {
+    if (isNumStr(x) && isNumStr(y)) return Math.sign(parseFloat(x) - parseFloat(y));
+    return viColl ? Math.sign(viColl.compare(String(x).trim(), String(y).trim())) : Math.sign(String(x).trim().localeCompare(String(y).trim()));
+  }
+  function binaryBox(a) {
+    const spec = a.search; let items = (spec.items || []).map(String), det = spec.details || [];
+    const box = el("div", "sr-box bn-box");
+    if (spec.title) box.appendChild(el("h3", "sr-title", "🔎 " + esc(spec.title)));
+    if (spec.intro) box.appendChild(el("p", "subtitle", esc(spec.intro)));
+    let listIn = null, bSort = null;
+    if (spec.editItems) {
+      const ll = el("label", "sr-in sr-list"); ll.appendChild(el("span", null, "📋 Danh sách:")); listIn = el("input"); listIn.value = items.join(", ");
+      listIn.placeholder = "Gõ các phần tử, cách nhau bởi dấu phẩy"; bSort = el("button", "btn ghost", "🔤 Sắp xếp"); bSort.type = "button";
+      ll.append(listIn, bSort); box.appendChild(ll);
+    }
+    const top = el("div", "sr-top"), lb = el("label", "sr-in"), inp = el("input");
+    lb.appendChild(el("span", null, "🎯 Cần tìm:")); inp.value = spec.target || ""; if (spec.editTarget === false) inp.readOnly = true; lb.appendChild(inp);
+    const bNext = el("button", "btn", "▶ Bước tiếp"), bAll = el("button", "btn ghost", "⏩ Chạy hết"), bReset = el("button", "btn ghost", "🔄 Làm lại");
+    top.append(lb, bNext, bAll, bReset); box.appendChild(top);
+    const warn = el("div", "bn-warn"), cards = el("div", "sr-cards bn-cards"); let cs = [];
+    const build = () => { cards.innerHTML = ""; cs = items.map((t, i) => { const c = el("div", "sr-card", '<span class="sr-no">' + (i + 1) + "</span>" + esc(t)); cards.appendChild(c); return c; }); };
+    const msg = el("div", "sr-msg"), tw = el("div", "sr-tablewrap"), tb = el("table", "sr-table");
+    tb.innerHTML = "<thead><tr><th>Bước lặp</th><th>Vùng tìm kiếm</th><th>Vị trí giữa</th><th>" + esc(spec.col || "Giá trị ở giữa") + "</th><th>So sánh</th><th>Kết quả</th></tr></thead><tbody></tbody>";
+    tw.appendChild(tb); box.append(warn, cards, msg, tw);
+    const body = tb.querySelector("tbody");
+    const sortedOK = () => items.every((x, i) => i === 0 || cmpVal(items[i - 1], x) <= 0);
+    const paintWarn = () => { warn.innerHTML = sortedOK() ? "" : "⚠️ Danh sách <b>chưa được sắp xếp</b> — tìm kiếm nhị phân có thể cho kết quả sai. Hãy sắp xếp trước!"; };
+    let lo = 0, hi = items.length - 1, k = 0, done = false;
+    const reset = () => {
+      lo = 0; hi = items.length - 1; k = 0; done = false; body.innerHTML = ""; msg.innerHTML = ""; inp.disabled = false;
+      if (listIn) { listIn.disabled = false; bSort.disabled = false; }
+      cs.forEach((c) => c.classList.remove("cur", "hit", "out")); bNext.disabled = bAll.disabled = false;
+    };
+    const step = () => {
+      if (done) return;
+      if (!items.length) { alert("Danh sách đang trống."); return; }
+      const want = inp.value.trim();
+      if (!want) { alert("Hãy nhập giá trị cần tìm."); inp.focus(); return; }
+      inp.disabled = true; if (listIn) { listIn.disabled = true; bSort.disabled = true; }
+      const lo0 = lo, hi0 = hi, mid = Math.floor((lo + hi) / 2), c = cmpVal(want, items[mid]); k++;
+      let so, kq, found = false;
+      if (c === 0) { so = "Bằng nhau"; kq = "Tìm thấy ở vị trí số " + (mid + 1) + (det[mid] ? " — " + det[mid] : ""); found = true; done = true; }
+      else {
+        if (c < 0) { so = "“" + want + "” nhỏ hơn (đứng trước)"; hi = mid - 1; } else { so = "“" + want + "” lớn hơn (đứng sau)"; lo = mid + 1; }
+        if (lo > hi) { kq = "Vùng tìm kiếm không còn phần tử → Không tìm thấy"; done = true; }
+        else kq = (c < 0 ? "Bỏ nửa sau" : "Bỏ nửa trước") + ", tìm tiếp ở vị trí " + (lo + 1) + " → " + (hi + 1);
+      }
+      cs.forEach((e, i) => {
+        e.classList.toggle("cur", i === mid); e.classList.toggle("hit", found && i === mid);
+        e.classList.toggle("out", i !== mid && (i < lo || i > hi)); // thẻ giữa vừa so sánh vẫn sáng, bước sau mới mờ
+      });
+      const tr = el("tr", found ? "sr-found" : done ? "sr-miss" : "");
+      tr.innerHTML = "<td>" + k + "</td><td>" + (lo0 + 1) + " → " + (hi0 + 1) + "</td><td>" + (mid + 1) + "</td><td>" + esc(items[mid]) + '</td><td class="' + (found ? "yes" : "no") + '">' + esc(so) + "</td><td>" + esc(kq) + "</td>";
+      body.appendChild(tr);
+      let m = "Bước " + k + ": vùng tìm kiếm " + (lo0 + 1) + " → " + (hi0 + 1) + ", vị trí giữa = phần nguyên của (" + (lo0 + 1) + " + " + (hi0 + 1) + ")/2 = <b>" + (mid + 1) + "</b> (“" + esc(items[mid]) + "”). " + esc(so) + " → <b>" + esc(kq) + "</b>.";
+      if (done) {
+        const si = items.findIndex((x) => cmpVal(x, want) === 0), seq = si >= 0 ? si + 1 : items.length;
+        m += '<div class="bn-cmp">📊 Tìm kiếm nhị phân: <b>' + k + "</b> bước lặp · Tìm kiếm tuần tự: <b>" + seq + "</b> bước lặp.</div>";
+        sound(found ? "ok" : "no"); if (found) celebrate();
+      }
+      msg.innerHTML = m; bNext.disabled = bAll.disabled = done;
+    };
+    bNext.onclick = step;
+    bAll.onclick = () => { let g = 0; while (!done && g++ < 100) { const kk = k; step(); if (k === kk) break; } };
+    bReset.onclick = reset;
+    if (listIn) {
+      listIn.oninput = () => { items = listIn.value.split(/[,;]/).map((x) => x.trim()).filter(Boolean); det = []; build(); paintWarn(); reset(); };
+      bSort.onclick = () => { items.sort(cmpVal); det = []; listIn.value = items.join(", "); build(); paintWarn(); reset(); };
+    }
+    build(); paintWarn();
+    return box;
+  }
+
+  // ---- TRÒ CHƠI TÌM SỐ (activity.guess) — thẻ úp theo thứ tự tăng dần, HS (bạn B) chọn thẻ, app (bạn A) trả lời bằng nhau / lớn hơn / bé hơn ----
+  //  guess: { title?, intro?, cards: [2, 3, 5, …] (tăng dần), target? } — gợi ý khi thẻ chọn chưa phải thẻ ở giữa vùng tìm kiếm. Không chấm, không gửi.
+  function guessBox(a) {
+    const spec = a.guess, vals = (spec.cards || []).map(Number), n = vals.length;
+    const box = el("div", "sr-box gs-box");
+    if (spec.title) box.appendChild(el("h3", "sr-title", "🃏 " + esc(spec.title)));
+    if (spec.intro) box.appendChild(el("p", "subtitle", esc(spec.intro)));
+    const top = el("div", "sr-top"), lb = el("label", "sr-in"), inp = el("input");
+    inp.type = "number"; lb.appendChild(el("span", null, "🎯 Số B cần tìm:")); inp.value = spec.target != null ? spec.target : ""; lb.appendChild(inp);
+    const bRand = el("button", "btn ghost", "🎲 Số ngẫu nhiên"), bReset = el("button", "btn ghost", "🔄 Chơi lại");
+    top.append(lb, bRand, bReset); box.appendChild(top);
+    const cards = el("div", "sr-cards gs-cards"), msg = el("div", "sr-msg"), log = el("ol", "gs-log");
+    const cs = vals.map((v, i) => { const c = el("button", "sr-card gs-card", '<span class="sr-no">' + (i + 1) + '</span><span class="gs-face">?</span>'); c.type = "button"; cards.appendChild(c); return c; });
+    box.append(cards, msg, log);
+    let lo = 0, hi = n - 1, turns = 0, done = false;
+    const paint = () => cs.forEach((c, i) => { c.classList.toggle("out", !c.classList.contains("hit") && (i < lo || i > hi)); c.disabled = done || i < lo || i > hi; });
+    const reset = () => {
+      lo = 0; hi = n - 1; turns = 0; done = false; msg.innerHTML = ""; log.innerHTML = ""; inp.disabled = false;
+      cs.forEach((c) => { c.classList.remove("open", "hit", "out"); c.querySelector(".gs-face").textContent = "?"; }); paint();
+    };
+    cs.forEach((c, i) => { c.onclick = () => {
+      if (done || i < lo || i > hi) return;
+      const want = parseFloat(String(inp.value).replace(",", "."));
+      if (!isFinite(want)) { alert("Bạn B hãy nhập số cần tìm trước."); inp.focus(); return; }
+      inp.disabled = true; turns++;
+      const v = vals[i], mid = Math.floor((lo + hi) / 2), note = i === mid ? "" : " (Theo tìm kiếm nhị phân, nên chọn thẻ ở giữa — vị trí số " + (mid + 1) + ")";
+      c.classList.add("open"); c.querySelector(".gs-face").textContent = v;
+      let ans;
+      if (v === want) { ans = "Bằng nhau"; c.classList.add("hit"); done = true; }
+      else if (want > v) { ans = "Lớn hơn"; lo = i + 1; } else { ans = "Bé hơn"; hi = i - 1; }
+      log.appendChild(el("li", null, "Lượt " + turns + ": B chọn thẻ vị trí " + (i + 1) + " → " + v + ". A: “" + ans + "”" + (ans === "Bằng nhau" ? "" : " (số cần tìm " + (ans === "Lớn hơn" ? "lớn hơn " : "bé hơn ") + v + ")") + esc(note)));
+      if (done) { msg.innerHTML = "🎉 Tìm thấy số <b>" + want + "</b> ở vị trí số " + (i + 1) + " sau <b>" + turns + "</b> lượt."; sound("ok"); celebrate(); }
+      else if (lo > hi) { done = true; msg.innerHTML = "❌ Đã tìm hết dãy số — <b>không có số " + want + "</b> trong các thẻ (" + turns + " lượt)."; sound("no"); }
+      else msg.innerHTML = "A trả lời: <b>“" + ans + "”</b> → B tìm tiếp trong các thẻ từ vị trí " + (lo + 1) + " đến " + (hi + 1) + ".";
+      paint();
+    }; });
+    bReset.onclick = reset;
+    bRand.onclick = () => { const pool = Math.random() < 0.8 ? vals : [1, 4, 7, 10, 12, 13, 14, 17, 19]; inp.value = pool[Math.floor(Math.random() * pool.length)]; reset(); };
+    paint();
+    return box;
+  }
+
+  // ---- MÁY MÔ PHỎNG SẮP XẾP (activity.sorter) — nổi bọt / sắp xếp chọn như SGK Tin 7 Bài 16 ----
+  //  sorter: { title?, intro?, algo: "bubble" | "selection", items: [3, 5, 4, 1, 2], editItems?, allowAlgo? (nút đổi thuật toán),
+  //            allowDir? (nổi bọt: "Từ cuối dãy (SGK)" | "Từ đầu dãy (mở rộng)"), allowOrder? (tăng / giảm dần), practice? (HS tự quyết định) }
+  //  Nổi bọt (SGK): với vị trí i, so sánh cặp kề nhau từ cuối dãy lên i, phần tử sau nhỏ hơn thì đổi chỗ. Chọn (SGK): so sánh phần tử ở
+  //  vị trí i với từng phần tử phía sau, nhỏ hơn thì đổi chỗ. Luôn đủ n − 1 vòng lặp; mỗi bước = một lần so sánh. Không chấm, không gửi.
+  const SORT_ORD = ["thứ nhất", "thứ hai", "thứ ba", "thứ tư", "thứ năm", "thứ sáu", "thứ bảy", "thứ tám", "thứ chín"];
+  function sortSteps(arr0, algo, dir, desc) {
+    const a = arr0.slice(), n = a.length, out = [], less = (x, y) => (desc ? cmpVal(x, y) > 0 : cmpVal(x, y) < 0);
+    const push = (pass, i, j, swap, fixed) => { if (swap) { const t = a[i]; a[i] = a[j]; a[j] = t; } out.push({ pass, i, j, swap, arr: a.slice(), fixed }); };
+    if (algo === "selection") {
+      for (let i = 0; i < n - 1; i++) for (let j = i + 1; j < n; j++) push(i + 1, i, j, less(a[j], a[i]), j === n - 1 ? { from: 0, to: i } : null);
+    } else if (dir === "front") {
+      for (let p = 0; p < n - 1; p++) for (let j = 0; j < n - 1 - p; j++) push(p + 1, j, j + 1, less(a[j + 1], a[j]), j === n - 2 - p ? { from: n - 1 - p, to: n - 1 } : null);
+    } else {
+      for (let i = 0; i < n - 1; i++) for (let j = n - 1; j > i; j--) push(i + 1, j - 1, j, less(a[j], a[j - 1]), j === i + 1 ? { from: 0, to: i } : null);
+    }
+    return out;
+  }
+  function sorterBox(a) {
+    const spec = a.sorter; let items = (spec.items || []).map(String), algo = spec.algo === "selection" ? "selection" : "bubble", dir = "back", desc = false;
+    const practice = !!spec.practice;
+    const box = el("div", "sr-box so-box");
+    box.appendChild(el("h3", "sr-title", (practice ? "🙋 " : "🔵 ") + esc(spec.title || "Mô phỏng thuật toán sắp xếp")));
+    if (spec.intro) box.appendChild(el("p", "subtitle", esc(spec.intro)));
+    const opts = el("div", "sr-top");
+    let listIn = null;
+    if (spec.editItems) { const ll = el("label", "sr-in sr-list"); ll.appendChild(el("span", null, "📋 Dãy:")); listIn = el("input"); listIn.value = items.join(", "); listIn.placeholder = "Ví dụ: 3, 5, 4, 1, 2"; ll.appendChild(listIn); box.appendChild(ll); }
+    const seg = (pairs, get, set) => { const w = el("span", "so-seg"); pairs.forEach(([v, label]) => { const b = el("button", "btn ghost", label); b.type = "button"; b.dataset.v = v; b.onclick = () => { set(v); paintSeg(); reset(); }; w.appendChild(b); }); w._get = get; return w; };
+    const segs = [];
+    if (spec.allowAlgo) segs.push(seg([["bubble", "🔵 Nổi bọt"], ["selection", "👆 Sắp xếp chọn"]], () => algo, (v) => { algo = v; }));
+    let dirSeg = null;
+    if (spec.allowDir) { dirSeg = seg([["back", "Từ cuối dãy (SGK)"], ["front", "Từ đầu dãy (mở rộng)"]], () => dir, (v) => { dir = v; }); segs.push(dirSeg); }
+    if (spec.allowOrder) segs.push(seg([["asc", "Tăng dần"], ["desc", "Giảm dần"]], () => (desc ? "desc" : "asc"), (v) => { desc = v === "desc"; }));
+    segs.forEach((s) => opts.appendChild(s));
+    const paintSeg = () => { segs.forEach((s) => s.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.v === s._get()))); if (dirSeg) dirSeg.style.display = algo === "bubble" ? "" : "none"; };
+    if (segs.length) box.appendChild(opts);
+    const ctr = el("div", "sr-top");
+    const bA = el("button", "btn", practice ? "🔁 Hoán đổi" : "▶ Bước tiếp"), bB = el("button", practice ? "btn" : "btn ghost", practice ? "➡️ Không hoán đổi" : "⏩ Chạy hết"), bReset = el("button", "btn ghost", "🔄 Làm lại");
+    ctr.append(bA, bB, bReset); box.appendChild(ctr);
+    const cards = el("div", "so-cards"), msg = el("div", "sr-msg"), stat = el("div", "so-stat"), tw = el("div", "sr-tablewrap"), tb = el("table", "sr-table");
+    tb.innerHTML = "<thead><tr><th>Vòng lặp</th><th>So sánh</th><th>Kết quả</th><th>Dãy sau bước</th></tr></thead><tbody></tbody>";
+    tw.appendChild(tb); box.append(cards, msg, stat, tw);
+    const body = tb.querySelector("tbody");
+    let steps = [], k = 0, cur = [], fixed = new Set(), errs = 0;
+    const drawCards = (hl, swapped) => {
+      cards.innerHTML = "";
+      cur.forEach((v, i) => { const c = el("div", "so-card" + (fixed.has(i) ? " done" : "") + (hl && (i === hl[0] || i === hl[1]) ? " cmp" : "") + (swapped && (i === hl[0] || i === hl[1]) ? " swp" : ""), '<span class="sr-no">' + (i + 1) + "</span>" + esc(v)); cards.appendChild(c); });
+    };
+    const finish = () => { for (let i = 0; i < cur.length; i++) fixed.add(i); drawCards(); msg.innerHTML = "✅ Kết thúc — dãy đã được sắp xếp theo thứ tự " + (desc ? "giảm" : "tăng") + " dần: <b>" + cur.map(esc).join(", ") + "</b>." + (practice ? " Số lần chọn sai: <b>" + errs + "</b>." : ""); bA.disabled = bB.disabled = true; sound("ok"); if (!practice || errs === 0) celebrate(); };
+    const reset = () => {
+      if (listIn) items = listIn.value.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
+      cur = items.slice(); steps = sortSteps(items, algo, dir, desc); k = 0; errs = 0; fixed = new Set(); body.innerHTML = ""; stat.innerHTML = "";
+      bA.disabled = bB.disabled = steps.length === 0; if (listIn) listIn.disabled = false;
+      if (practice && steps.length) { drawCards([steps[0].i, steps[0].j]); msg.innerHTML = "Vòng lặp " + SORT_ORD[0] + ": so sánh <b>" + esc(cur[steps[0].i]) + "</b> và <b>" + esc(cur[steps[0].j]) + "</b> — có hoán đổi không?"; }
+      else { drawCards(); msg.innerHTML = steps.length ? "Bấm ▶ Bước tiếp để bắt đầu." : "Dãy cần ít nhất 2 phần tử."; }
+    };
+    const apply = () => {
+      const s = steps[k], x = cur[s.i], y = cur[s.j], later = algo === "selection" ? y : cur[s.j], earlier = algo === "selection" ? x : cur[s.i];
+      const rel = s.swap ? later + (desc ? " > " : " < ") + earlier : later + (cmpVal(later, earlier) === 0 ? " = " : desc ? " < " : " > ") + earlier;
+      cur = s.arr.slice(); k++;
+      if (s.fixed) for (let i = s.fixed.from; i <= s.fixed.to; i++) fixed.add(i);
+      const tr = el("tr", s.swap ? "sr-found" : "");
+      tr.innerHTML = "<td>" + SORT_ORD[s.pass - 1] + "</td><td>" + esc(x) + " và " + esc(y) + "</td><td>" + esc(rel) + " → " + (s.swap ? "hoán đổi" : "KHÔNG hoán đổi") + "</td><td><b>" + cur.map(esc).join("  ") + "</b></td>";
+      body.appendChild(tr);
+      drawCards([s.i, s.j], s.swap);
+      let m = "Vòng lặp " + SORT_ORD[s.pass - 1] + ": so sánh " + esc(x) + " và " + esc(y) + " — " + esc(rel) + " ⇒ <b>" + (s.swap ? "hoán đổi" : "KHÔNG hoán đổi") + "</b>.";
+      if (s.fixed) m += " Kết thúc vòng lặp " + SORT_ORD[s.pass - 1] + ".";
+      if (listIn) listIn.disabled = true;
+      if (k >= steps.length) { finish(); return; }
+      if (practice) { const n2 = steps[k]; m += '<div class="so-next">Tiếp: so sánh <b>' + esc(cur[n2.i]) + "</b> và <b>" + esc(cur[n2.j]) + "</b> — có hoán đổi không?</div>"; setTimeout(() => drawCards([n2.i, n2.j]), 450); }
+      msg.innerHTML = m;
+    };
+    const answer = (sw) => {
+      if (k >= steps.length) return;
+      const s = steps[k];
+      if (s.swap !== sw) {
+        errs++; stat.innerHTML = "❌ Chưa đúng (số lần sai: " + errs + "). " + (algo === "selection" ? "So sánh phần tử phía sau với phần tử ở vị trí đang xét" : "So sánh phần tử đứng sau với phần tử đứng trước") + ": " + (s.swap ? "phần tử đó " + (desc ? "lớn" : "nhỏ") + " hơn nên phải hoán đổi." : "không " + (desc ? "lớn" : "nhỏ") + " hơn nên không hoán đổi.");
+        sound("no"); cards.classList.remove("shake"); void cards.offsetWidth; cards.classList.add("shake"); return;
+      }
+      stat.innerHTML = ""; apply();
+    };
+    if (practice) { bA.onclick = () => answer(true); bB.onclick = () => answer(false); }
+    else { bA.onclick = () => { if (k < steps.length) apply(); }; bB.onclick = () => { let g = 0; while (k < steps.length && g++ < 500) apply(); }; }
+    bReset.onclick = reset;
+    if (listIn) listIn.onchange = reset;
+    paintSeg(); reset();
+    return box;
+  }
+
   // ---- CHẠY THỬ CHƯƠNG TRÌNH SCRATCH (activity.scratch) — khối lệnh giống Scratch + sân khấu có chú mèo ----------
   //  scratch: { title?, intro?, sprite?: "🐱", script: [khối…] }   (mỗi khối có thể có n: 1 → hiện ① như SGK)
   //   { op: "flag" } · { op: "say", text | join: ["chuỗi", { v: "tên biến" } | { e: "a - b" }], secs? } · { op: "ask", text }
@@ -2319,6 +2590,52 @@
 .order-list.fc-list li+li::before{content:"↓";position:absolute;top:-30px;left:calc(50% - 48px);font-size:1.4rem;font-weight:900;color:#334155}
 .order-list.fc-list li>span:last-child{flex:0 0 96px;display:flex;gap:6px}
 .rv-row .fc-node{min-width:0}
+.sr-box{margin:14px 0;border:3px solid #8b5cf6;border-radius:18px;background:#faf5ff;padding:12px 16px}
+.sr-title{margin:0 0 6px;color:#6d28d9}
+.sr-top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+.sr-in{display:flex;gap:8px;align-items:center;font-weight:700}
+.sr-in input{font:inherit;padding:6px 10px;border:2px solid #c4b5fd;border-radius:10px;min-width:170px;max-width:60vw}
+.sr-list{margin-bottom:10px}.sr-list input{flex:1;min-width:0;max-width:none;width:100%}
+.sr-cards{display:flex;flex-wrap:wrap;gap:12px;margin:8px 0 10px}
+.sr-card{position:relative;min-width:100px;padding:14px 14px 10px;border-radius:14px;background:#fff;border:3px solid #ddd6fe;text-align:center;font-weight:700;transition:all .25s}
+.sr-no{position:absolute;top:-11px;left:-9px;background:#6d28d9;color:#fff;border-radius:999px;width:24px;height:24px;font-size:.8rem;line-height:24px}
+.sr-card.seen{background:#f1f5f9;border-color:#cbd5e1;color:#64748b}
+.sr-card.hit{background:#dcfce7;border-color:#16a34a;color:#166534}
+.sr-card.cur{transform:translateY(-6px);box-shadow:0 8px 18px rgba(109,40,217,.25);border-color:#f59e0b}
+.sr-card.cur.hit{border-color:#16a34a}
+.sr-msg{min-height:1.6em;font-weight:600;margin:6px 0}
+.sr-tablewrap{overflow-x:auto}
+.sr-table{border-collapse:collapse;width:100%;background:#fff}
+.sr-table th,.sr-table td{border:1px solid #cbd5e1;padding:6px 10px;text-align:center}
+.sr-table th{background:#ede9fe}
+.sr-table td.yes{color:#16a34a;font-weight:800}
+.sr-table td.no{color:#dc2626}
+.sr-table tr.sr-found td{background:#f0fdf4}
+.sr-table tr.sr-miss td{background:#fef2f2}
+.bn-cards{margin-bottom:30px}
+.sr-card.out{opacity:.35;background:#f1f5f9;border-color:#e2e8f0}
+.bn-box .sr-card.cur::after{content:"▲ vị trí giữa";position:absolute;left:50%;bottom:-22px;transform:translateX(-50%);font-size:.72rem;color:#ea580c;white-space:nowrap;font-weight:800}
+.bn-warn{color:#b91c1c;font-weight:700;margin:4px 0}
+.bn-cmp{margin-top:6px;padding:6px 10px;border-radius:10px;background:#fff7ed;border:2px dashed #fb923c;display:inline-block}
+.gs-card{font:inherit;cursor:pointer;min-width:64px;min-height:64px;background:#6d28d9;color:#fff;border-color:#5b21b6;font-size:1.3rem}
+.gs-card.open{background:#fff;color:#1f2937;border-color:#ddd6fe}
+.gs-card.hit{background:#dcfce7;color:#166534;border-color:#16a34a}
+.gs-card:disabled{cursor:default}
+.gs-log{margin:6px 0 0;padding-left:22px;line-height:1.6}
+.so-seg{display:inline-flex;gap:4px;flex-wrap:wrap;margin-right:8px}
+.so-seg .btn.on{background:var(--primary,#4338ca);color:#fff;border-color:transparent}
+.so-cards{display:flex;flex-wrap:wrap;gap:12px;margin:14px 0 8px}
+.so-card{position:relative;min-width:62px;height:62px;padding:0 10px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#e0f2fe;border:3px solid #7dd3fc;font-size:1.5rem;font-weight:800;color:#0c4a6e;transition:all .3s}
+.so-card .sr-no{top:-10px;left:-6px}
+.so-card.cmp{border-color:#dc2626;background:#fff;box-shadow:0 0 0 4px rgba(220,38,38,.18)}
+.so-card.swp{animation:so-swap .45s ease}
+.so-card.done{background:#d1d5db;border-color:#9ca3af;color:#374151}
+.so-next{margin-top:4px;color:#b45309}
+.so-stat{color:#b91c1c;font-weight:700;min-height:1.2em}
+.so-cards.shake{animation:so-shake .35s}
+@keyframes so-swap{0%{transform:translateY(0)}50%{transform:translateY(-16px) scale(1.12)}100%{transform:none}}
+@keyframes so-shake{0%,100%{transform:none}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+.fill select.fill-sel{font-size:1.15rem;padding:6px 10px;border:2px solid #c7d2fe;border-radius:10px;background:#fff;margin:2px 4px}
 .rn-box{margin:14px 0;border:3px solid #0ea5e9;border-radius:18px;background:#f8fafc;padding:12px 16px}
 .rn-title{margin:0 0 6px;color:#0369a1}
 .rn-wrap{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start}

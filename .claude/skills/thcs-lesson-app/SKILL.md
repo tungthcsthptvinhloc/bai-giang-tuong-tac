@@ -174,6 +174,8 @@ Hệ thống đã có sẵn (không cần làm gì trong bài, chỉ cần biế
   `dragdrop`, `ordering`, `fillblank`, `content.challenge` của summary.
 - **Điền khuyết xuống dòng**: trong `text` của `fillblank` dùng `
 ` để xuống dòng (mỗi câu a, b, c một dòng); `{{}}` là ô trống.
+- **Điền khuyết dạng chọn** (bảng lần lặp Đúng/Sai…): thêm `choices: ["Đúng", "Sai"]` (dùng chung) hoặc
+  `choices: [[…], […]]` (từng ô) → mỗi ô trống thành hộp chọn; đáp án `answers[i][0]` phải có trong danh sách chọn.
 - Câu tự luận nhóm gửi cho GV: `vandung.cases[].question` (hướng trả lời `answer`, thêm sơ đồ/hình tự soạn bằng `answerHtml`), `scenario.content.question`.
 - `data/lesson.js` phải giữ dòng `module.exports = LESSON` (máy chủ đọc bằng Node).
 
@@ -189,7 +191,9 @@ const SHEET = { title: "Bảng điểm.xlsx", cols: 7, rows: 11, sheets: ["Sheet
   cells: { C2: "BẢNG ĐIỂM LỚP 7A", B6: "Bùi Lê Đình Anh", D6: "7" },
   bold: ["C2", "B5:F5"], fill: { "A3:C3": "#fde047" }, color: { A1: "#16a34a" }, size: { A1: 16 },
   center: ["A3:A8"],                           // (right/left/italic tương tự)
-  comma: ["D3:E6"] };                          // số hiện dấu phẩy hàng nghìn: 8000 -> 8,000 (như hình Excel trong SGK)
+  comma: ["D3:E6"],                            // số hiện dấu phẩy hàng nghìn: 8000 -> 8,000 (như hình Excel trong SGK)
+  dec: { "F3:F7": 2 },                         // số chữ số thập phân cố định: 7.666… -> 7.67, 8 -> 8.00 (kết hợp comma được)
+  activeSheet: 2 };                            // tên trang tính đang mở trong `sheets` (mặc định 0 = trang đầu)
 { id: "dia-chi-o", type: "knowledge", sheet: SHEET, questions: [
   { type: "sheet", question: "Bấm vào ô ghi tên Bùi Lê Đình Anh.", answer: "B6", explanation: "...", level: "nhan-biet" },
   { type: "sheet", question: "Kéo chọn vùng D7:F9.", answer: "D7:F9", ... },
@@ -199,8 +203,8 @@ const SHEET = { title: "Bảng điểm.xlsx", cols: 7, rows: 11, sheets: ["Sheet
   { type: "sheet", sheet: { cols: 6, rows: 8 }, answer: "B2:C4", ... },  // lưới riêng cho câu này
 ] }
 ```
-- `answer`: ô `"B6"`, vùng `"B4:E11"` (viết ngược `E11:B4` vẫn đúng), cả cột `"D"`, cả hàng
-  `"6"`, hoặc mảng nhiều đáp án. Đặt `sheet` ở hoạt động (dùng chung) hoặc ở từng câu (bắt
+- `answer`: ô `"B6"`, vùng `"B4:E11"` (viết ngược `E11:B4` vẫn đúng), cả cột `"D"`, nhiều cột
+  `"E:K"` (kéo trên tên cột), cả hàng `"6"`, hoặc mảng nhiều đáp án. Đặt `sheet` ở hoạt động (dùng chung) hoặc ở từng câu (bắt
   buộc với câu trong `content.challenge`). Dùng được trong mọi hoạt động có `questions`.
 - Lưới tự căn như phần mềm thật: văn bản căn trái; số, ngày tháng kiểu tháng/ngày/năm căn
   phải (15/12/2020 là văn bản → căn trái); chữ dài tràn sang ô trống bên phải.
@@ -330,6 +334,22 @@ cond: hình thoi kiểm tra điều kiện) nối bằng mũi tên; chấm, nộ
 - Nút mở Scratch thật: `links: [{ label, url: "https://scratch.mit.edu/projects/editor/" }]`.
 Không đặt `runner` trong trò ghép sơ đồ khối (lộ đáp án) — đặt ở hoạt động SAU. Vẽ sơ đồ tĩnh trong `content` bằng các lớp
 `fc-chart`, `fc-node fc-term|fc-io|fc-proc|fc-cond`, `fc-arrow` (engine có sẵn CSS).
+
+**Máy tìm kiếm tuần tự** — `search` ở BẤT KỲ hoạt động nào (không chấm, không gửi; Tin 7 Bài 14 và các bài tìm kiếm sau):
+`search: { title, items: ["Nguyễn An", …], details?: ["Số 48 …", …], target: "Thanh Trúc", col: "Tên khách hàng",
+q1: "Có đúng khách hàng cần tìm không?", q2: "Có đúng là đã hết danh sách không?", editItems?: true, editTarget?: false }` —
+HS bấm ▶ Bước tiếp: thẻ đang xét sáng lên, bảng lần lặp tự điền (Sai/Đúng, “–”, Tìm thấy ở vị trí số k / Không tìm thấy).
+`editItems: true` cho HS tự gõ danh sách (Vận dụng). Đặt ở hoạt động SAU bài điền bảng (lộ đáp án).
+- **Tìm kiếm nhị phân**: thêm `mode: "binary"` (items đã sắp xếp; `editItems` có nút 🔤 Sắp xếp, cảnh báo khi chưa sắp xếp).
+  Vị trí giữa = phần nguyên của (đầu + cuối)/2; mỗi lần bấm = 1 bước lặp = 1 lần so sánh (cách đếm của SGK); chữ so theo
+  bảng chữ cái tiếng Việt (không phân biệt dấu thanh), số so theo giá trị; cuối cùng hiện số bước lặp so với tìm kiếm tuần tự.
+- **Máy mô phỏng sắp xếp**: `sorter: { title, algo: "bubble" | "selection", items: [3, 5, 4, 1, 2], editItems?, allowAlgo?,
+  allowDir? (nổi bọt: từ cuối dãy — SGK / từ đầu dãy — mở rộng), allowOrder? (tăng/giảm dần), practice? }` — mỗi bước = một lần
+  so sánh, tô cặp đang so sánh, thẻ đổi chỗ, ghi dãy sau mỗi bước theo vòng lặp; đủ n − 1 vòng lặp như SGK.
+  `practice: true`: HS tự bấm “Hoán đổi / Không hoán đổi”, máy báo sai ngay và đếm lỗi (không tính điểm).
+- **Emoji**: KHÔNG dùng emoji dải U+1FA70–U+1FAFF (🫧 🪜 🪣 🫖…) — Windows 10 hiện thành ô vuông.
+- **Trò chơi tìm số thẻ úp**: `guess: { title, intro, cards: [2, 3, 5, …] (tăng dần), target? }` — HS (bạn B) chọn thẻ, app
+  (bạn A) trả lời “bằng nhau / lớn hơn / bé hơn”, nhắc khi thẻ chọn chưa phải thẻ ở giữa vùng còn lại.
 
 ## Câu trả lời ngắn, ô chữ & hộp thư mô phỏng (engine v5)
 

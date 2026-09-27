@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-09-26T16:55:48.582Z",
+ "generatedAt": "2026-09-27T10:23:12.060Z",
  "lessons": [
   {
    "id": "tin6-bai01-thong-tin-va-du-lieu",
@@ -260,6 +260,76 @@
    "activities": 16,
    "items": 53,
    "open": 1
+  },
+  {
+   "id": "tin7-bai10-hoan-thien-bang-tinh",
+   "title": "Bài 10: Hoàn thiện bảng tính",
+   "grade": "7",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4 — Ứng dụng tin học",
+   "activities": 16,
+   "items": 50,
+   "open": 2
+  },
+  {
+   "id": "tin7-bai11-tao-bai-trinh-chieu",
+   "title": "Bài 11: Tạo bài trình chiếu",
+   "grade": "7",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4 — Ứng dụng tin học",
+   "activities": 14,
+   "items": 47,
+   "open": 3
+  },
+  {
+   "id": "tin7-bai12-dinh-dang-doi-tuong-tren-trang-chieu",
+   "title": "Bài 12: Định dạng đối tượng trên trang chiếu",
+   "grade": "7",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4 — Ứng dụng tin học",
+   "activities": 14,
+   "items": 41,
+   "open": 3
+  },
+  {
+   "id": "tin7-bai13-hoan-thien-bai-trinh-chieu",
+   "title": "Bài 13: Thực hành tổng hợp: Hoàn thiện bài trình chiếu",
+   "grade": "7",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4 — Ứng dụng tin học",
+   "activities": 14,
+   "items": 28,
+   "open": 4
+  },
+  {
+   "id": "tin7-bai14-thuat-toan-tim-kiem-tuan-tu",
+   "title": "Bài 14: Thuật toán tìm kiếm tuần tự",
+   "grade": "7",
+   "subject": "Tin học",
+   "unit": "Chủ đề 5 — Giải quyết vấn đề với sự trợ giúp của máy tính",
+   "activities": 13,
+   "items": 32,
+   "open": 2
+  },
+  {
+   "id": "tin7-bai15-thuat-toan-tim-kiem-nhi-phan",
+   "title": "Bài 15: Thuật toán tìm kiếm nhị phân",
+   "grade": "7",
+   "subject": "Tin học",
+   "unit": "Chủ đề 5 — Giải quyết vấn đề với sự trợ giúp của máy tính",
+   "activities": 16,
+   "items": 44,
+   "open": 2
+  },
+  {
+   "id": "tin7-bai16-thuat-toan-sap-xep",
+   "title": "Bài 16: Thuật toán sắp xếp",
+   "grade": "7",
+   "subject": "Tin học",
+   "unit": "Chủ đề 5 — Giải quyết vấn đề với sự trợ giúp của máy tính",
+   "activities": 16,
+   "items": 34,
+   "open": 2
   },
   {
    "id": "tin9-bai01-the-gioi-ki-thuat-so",
