@@ -393,7 +393,7 @@ const LESSON = {
         { left: "𝐁", right: "Chữ đậm" },
         { left: "𝐼", right: "Chữ nghiêng" },
         { left: "U̲", right: "Gạch chân" },
-        { left: "🪣 Thùng sơn", right: "Màu nền ô" },
+        { left: "🎨 Thùng sơn", right: "Màu nền ô" },
         { left: "A (gạch đỏ)", right: "Màu chữ" },
         { left: "Arial ▾", right: "Phông chữ" },
         { left: "11 ▾", right: "Cỡ chữ" },
@@ -421,7 +421,7 @@ const LESSON = {
       ],
     },
     {
-      id: "cac-buoc-thuc-hanh", name: "Sắp xếp các bước thực hành 🪜", type: "ordering",
+      id: "cac-buoc-thuc-hanh", name: "Sắp xếp các bước thực hành 🔢", type: "ordering",
       goal: "Nắm quy trình tạo, nhập, định dạng và lưu bảng tính khảo sát.",
       time: 150,
       task: "Sắp xếp các bước thực hành “Nhập thông tin khảo sát dự án Trường học xanh” theo đúng thứ tự rồi bấm Nộp bài.",

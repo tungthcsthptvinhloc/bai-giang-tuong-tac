@@ -308,7 +308,7 @@ const LESSON = {
       explanation: "Mỗi tệp gắn vào nhánh có nội dung liên quan trực tiếp — người xem mở đúng chỗ là thấy chi tiết. ENIAC (1945) là một trong những máy tính điện tử đầu tiên.",
     },
     {
-      id: "cac-buoc", name: "Sắp xếp các bước tạo sơ đồ có đính kèm 🪜", type: "ordering",
+      id: "cac-buoc", name: "Sắp xếp các bước tạo sơ đồ có đính kèm 🔢", type: "ordering",
       goal: "Nắm quy trình tạo sơ đồ tư duy số có đính kèm nội dung.",
       time: 120,
       task: "Sắp xếp các bước theo đúng thứ tự rồi bấm Nộp bài.",

@@ -308,7 +308,7 @@ const LESSON = {
       remember: ["Sao chép công thức: địa chỉ tự điều chỉnh để giữ nguyên vị trí tương đối.", "Chức năng tính toán tự động còn được thể hiện khi sao chép công thức."],
     },
     {
-      id: "cac-buoc-sao-chep", name: "Sắp xếp các bước sao chép công thức 🪜", type: "ordering",
+      id: "cac-buoc-sao-chep", name: "Sắp xếp các bước sao chép công thức 🔢", type: "ordering",
       goal: "Nắm quy trình sao chép ô tính chứa công thức.",
       time: 120,
       task: "Sắp xếp các bước sao chép công thức từ ô E4 xuống E5:E6 theo đúng thứ tự rồi bấm Nộp bài.",

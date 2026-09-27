@@ -163,7 +163,7 @@ const LESSON = {
         { text: "🚰 Vòi nước chảy", group: 0 },
         { text: "🔲 Pin mặt trời", group: 1 },
         { text: "♨️ Bếp điện", group: 2 },
-        { text: "🫖 Ấm nước sôi", group: 0 },
+        { text: "☕ Ấm nước sôi", group: 0 },
         { text: "💡 Bóng đèn compact", group: 2 },
       ],
       explanation: "Nguồn: người đạp xe, ánh sáng mặt trời, vòi nước chảy, ấm nước sôi. Chuyển hoá thành điện năng: pin mặt trời, máy phát điện. Tiêu thụ điện: bếp điện, bóng đèn sợi đốt, bóng đèn compact, quạt điện.",
@@ -238,7 +238,7 @@ const LESSON = {
       remember: ["Đo cường độ dòng điện bằng ampe kế, mắc NỐI TIẾP với đoạn mạch cần đo.", "Không mắc ampe kế trực tiếp vào hai cực nguồn điện."],
     },
     {
-      id: "nv2-cac-buoc", name: "Sắp xếp các bước lắp mạch đo dòng điện 🪜", type: "ordering",
+      id: "nv2-cac-buoc", name: "Sắp xếp các bước lắp mạch đo dòng điện 🔢", type: "ordering",
       goal: "Nắm quy trình lắp mạch và đo cường độ dòng điện trên phòng thí nghiệm ảo.",
       time: 150,
       task: "Sắp xếp các bước theo đúng thứ tự rồi bấm Nộp bài.",
@@ -293,7 +293,7 @@ const LESSON = {
       remember: ["Ngôi sao năm cánh đều: AB/BC = AC/AB = AD/AC = (1 + √5)/2 ≈ 1,618 — tỉ lệ vàng.", "Mô phỏng hình học cho phép đo, tính và kiểm chứng nhanh trên nhiều kích thước khác nhau."],
     },
     {
-      id: "nv3-cac-buoc", name: "Sắp xếp thao tác trong Geometer's Sketchpad 🪜", type: "ordering",
+      id: "nv3-cac-buoc", name: "Sắp xếp thao tác trong Geometer's Sketchpad 🔢", type: "ordering",
       goal: "Nắm quy trình đo và tính tỉ lệ trong phần mềm mô phỏng hình học.",
       time: 150,
       task: "Sắp xếp các thao tác khám phá tỉ lệ vàng theo đúng thứ tự rồi bấm Nộp bài.",

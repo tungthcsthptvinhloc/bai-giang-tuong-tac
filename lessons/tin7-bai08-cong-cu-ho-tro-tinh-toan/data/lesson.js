@@ -194,7 +194,7 @@ const LESSON = {
       content: {
         heading: "⌨️ Nhập hàm",
         prompt: "Hoạt động 2: Theo em, nhập hàm vào bảng tính có giống như nhập dữ liệu thông thường không?",
-        revealLabel: "🪜 Các bước nhập hàm (SGK tr.40)",
+        revealLabel: "🔢 Các bước nhập hàm (SGK tr.40)",
         blocks: [
           { kind: "list", value: ["Bước 1. Nháy chuột vào ô C9 (hoặc vùng nhập dữ liệu) để nhập hàm.", "Bước 2. Nhập =SUM( , sau đó dùng chuột đánh dấu vùng dữ liệu cần tính tổng (C4:C8), gõ dấu đóng ngoặc “)” để đóng hàm.", "Nhấn Enter để kết thúc — kết quả hiện ngay trên ô C9.", "Tương tự cho D9 đến I9 — có thể sao chép công thức từ ô C9 sang các ô D9 đến I9."] },
           { kind: "image", value: "assets/sgk/hinh-8-4.jpg", caption: "Hình 8.4. Vị trí nhập hàm" },
@@ -218,7 +218,7 @@ const LESSON = {
       remember: ["Cách nhập hàm tương tự như cách nhập công thức. Cú pháp: =<tên hàm>(<các tham số>).", "Cần nhập chính xác tên hàm và các tham số; có thể dùng chuột chọn các ô hoặc vùng làm tham số."],
     },
     {
-      id: "cac-buoc-nhap-ham", name: "Sắp xếp các bước nhập hàm 🪜", type: "ordering",
+      id: "cac-buoc-nhap-ham", name: "Sắp xếp các bước nhập hàm 🔢", type: "ordering",
       goal: "Nắm quy trình nhập hàm.",
       time: 90,
       task: "Sắp xếp các bước nhập hàm =SUM(C4:C8) vào ô C9 rồi bấm Nộp bài.",
@@ -328,7 +328,7 @@ const LESSON = {
       sheet: T4base,
       content: {
         heading: "🌳 Trang tính 4. Dự kiến kết quả",
-        revealLabel: "🪜 Hướng dẫn trên Excel (SGK tr.42–44)",
+        revealLabel: "🔢 Hướng dẫn trên Excel (SGK tr.42–44)",
         blocks: [
           { kind: "list", value: [
             "a) Mở tệp THXanh.xlsx; tạo trang tính mới đặt tên 4. Dự kiến kết quả.",

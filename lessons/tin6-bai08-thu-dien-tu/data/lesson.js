@@ -279,7 +279,7 @@ const LESSON = {
         intro: "🧪 Hộp thư mô phỏng giống Gmail. Thư gửi trong mô phỏng không đi ra Internet." },
       content: {
         heading: "🆕 Tạo tài khoản thư điện tử",
-        revealLabel: "🪜 Các bước (SGK tr.34)",
+        revealLabel: "🔢 Các bước (SGK tr.34)",
         blocks: [
           { kind: "list", value: ["1. Truy cập trang mail.google.com.", "2. Nháy chuột vào nút Tạo tài khoản.", "3. Nhập đầy đủ thông tin vào các dòng trên cửa sổ theo hướng dẫn.", "4. Nháy chuột vào nút Tiếp theo.", "5. Xác nhận số điện thoại (nếu có).", "6. Thực hiện theo hướng dẫn.", "7. Cuối cùng xuất hiện thông báo Chào mừng bạn!"] },
           { kind: "text", value: "Lưu ý: Theo quy định của Google, trẻ vị thành niên cần có sự đồng ý, trợ giúp và quản lí của phụ huynh nếu muốn đăng kí tài khoản thư điện tử. Em cần ghi nhớ tên đăng nhập và mật khẩu truy cập." },
@@ -304,7 +304,7 @@ const LESSON = {
       mail: { key: "gmail", me: ME, login: true, signup: true, inbox: INBOX, files: FILES },
       content: {
         heading: "🔐 Đăng nhập hộp thư, xem nội dung thư, đăng xuất",
-        revealLabel: "🪜 Các bước (SGK tr.34–35)",
+        revealLabel: "🔢 Các bước (SGK tr.34–35)",
         blocks: [
           { kind: "list", value: ["1. Truy cập trang mail.google.com.", "2. Đăng nhập vào hộp thư: chọn tên đăng nhập → nhập mật khẩu → nháy Tiếp theo (hoặc nhấn Enter).", "3. Hộp thư mở ra với danh sách các thư trong Hộp thư đến.", "4. Nháy chuột vào Tên người gửi hoặc Tiêu đề thư để mở thư.", "5. Nháy chuột vào nút Đăng xuất để ra khỏi hộp thư điện tử."] },
           { kind: "image", value: "assets/sgk/hinh-3-11.jpg", caption: "Hình 3.11. Đăng nhập hộp thư" },
@@ -322,7 +322,7 @@ const LESSON = {
       remember: ["Đăng xuất khi không dùng hộp thư điện tử để tránh bị người khác sử dụng."],
     },
     {
-      id: "cac-buoc-soan", name: "Sắp xếp các bước soạn thư mới và gửi 🪜", type: "ordering",
+      id: "cac-buoc-soan", name: "Sắp xếp các bước soạn thư mới và gửi 🔢", type: "ordering",
       goal: "Nắm quy trình soạn và gửi thư (Hình 3.13).",
       time: 120,
       task: "Sắp xếp các bước soạn thư mới và gửi theo đúng thứ tự rồi bấm Nộp bài.",

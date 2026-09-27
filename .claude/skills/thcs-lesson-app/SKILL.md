@@ -440,6 +440,9 @@ trường dữ liệu để kích hoạt — đây là yêu cầu chuẩn, khôn
   ảnh scan. Kết hợp với nút "Xem ảnh SGK" cho ảnh gốc.
 - **Trực quan cho lớp 6:** đặt bảng màu tươi sáng trong `styles/app.css` (`:root`),
   nhiều emoji/biểu tượng, card bo tròn. Mỗi bài nên có nhận diện màu riêng.
+- **Không dùng emoji dải U+1FA70–U+1FAFF** (Emoji 13+, ví dụ 🫧 🪜 🪣 🫖): Windows 10
+  của phòng máy (font Segoe UI Emoji cũ) hiện thành ô vuông. Thay bằng emoji cũ tương
+  đương, ví dụ 🪜 → 🔢 (các bước), 🪣 → 🎨, 🫖 → ☕.
 
 ## Tài nguyên trong skill
 

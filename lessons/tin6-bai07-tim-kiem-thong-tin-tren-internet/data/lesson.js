@@ -190,7 +190,7 @@ const LESSON = {
 
     /* ===================== HĐ2.2: THỰC HÀNH (22 phút) ===================== */
     {
-      id: "cac-buoc-tim-kiem", name: "Các bước tìm kiếm thông tin 🪜", type: "ordering",
+      id: "cac-buoc-tim-kiem", name: "Các bước tìm kiếm thông tin 🔢", type: "ordering",
       goal: "Nắm các bước tìm kiếm thông tin bằng máy tìm kiếm.",
       time: 150,
       task: "Nhóm thảo luận: để tìm kiếm thông tin bằng máy tìm kiếm em làm những bước nào? Sắp xếp đúng thứ tự rồi bấm Nộp bài.",
