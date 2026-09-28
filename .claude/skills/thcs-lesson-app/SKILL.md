@@ -346,6 +346,14 @@ cond: hình thoi kiểm tra điều kiện) nối bằng mũi tên; chấm, nộ
 - Ghép khối lệnh: `ordering` thêm `blocks: ["event","looks","sensing","variables","operators","control","motion","sound"]` (cùng thứ tự steps).
   Khi các cặp lệnh đổi chỗ được (nhập a/b), ghi rõ thứ tự trong `task` (ví dụ “nhập a trước, b sau”).
 - Nút mở Scratch thật: `links: [{ label, url: "https://scratch.mit.edu/projects/editor/" }]`.
+- **Nhân vật di chuyển, vẽ hình** (Tin 8 Bài 12 — sân khấu 480×360 toạ độ như Scratch, bọ rùa/xe buýt tự vẽ SVG):
+  `turtle: { title, intro?, sprite?: "bug" | "bus", start: { x, y, dir }, flow?: true, goals?: [3, 4, 6], rock?: { x, y, name: "Rocks",
+  label: "hòn đá" }, script: [{ op: "flag" }, { op: "clear" }, { op: "pendown" }, { op: "color", c: "#8e24aa", name: "tím" },
+  { op: "repeat", times: 3, edit: true, body: [{ op: "move", steps: 60, edit: true }, { op: "turn", deg: 120, edit: true },
+  { op: "wait", secs: 1 }] }, { op: "penup" } | { op: "goto", x, y } | { op: "until", lt: 120, body: [...] }] }` — `edit` = ô số sửa
+  được trên khối; `flow` = sơ đồ khối (Lần lặp ← 1, Lần lặp ≤ n, Tăng Lần lặp) sinh tự động, sáng theo lệnh đang chạy; vẽ đúng đa giác
+  đều trong `goals` → 🎉, chưa khép kín → gợi ý. Nhóm Bút vẽ trong `ordering.blocks` là `"pen"`. Khối lệnh tĩnh cho câu hỏi: dùng lớp
+  `sb sb-event|motion|control|pen`, `sb-c`/`sb-inner` (xem hàm `B`, `LOOP`, `STACK`, `PATH` trong Bài 12).
 Không đặt `runner` trong trò ghép sơ đồ khối (lộ đáp án) — đặt ở hoạt động SAU. Vẽ sơ đồ tĩnh trong `content` bằng các lớp
 `fc-chart`, `fc-node fc-term|fc-io|fc-proc|fc-cond`, `fc-arrow` (engine có sẵn CSS).
 
@@ -413,7 +421,13 @@ HS bấm ▶ Bước tiếp: thẻ đang xét sáng lên, bảng lần lặp t�
   - `colorsim: { title, slide: { title, bullets }, palette?: [{ name, hex }] }` — chọn chủ đề (lễ hội → nóng, học tập → trung tính,
     nghệ thuật/tri ân → lạnh), màu nền/tiêu đề/chữ, cỡ chữ (pt, tỉ lệ đúng trang 16:9) → nhận xét độ tương phản (WCAG ≥ 4,5 dễ đọc),
     nhóm màu, trộn nóng–lạnh, cỡ chữ ≥ 20, tiêu đề lớn hơn nội dung.
-  - Trang chiếu mẫu cho câu hỏi: tự vẽ bằng hàm `SL` trong `data/lesson.js` (xem Tin 8 Bài 10a) đặt vào `html` của câu.
+  - `tplsim: { title, want?: "id", success?, cats?, templates: [{ id, name, cat, kind?: "template" | "theme" | "blank", home?, keys?,
+    desc?, note?, slides?: ["html 16:9"] }] }` (Tin 8 Bài 11a, Hình 11a.3) — màn hình File: Home / New → ô tìm kiếm (không dấu vẫn
+    tìm được theo `keys`) + Suggested searches → xem trước ◀ ▶ → Create → cửa sổ bài trình chiếu (cột trang thu nhỏ + trang lớn).
+    `kind: "theme"` báo “chỉ có màu sắc, phông chữ, hiệu ứng”; tạo đúng `want` → 🎉. Trang chiếu viết HTML định vị tuyệt đối, cỡ
+    chữ theo `cqw` (1cqw = 1% bề rộng trang) để thu nhỏ/phóng to đúng tỉ lệ; biểu tượng tự vẽ SVG (xem `LAB`, `IC` trong Bài 11a).
+  - Trang chiếu mẫu cho câu hỏi: tự vẽ bằng hàm `SL` trong `data/lesson.js` (xem Tin 8 Bài 10a) hoặc `BOX(html)` (Bài 11a, dùng lại
+    trang của `tplsim`) đặt vào `html` của câu/hoạt động. Phông có dấu tiếng Việt: dùng Arial/“Times New Roman” (Georgia lỗi dấu “ế”).
 - **Mô phỏng lan truyền thông tin số** (Tin 8 Bài 2): `spread: { title, intro, thumb?: "assets/anh.jpg" | emoji?, steps: [{ text,
   nodes: [{ id, icon, name, from?: "id", via?: "thư điện tử", edited?, paper? (bản in), lock?: "lí do không xoá được" }] }], end? }` —
   ▶ Bước tiếp thêm thiết bị nhận bản sao, bộ đếm bản sao số; 🗑️ xoá bản sao của mình, 🔒 báo không xoá được → minh hoạ “dễ nhân

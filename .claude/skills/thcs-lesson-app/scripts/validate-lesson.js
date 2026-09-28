@@ -197,7 +197,7 @@ function checkMindmapsChecklists(L) {
       else a.flow.forEach((sh, i) => { if (!SHAPES.includes(sh)) err(`${where}: bước ${i + 1} có hình "${sh}" không hợp lệ (${SHAPES.join(", ")}).`); });
     }
     if (a.blocks) { // ordering dạng khối lệnh Scratch
-      const where = `HĐ "${a.id}" blocks`, CATS = ["event", "looks", "sensing", "variables", "operators", "control", "motion", "sound"];
+      const where = `HĐ "${a.id}" blocks`, CATS = ["event", "looks", "sensing", "variables", "operators", "control", "motion", "sound", "pen"];
       if (a.type !== "ordering") err(`${where}: \`blocks\` chỉ dùng cho type "ordering".`);
       else if (!Array.isArray(a.blocks) || a.blocks.length !== (a.steps || []).length) err(`${where}: cần mảng cùng độ dài với \`steps\`.`);
       else a.blocks.forEach((c, i) => { if (!CATS.includes(c)) err(`${where}: khối ${i + 1} có nhóm "${c}" không hợp lệ (${CATS.join(", ")}).`); });
@@ -283,6 +283,12 @@ function checkMindmapsChecklists(L) {
     if (a.flyer) { if (!a.flyer.bg || !Array.isArray(a.flyer.texts)) err(`HĐ "${a.id}" flyer: cần \`bg\` và \`texts\`.`); (a.flyer.checks || []).forEach((c, i) => { if (!["color", "inCircle", "shapes", "region"].includes(c.test)) err(`HĐ "${a.id}" flyer: checks[${i}] có test "${c.test}" không hợp lệ.`); }); }
     if (a.hfsim && (!Array.isArray(a.hfsim.slides) || !a.hfsim.slides.length)) err(`HĐ "${a.id}" hfsim: cần \`slides\`.`);
     if (a.colorsim && (!a.colorsim.slide || !a.colorsim.slide.title || !Array.isArray(a.colorsim.slide.bullets))) err(`HĐ "${a.id}" colorsim: cần \`slide: { title, bullets }\`.`);
+    if (a.tplsim) {
+      const T = a.tplsim.templates;
+      if (!Array.isArray(T) || !T.length || T.some((t) => !t.id || !t.name)) err('HĐ "' + a.id + '" tplsim: cần templates: [{ id, name, cat, slides }].');
+      else if (a.tplsim.want && !T.some((t) => t.id === a.tplsim.want)) err('HĐ "' + a.id + '" tplsim: want "' + a.tplsim.want + '" không có trong templates.');
+    }
+    if (a.turtle && (!Array.isArray(a.turtle.script) || !a.turtle.script.length)) err('HĐ "' + a.id + '" turtle: cần script: [{ op: "flag" }, …].');
     { // biểu đồ SVG: a.chart, q.chart, content.blocks { kind: "chart" }
       const chk = (spec, where) => [].concat(spec).forEach((s, i) => {
         const w = Array.isArray(spec) ? `${where} [${i + 1}]` : where, ser = s && (s.series || [{ values: s.values }]);

@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-09-28T14:20:03.060Z",
+ "generatedAt": "2026-09-28T15:17:17.129Z",
  "lessons": [
   {
    "id": "tin6-bai01-thong-tin-va-du-lieu",
@@ -429,6 +429,36 @@
    "unit": "Chủ đề 4a — Soạn thảo văn bản và trình chiếu nâng cao",
    "activities": 14,
    "items": 35,
+   "open": 0
+  },
+  {
+   "id": "tin8-bai11a-su-dung-ban-mau-tao-bai-trinh-chieu",
+   "title": "Bài 11a: Sử dụng bản mẫu tạo bài trình chiếu",
+   "grade": "8",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4a — Soạn thảo văn bản và trình chiếu nâng cao",
+   "activities": 13,
+   "items": 38,
+   "open": 1
+  },
+  {
+   "id": "tin8-bai12-tu-thuat-toan-den-chuong-trinh",
+   "title": "Bài 12: Từ thuật toán đến chương trình",
+   "grade": "8",
+   "subject": "Tin học",
+   "unit": "Chủ đề 5 — Giải quyết vấn đề với sự trợ giúp của máy tính",
+   "activities": 17,
+   "items": 31,
+   "open": 0
+  },
+  {
+   "id": "tin8-bai13-bieu-dien-du-lieu",
+   "title": "Bài 13: Biểu diễn dữ liệu",
+   "grade": "8",
+   "subject": "Tin học",
+   "unit": "Chủ đề 5 — Giải quyết vấn đề với sự trợ giúp của máy tính",
+   "activities": 13,
+   "items": 40,
    "open": 0
   },
   {

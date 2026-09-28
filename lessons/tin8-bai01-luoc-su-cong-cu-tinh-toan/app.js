@@ -578,6 +578,8 @@
     if (a.flyer) cardEl.appendChild(flyerBox(a)); // thiết kế tờ rơi kéo thả
     if (a.hfsim) cardEl.appendChild(hfsimBox(a)); // hộp thoại Header and Footer (PowerPoint)
     if (a.colorsim) cardEl.appendChild(colorsimBox(a)); // phối màu trang chiếu
+    if (a.tplsim) cardEl.appendChild(tplsimBox(a)); // chọn bản mẫu File › New (PowerPoint)
+    if (a.turtle) cardEl.appendChild(turtleBox(a)); // nhân vật di chuyển, vẽ hình như Scratch
   }
   function appendRemember(items, cardOrView) {
     // "Em cần nhớ" — ẩn, bấm mới hiện
@@ -986,7 +988,7 @@
   const FC_SHAPES = { term: 1, io: 1, proc: 1, cond: 1 };
   const fcNode = (text, shape) => `<span class="fc-node fc-${FC_SHAPES[shape] ? shape : "proc"}">${esc(text)}</span>`;
   // Khối lệnh Scratch: a.blocks = ["event","looks","sensing","variables","operators","control","motion","sound"] (cùng thứ tự steps ĐÚNG)
-  const SB_CATS = { event: 1, looks: 1, sensing: 1, variables: 1, operators: 1, control: 1, motion: 1, sound: 1 };
+  const SB_CATS = { event: 1, looks: 1, sensing: 1, variables: 1, operators: 1, control: 1, motion: 1, sound: 1, pen: 1 };
   const sbNode = (text, cat) => `<span class="sb sb-${SB_CATS[cat] ? cat : "control"}${cat === "event" ? " sb-hat" : ""}">${esc(text)}</span>`;
   const stepHTML = (a, i) => (a.flow ? fcNode((a.steps || [])[i], a.flow[i]) : a.blocks ? sbNode((a.steps || [])[i], a.blocks[i]) : esc((a.steps || [])[i]));
   function orderingUI(a) {
@@ -3429,6 +3431,46 @@
 .cs-t{font-weight:800;text-align:center;line-height:1.15;margin-bottom:.3em}.cs-slide ul{margin:0;padding-left:1.2em;line-height:1.3}
 .cs-list{display:flex;flex-direction:column;gap:5px;margin-top:8px;text-align:left}.cs-it{border-radius:8px;padding:5px 9px;font-size:.93rem;border:1px solid #e2e8f0;background:#fff}
 .cs-it.ok{background:#dcfce7;border-color:#86efac}.cs-it.warn{background:#fef9c3;border-color:#fde047}.cs-it.bad{background:#fee2e2;border-color:#fca5a5}
+.tp-scr{position:relative;display:flex;min-height:470px;contain:inline-size;margin-top:6px;border:1px solid #9ca3af;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,.15);font-family:"Segoe UI",Arial,sans-serif;color:#111;text-align:left;overflow:hidden}
+.tp-side{flex:0 0 150px;background:#b7472a;color:#fff;display:flex;flex-direction:column;padding:6px 0}.tp-back{font-size:1.4rem;padding:4px 16px 10px}
+.tp-sb{background:none;border:0;color:#fff;font:inherit;font-size:1rem;text-align:left;padding:9px 16px;cursor:pointer}.tp-sb:hover{background:rgba(0,0,0,.15)}.tp-sb.on{background:#7c2d18;box-shadow:inset 4px 0 0 #fde68a;font-weight:700}
+.tp-main{flex:1;min-width:0;padding:12px 18px 16px}.tp-h{font-size:2rem;font-weight:300;margin:0 0 8px}.tp-sub{font-weight:600;margin-bottom:6px}
+.tp-search{display:flex;max-width:560px;border:1px solid #9ca3af}.tp-search input{flex:1;min-width:0;font:inherit;font-size:.95rem;padding:6px 10px;border:0;outline:0}.tp-go{border:0;background:#f1f5f9;cursor:pointer;padding:0 12px;font-size:1rem}
+.tp-sugg{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;font-size:.88rem;margin:8px 0 12px;font-weight:600}
+.tp-cat{background:none;border:0;padding:2px 0;font:inherit;font-weight:400;color:#1f2937;cursor:pointer}.tp-cat:hover{color:#b7472a;text-decoration:underline}.tp-cat.on{color:#b7472a;text-decoration:underline;font-weight:700}
+.tp-bk{background:none;border:0;color:#b7472a;font:inherit;font-size:.9rem;cursor:pointer;padding:0 0 8px}.tp-none{color:#64748b;font-style:italic;margin:8px 0}
+.tp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}.tp-few{max-width:640px}
+.tp-card{cursor:pointer;border:2px solid transparent;border-radius:4px;padding:4px;text-align:center}.tp-card:hover{border-color:#cbd5e1;background:#f1f5f9}.tp-name{font-size:.85rem;margin-top:4px}
+.tp-more{background:none;border:0;color:#b7472a;font:inherit;font-size:.9rem;cursor:pointer;margin-top:8px;padding:0}
+.tp-slide{container-type:inline-size;position:relative;aspect-ratio:16/9;overflow:hidden;background:#fff;border:1px solid #cbd5e1;font-family:Arial,sans-serif;text-align:left;line-height:1.2}.tp-sin{position:absolute;inset:0}
+.tp-pv{position:absolute;inset:0;z-index:5;background:rgba(15,23,42,.45);display:flex;align-items:flex-start;justify-content:center;padding:10px;overflow:auto}
+.tp-pvbox{position:relative;width:min(500px,100%);background:#fff;padding:14px 16px;box-shadow:0 10px 30px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:6px}
+.tp-x{position:absolute;right:6px;top:4px;background:none;border:0;font-size:1.1rem;cursor:pointer;z-index:1}.tp-pvbox .tp-slide{margin-top:18px}
+.tp-pvnav{display:flex;justify-content:center;align-items:center;gap:12px;font-size:.85rem;color:#475569}.tp-arr{border:1px solid #cbd5e1;background:#fff;cursor:pointer;padding:2px 10px}
+.tp-pvn{font-size:1.25rem;font-weight:600}.tp-desc{font-size:.88rem;color:#475569}
+.tp-create{align-self:flex-start;background:#b7472a;color:#fff;border:0;padding:8px 26px;font:inherit;font-weight:700;cursor:pointer}.tp-create:hover{background:#8f351f}
+.tp-doc{flex:1;min-width:0;display:flex;flex-direction:column}.tp-bar{display:flex;justify-content:space-between;background:#b7472a;color:#fff;padding:5px 12px;font-size:.9rem}
+.tp-rib{display:flex;flex-wrap:wrap;gap:4px 14px;background:#f3f4f6;border-bottom:1px solid #d1d5db;padding:4px 10px;font-size:.85rem}
+.tp-body{flex:1;display:flex;gap:10px;padding:10px;background:#e5e7eb;min-height:0}
+.tp-thumbs{flex:0 0 150px;max-height:440px;overflow:auto;display:flex;flex-direction:column;gap:8px;padding-right:4px}
+.tp-th{display:flex;gap:4px;cursor:pointer;font-size:.75rem;color:#475569}.tp-th .tp-slide{flex:1}.tp-th.on .tp-slide{outline:3px solid #b7472a}
+.tp-big{flex:1;min-width:0;display:flex;align-items:center;justify-content:center}.tp-big .tp-slide{width:100%;max-width:760px;box-shadow:0 4px 14px rgba(0,0,0,.2)}
+.tp-stat{display:flex;justify-content:space-between;align-items:center;background:#f3f4f6;font-size:.8rem;padding:3px 10px;color:#475569}.tp-again{background:none;border:1px solid #cbd5e1;font:inherit;font-size:.8rem;cursor:pointer;padding:2px 8px}
+@media (max-width:640px){.tp-side{flex-basis:78px}.tp-sb{padding:8px 6px;font-size:.82rem}.tp-main{padding:10px}.tp-h{font-size:1.5rem}.tp-body{flex-direction:column-reverse}.tp-thumbs{flex:none;flex-direction:row;max-height:none;overflow-x:auto;padding:0 0 4px}.tp-th{flex:0 0 96px}.tp-grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}}
+.card{overflow-wrap:anywhere}.topbar .act-name{overflow-wrap:anywhere;min-width:0}
+.sb-pen{background:#0fbd8c}.tt-code .sb-row{display:flex;flex-wrap:wrap;gap:4px;align-items:center}.tt-code .sb-bool{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center;padding:3px 14px}.tt-on{box-shadow:0 0 0 4px #fde047,0 0 14px #facc15}
+.tt-num{width:3.3em;border:none;border-radius:999px;text-align:center;font:inherit;font-weight:700;color:#333;padding:1px 4px;background:#fff}.tt-num:focus{outline:3px solid #fde047}
+.tt-sw{display:inline-block;width:22px;height:22px;border-radius:50%;border:2px solid #fff;vertical-align:middle}
+.tt-code{flex:1 1 210px}.tt-right{flex:3 1 400px}.tt-wrap>.tt-code,.tt-wrap>.tt-flow{max-width:100%}
+.tt-flow{flex:1 1 200px;margin:0;font-size:.88rem;gap:1px}.tt-flow .fc-node{min-width:140px;padding:5px 12px}.tt-flow .fc-cond{padding:15px 30px}.tt-flow .fc-arrow{font-size:1.05rem}
+.tt-loop{border:2px dashed #db2777;border-radius:10px;padding:6px 8px;display:flex;flex-direction:column;align-items:center;gap:1px;background:#fff7fb}
+.tt-yes{font-size:.78rem;color:#475569}.tt-back{font-size:.8rem;color:#be185d;font-weight:700;margin-top:2px}
+.tt-stage{position:relative;aspect-ratio:4/3;background:#fff;border:2px solid #cbd5e1;border-radius:12px;overflow:hidden}
+.tt-svg{position:absolute;inset:0;width:100%;height:100%}
+.tt-obj{position:absolute;transform:translate(-50%,-50%);line-height:0;pointer-events:none;width:9%}.tt-obj svg{width:100%;height:auto;display:block}.tt-obj.tt-bus{width:19%}.tt-obj.tt-rock{width:13%}.tt-rock{z-index:1}.tt-spr{z-index:2}
+.tt-spd{font:inherit;font-size:.95rem;padding:4px 6px;border-radius:8px;border:2px solid #cbd5e1}
+.tt-goals{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-weight:700}.tt-goals:empty{display:none}
+.tt-goal{background:#fff;border:2px solid #cbd5e1;border-radius:999px;padding:2px 10px;font-weight:600}.tt-goal.ok{border-color:#16a34a;background:#dcfce7}
 .chart-fig{margin:6px auto;max-width:640px}.ladder-card .chart-fig{max-width:500px}.chart-svg{display:block;width:100%;height:auto;border-radius:10px}
 .chart-row{display:flex;flex-wrap:wrap;gap:12px;justify-content:center}.chart-row>.chart-fig{flex:1 1 460px;max-width:600px;margin:0}
 .poll-tabs{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}.poll-tab.on{background:var(--primary,#2563eb);color:#fff;border-color:var(--primary,#2563eb)}
@@ -4254,6 +4296,312 @@
       right.appendChild(list);
     }
     paint();
+    return box;
+  }
+
+  // ---- MÔ PHỎNG CHỌN BẢN MẪU: FILE › NEW CỦA POWERPOINT (hoạt động `tplsim`) — Tin 8 Bài 11a, Hình 11a.3 ----------
+  //  tplsim: { title?, intro?, cats?: ["Presentations","Themes","Education","Charts","Diagrams"], want?: "id bản mẫu cần tạo", success?,
+  //    templates: [{ id, name, cat, kind?: "template" | "theme" | "blank", keys?: "từ khoá tìm kiếm", desc?, note?: "nhận xét khi tạo",
+  //      slides?: ["<html trang chiếu 16:9, định vị tuyệt đối, cỡ theo đơn vị cqw>", ...] }] }
+  //  Backstage Home / New / Open → New: ô tìm kiếm + Suggested searches → danh sách bản mẫu → xem trước (◀ ▶) → Create
+  //  → cửa sổ bài trình chiếu mới (cột trang chiếu thu nhỏ + trang lớn). Không chấm; tạo đúng bản mẫu `want` thì 🎉.
+  const TP_BLANK = ['<div style="position:absolute;left:12%;right:12%;top:26%;height:24%;border:1px dashed #94a3b8;display:flex;align-items:center;justify-content:center;font-size:4.2cqw;color:#64748b">Click to add title</div><div style="position:absolute;left:20%;right:20%;top:56%;height:14%;border:1px dashed #94a3b8;display:flex;align-items:center;justify-content:center;font-size:2.6cqw;color:#64748b">Click to add subtitle</div>'];
+  function tplsimBox(a) {
+    ensureEngineCSS();
+    const spec = a.tplsim, T = spec.templates || [], cats = spec.cats || ["Presentations", "Themes", "Education", "Charts", "Diagrams"];
+    const want = T.find((t) => t.id === spec.want);
+    const S = a._tp || (a._tp = { view: "home", q: "", cat: "", pv: null, pvi: 0, doc: null, cur: 0, done: false });
+    const box = el("div", "sr-box tp-box");
+    box.appendChild(el("h3", "sr-title", "🗂️ " + esc(spec.title || "Mô phỏng: sử dụng bản mẫu (File › New)")));
+    if (spec.intro) box.appendChild(el("p", "subtitle", esc(spec.intro)));
+    const scr = el("div", "tp-scr"), msg = el("div", "sp-msg");
+    box.append(scr, msg);
+    const say = (t) => { msg.className = "sp-msg"; msg.innerHTML = t; };
+    const norm = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").trim();
+    const slidesOf = (t) => (t.slides && t.slides.length ? t.slides : TP_BLANK);
+    const slideEl = (html) => { const d = el("div", "tp-slide"); d.innerHTML = '<div class="tp-sin">' + html + "</div>"; return d; };
+    const btn = (cls, html, fn) => { const b = el("button", cls, html); b.type = "button"; b.onclick = fn; return b; };
+    const card = (t) => {
+      const c = el("div", "tp-card");
+      c.append(slideEl(slidesOf(t)[0]), el("div", "tp-name", esc(t.name)));
+      c.onclick = () => { S.pv = t.id; S.pvi = 0; paint(); say("👀 Đang xem trước <b>" + esc(t.name) + "</b>. Bấm ◀ ▶ để xem các trang, bấm <b>Create</b> để tạo bài trình chiếu."); };
+      return c;
+    };
+    function create(t) {
+      S.doc = t.id; S.cur = 0; S.pv = null; S.view = "doc"; paint();
+      if (want && t.id === want.id) {
+        say("🎉 " + esc(spec.success || "Đã tạo bài trình chiếu từ bản mẫu " + t.name + "!"));
+        if (!S.done) { S.done = true; sound("ok"); celebrate(); }
+      } else if (t.note) say(t.note);
+      else if (t.kind === "theme") say("🎨 <b>" + esc(t.name) + "</b> là <b>mẫu định dạng (Theme)</b>: chỉ có màu sắc, phông chữ, hiệu ứng — chưa có nội dung gợi ý." + (want ? " Nhiệm vụ cần bản mẫu <b>" + esc(want.name) + "</b>." : ""));
+      else if (t.kind === "blank") say("⬜ Bài trình chiếu trống: em phải tự thiết kế từ đầu." + (want ? " Nhiệm vụ cần bản mẫu <b>" + esc(want.name) + "</b>." : ""));
+      else say("✅ Đã tạo bài trình chiếu từ bản mẫu <b>" + esc(t.name) + "</b>." + (want ? " Nhiệm vụ cần bản mẫu <b>" + esc(want.name) + "</b> (chủ đề <b>" + esc(want.cat) + "</b>)." : ""));
+    }
+    function paint() {
+      scr.innerHTML = "";
+      if (S.view === "doc") return paintDoc();
+      const side = el("div", "tp-side");
+      side.appendChild(el("div", "tp-back", "⮌"));
+      [["home", "🏠 Home"], ["new", "📄 New"], ["open", "📂 Open"]].forEach(([k, lb]) => {
+        side.appendChild(btn("tp-sb" + ((S.view === k || (k === "new" && S.view === "res")) ? " on" : ""), lb, () => {
+          if (k === "open") { say("📂 Mô phỏng này chỉ có <b>Home</b> và <b>New</b>. Hãy bấm <b>New</b>."); return; }
+          S.view = k; S.q = ""; S.cat = ""; S.pv = null; paint();
+          say(k === "new" ? "🔎 Chọn một chủ đề trong <b>Suggested searches</b> (ví dụ <b>Education</b>) hoặc gõ từ khoá vào ô tìm kiếm rồi nhấn Enter." : "👉 Bấm <b>New</b> ở cột bên trái để xem các bản mẫu có sẵn.");
+        }));
+      });
+      const main = el("div", "tp-main");
+      scr.append(side, main);
+      if (S.view === "home") {
+        main.appendChild(el("div", "tp-h", "Good morning"));
+        main.appendChild(el("div", "tp-sub", "New"));
+        const g = el("div", "tp-grid tp-few");
+        T.filter((t) => t.home).forEach((t) => g.appendChild(card(t)));
+        main.appendChild(g);
+        main.appendChild(btn("tp-more", "More themes →", () => { S.view = "new"; paint(); }));
+      } else {
+        main.appendChild(el("div", "tp-h", "New"));
+        const sr = el("div", "tp-search"), inp = el("input");
+        inp.placeholder = "Search for online templates and themes"; inp.value = S.cat ? S.cat : S.q;
+        const go = () => { S.q = inp.value.trim(); S.cat = ""; S.view = S.q ? "res" : "new"; paint(); if (S.q) say("🔎 Kết quả tìm kiếm cho “" + esc(S.q) + "”. Bấm vào một bản mẫu để xem trước."); };
+        inp.onkeydown = (e) => { e.stopPropagation(); if (e.key === "Enter") go(); };
+        sr.append(inp, btn("tp-go", "🔍", go));
+        main.appendChild(sr);
+        const sg = el("div", "tp-sugg"); sg.appendChild(el("span", "", "Suggested searches:"));
+        cats.forEach((c) => sg.appendChild(btn("tp-cat" + (S.cat === c ? " on" : ""), esc(c), () => {
+          S.cat = c; S.q = ""; S.view = "res"; paint();
+          say(T.some((t) => t.cat === c) ? "📚 Các bản mẫu chủ đề <b>" + esc(c) + "</b>. Bấm vào một bản mẫu để xem trước." : "🙈 Mô phỏng chưa có bản mẫu chủ đề <b>" + esc(c) + "</b> — thử chủ đề khác nhé.");
+        })));
+        main.appendChild(sg);
+        let list;
+        if (S.view === "res") {
+          main.appendChild(btn("tp-bk", "← Back", () => { S.view = "new"; S.q = ""; S.cat = ""; paint(); }));
+          list = S.cat ? T.filter((t) => t.cat === S.cat) : T.filter((t) => norm(t.name + " " + (t.keys || "") + " " + t.cat).includes(norm(S.q)));
+          if (!list.length) main.appendChild(el("div", "tp-none", "Không tìm thấy bản mẫu phù hợp. Hãy thử từ khoá khác hoặc chọn một chủ đề."));
+        } else list = T.filter((t) => t.kind === "blank" || t.kind === "theme");
+        const g = el("div", "tp-grid");
+        list.forEach((t) => g.appendChild(card(t)));
+        main.appendChild(g);
+      }
+      if (S.pv) {
+        const t = T.find((x) => x.id === S.pv), sl = slidesOf(t), ov = el("div", "tp-pv"), pb = el("div", "tp-pvbox");
+        ov.onclick = (e) => { if (e.target === ov) { S.pv = null; paint(); } };
+        const nav = el("div", "tp-pvnav");
+        nav.append(btn("tp-arr", "◀", () => { S.pvi = (S.pvi + sl.length - 1) % sl.length; paint(); }), el("span", "", "Trang " + (S.pvi + 1) + "/" + sl.length),
+          btn("tp-arr", "▶", () => { S.pvi = (S.pvi + 1) % sl.length; paint(); }));
+        pb.append(btn("tp-x", "✕", () => { S.pv = null; paint(); }), slideEl(sl[S.pvi]), nav, el("div", "tp-pvn", esc(t.name)));
+        if (t.desc) pb.appendChild(el("div", "tp-desc", esc(t.desc)));
+        pb.appendChild(btn("tp-create", "Create", () => create(t)));
+        ov.appendChild(pb); scr.appendChild(ov);
+      }
+    }
+    function paintDoc() {
+      const t = T.find((x) => x.id === S.doc), sl = slidesOf(t), d = el("div", "tp-doc");
+      d.appendChild(el("div", "tp-bar", "<span>" + esc(t.kind === "blank" ? "Presentation1" : t.name) + " - PowerPoint</span><span>— ☐ ✕</span>"));
+      d.appendChild(el("div", "tp-rib", ["File", "Home", "Insert", "Design", "Transitions", "Animations", "Slide Show", "Review", "View"].map((x) => "<span>" + x + "</span>").join("")));
+      const body = el("div", "tp-body"), th = el("div", "tp-thumbs"), big = el("div", "tp-big");
+      sl.forEach((h, i) => {
+        const r = el("div", "tp-th" + (i === S.cur ? " on" : ""));
+        r.append(el("b", "", String(i + 1)), slideEl(h));
+        r.onclick = () => { S.cur = i; paint(); };
+        th.appendChild(r);
+      });
+      big.appendChild(slideEl(sl[S.cur]));
+      body.append(th, big); d.appendChild(body);
+      const st = el("div", "tp-stat"); st.appendChild(el("span", "", "Slide " + (S.cur + 1) + " of " + sl.length));
+      st.appendChild(btn("tp-again", "↩ Tạo bài khác (File › New)", () => { S.view = "new"; S.doc = null; S.q = ""; S.cat = ""; paint(); say("🔎 Chọn chủ đề hoặc tìm bản mẫu khác."); }));
+      d.appendChild(st); scr.appendChild(d);
+    }
+    say("👉 Đây là màn hình <b>File</b> của PowerPoint. Bấm <b>New</b> ở cột bên trái để xem các bản mẫu có sẵn.");
+    paint();
+    return box;
+  }
+
+  // ---- NHÂN VẬT DI CHUYỂN, VẼ HÌNH NHƯ SCRATCH (activity.turtle) — Tin 8 Bài 12 (Hình 12.3, 12.4, 12.5, 12.6) ----------
+  //  turtle: { title?, intro?, sprite?: "bug" | "bus", start?: { x, y, dir } (toạ độ Scratch, dir 90 = sang phải),
+  //    rock?: { x, y, name? } (vật cản cho lệnh until), flow?: true (vẽ sơ đồ khối sáng theo từng lệnh), goals?: [3, 4, 6] (đa giác đều cần vẽ),
+  //    script: [ { op: "flag" } · { op: "clear" } · { op: "pendown" } · { op: "penup" } · { op: "color", c: "#8e24aa", name: "tím" }
+  //      · { op: "goto", x, y } · { op: "move", steps: 60 } · { op: "turn", deg: 120 } (xoay ↺ trái; right: true = ↻ phải) · { op: "wait", secs: 1 }
+  //      · { op: "repeat", times: 3, body: [...] } · { op: "until", lt: 120, body: [...] } (lặp đến khi khoảng cách đến vật cản < lt) ] }
+  //  Ô số có `edit: true` sửa được ngay trên khối. Không chấm điểm; vẽ đúng đa giác đều trong `goals` → 🎉.
+  const TT_BUG = '<svg viewBox="-22 -18 44 36" width="46" height="38"><g stroke="#111" stroke-width="2"><path d="M-6 -12 L-10 -17 M4 -12 L0 -17 M-6 12 L-10 17 M4 12 L0 17 M-14 -9 L-19 -13 M-14 9 L-19 13"/></g><ellipse cx="-2" cy="0" rx="14" ry="12" fill="#e11d48" stroke="#111" stroke-width="1.5"/><path d="M-16 0 H12" stroke="#111" stroke-width="1.5"/><circle cx="-8" cy="-6" r="3" fill="#111"/><circle cx="-8" cy="6" r="3" fill="#111"/><circle cx="3" cy="-6" r="2.4" fill="#111"/><circle cx="3" cy="6" r="2.4" fill="#111"/><circle cx="14" cy="0" r="6" fill="#111"/><circle cx="16" cy="-2.5" r="1.3" fill="#fff"/><circle cx="16" cy="2.5" r="1.3" fill="#fff"/></svg>';
+  const TT_BUS = '<svg viewBox="-40 -20 80 40" width="92" height="46"><rect x="-38" y="-18" width="76" height="30" rx="5" fill="#db2777" stroke="#831843" stroke-width="1.5"/><rect x="-38" y="-18" width="76" height="6" rx="3" fill="#9d174d"/>' + [-32, -20, -8, 4, 16].map((x) => `<rect x="${x}" y="-10" width="9" height="8" fill="#e0f2fe"/>`).join("") + '<rect x="28" y="-10" width="8" height="18" fill="#bae6fd"/><text x="-4" y="7" font-size="6" fill="#fff" text-anchor="middle" font-family="Arial" font-weight="700">Scratch Tours</text><circle cx="-24" cy="13" r="6" fill="#1f2937"/><circle cx="22" cy="13" r="6" fill="#1f2937"/><circle cx="-24" cy="13" r="2.5" fill="#9ca3af"/><circle cx="22" cy="13" r="2.5" fill="#9ca3af"/></svg>';
+  const TT_ROCK = '<svg viewBox="-30 -20 60 40" width="64" height="44"><path d="M-26 14 Q-30 0 -16 -8 Q-8 -18 6 -12 Q22 -12 26 2 Q30 14 18 16 Z" fill="#94a3b8" stroke="#475569" stroke-width="2"/><path d="M-10 -4 Q-2 -10 8 -6" stroke="#cbd5e1" stroke-width="3" fill="none"/></svg>';
+  const TT_SHAPE = { 3: "tam giác đều", 4: "hình vuông", 5: "ngũ giác đều", 6: "lục giác đều", 8: "bát giác đều" };
+  function turtleBox(a) {
+    ensureEngineCSS();
+    const spec = a.turtle, script = spec.script || [], start = Object.assign({ x: 0, y: 0, dir: 90 }, spec.start || {});
+    const box = el("div", "sc-box tt-box");
+    if (spec.title) box.appendChild(el("h3", "rn-title", (spec.sprite === "bus" ? "🚌 " : "🐞 ") + esc(spec.title)));
+    if (spec.intro) box.appendChild(el("p", "subtitle", esc(spec.intro)));
+    const wrap = el("div", "sc-wrap tt-wrap"), code = el("div", "sc-code tt-code"), flow = el("div", "tt-flow"), right = el("div", "sc-right tt-right");
+    const ctr = el("div", "rn-ctrl"), bGo = el("button", "btn", "🏁 Chạy"), bStop = el("button", "btn ghost", "⏹ Dừng"), bClr = el("button", "btn ghost", "🧽 Xoá hình");
+    const spd = el("select", "tt-spd"); spd.innerHTML = '<option value="1">🐢 Chậm</option><option value="2" selected>Vừa</option><option value="4">⚡ Nhanh</option>';
+    ctr.append(bGo, bStop, bClr, spd);
+    const stage = el("div", "tt-stage"), mon = el("div", "sc-mon tt-mon"), msg = el("div", "sp-msg"), goalsEl = el("div", "tt-goals");
+    right.append(ctr, stage, mon, goalsEl, msg);
+    wrap.append(code); if (spec.flow) wrap.append(flow); wrap.append(right); box.appendChild(wrap);
+    const say = (t) => { msg.className = "sp-msg"; msg.innerHTML = t; };
+    // sân khấu 480 × 360 như Scratch
+    stage.innerHTML = `<svg class="tt-svg" viewBox="-240 -180 480 360"><g class="tt-grid"></g><g class="tt-ink"></g></svg>`
+      + (spec.rock ? `<div class="tt-obj tt-rock">${TT_ROCK}</div>` : "") + `<div class="tt-obj tt-spr${spec.sprite === "bus" ? " tt-bus" : ""}">${spec.sprite === "bus" ? TT_BUS : TT_BUG}</div>`;
+    const svg = stage.querySelector("svg"), ink = stage.querySelector(".tt-ink"), spr = stage.querySelector(".tt-spr"), rockEl = stage.querySelector(".tt-rock");
+    stage.querySelector(".tt-grid").innerHTML = '<line x1="-240" y1="0" x2="240" y2="0" stroke="#e2e8f0"/><line x1="0" y1="-180" x2="0" y2="180" stroke="#e2e8f0"/>';
+    const pos = (x, y) => ({ left: ((x + 240) / 480 * 100) + "%", top: ((180 - y) / 360 * 100) + "%" });
+    if (rockEl) Object.assign(rockEl.style, pos(spec.rock.x, spec.rock.y || 0));
+    // ---- khối lệnh
+    const numIn = (b, k) => (b.edit ? `<input class="tt-num" data-k="${k}" value="${esc(b[k])}" inputmode="numeric">` : `<span class="sb-in sb-num">${esc(b[k])}</span>`);
+    const label = (b) => {
+      switch (b.op) {
+        case "flag": return "khi bấm vào <b class='sb-flag'>🏁</b>";
+        case "clear": return "✏️ xoá tất cả";
+        case "pendown": return "✏️ đặt bút";
+        case "penup": return "✏️ nhấc bút";
+        case "color": return `✏️ chọn bút màu <span class="tt-sw" style="background:${esc(b.c)}"></span>`;
+        case "goto": return "đi tới điểm x: " + numIn(b, "x") + " y: " + numIn(b, "y");
+        case "move": return "di chuyển " + numIn(b, "steps") + " bước";
+        case "turn": return "xoay " + (b.right ? "↻" : "↺") + " " + numIn(b, "deg") + " độ";
+        case "wait": return "đợi " + numIn(b, "secs") + " giây";
+        case "repeat": return "lặp lại " + numIn(b, "times");
+        case "until": return `lặp lại cho đến khi <span class="sb-bool">khoảng cách đến <span class="sb-in sb-dd">${esc((spec.rock && spec.rock.name) || "Rocks")} ▾</span> &lt; ${numIn(b, "lt")}</span>`;
+        default: return esc(b.op);
+      }
+    };
+    const CAT = { flag: "event", clear: "pen", pendown: "pen", penup: "pen", color: "pen", goto: "motion", move: "motion", turn: "motion", wait: "control", repeat: "control", until: "control" };
+    const draw = (list, host) => list.forEach((b) => {
+      if (b.op === "repeat" || b.op === "until") {
+        const c = el("div", "sb sb-c sb-control"); b._el = c;
+        c.appendChild(el("div", "sb-row", label(b)));
+        const inner = el("div", "sb-inner"); draw(b.body || [], inner); c.appendChild(inner);
+        c.appendChild(el("div", "sb-foot", "↻")); host.appendChild(c);
+      } else { const d = el("div", "sb sb-" + CAT[b.op] + (b.op === "flag" ? " sb-hat" : ""), label(b)); b._el = d; host.appendChild(d); }
+    });
+    draw(script, code);
+    const all = []; (function walk(l) { l.forEach((b) => { all.push(b); if (b.body) walk(b.body); }); })(script);
+    all.forEach((b) => b._el && b._el.querySelectorAll(".tt-num").forEach((inp) => {
+      inp.onkeydown = (e) => e.stopPropagation();
+      inp.oninput = () => { const v = parseFloat(String(inp.value).replace(",", ".")); if (isFinite(v)) { b[inp.dataset.k] = v; paintFlow(); } };
+    }));
+    // ---- sơ đồ khối sinh từ chương trình
+    const FT = (b) => {
+      switch (b.op) {
+        case "clear": return "Xoá tất cả"; case "pendown": return "Đặt bút"; case "penup": return "Nhấc bút";
+        case "color": return "Chọn bút màu " + (b.name || ""); case "goto": return "Đi tới điểm (" + b.x + "; " + b.y + ")";
+        case "move": return "Di chuyển " + b.steps + " bước"; case "turn": return "Quay " + (b.right ? "phải " : "trái ") + b.deg + " độ";
+        case "wait": return "Đợi " + b.secs + " giây"; default: return "";
+      }
+    };
+    let fnodes = [];
+    function paintFlow() {
+      if (!spec.flow) return;
+      flow.innerHTML = ""; fnodes = [];
+      const add = (text, shape, key, host) => { const w = el("div", "rn-step"); w.innerHTML = fcNode(text, shape); if (fnodes.length || host) (host || flow).insertAdjacentHTML("beforeend", '<span class="fc-arrow">↓</span>'); (host || flow).appendChild(w); fnodes.push({ key, w }); return w; };
+      flow.classList.add("fc-chart");
+      add("Bắt đầu", "term", "start");
+      script.forEach((b) => {
+        if (b.op === "flag") return;
+        if (b.op === "repeat") {
+          add("Lần lặp ← 1", "proc", "init");
+          const lp = el("div", "tt-loop"); flow.insertAdjacentHTML("beforeend", '<span class="fc-arrow">↓</span>'); flow.appendChild(lp);
+          const w = el("div", "rn-step"); w.innerHTML = fcNode("Lần lặp ≤ " + b.times, "cond"); lp.appendChild(w); fnodes.push({ key: b, w });
+          lp.appendChild(el("div", "tt-yes", "Đúng ↓ &nbsp;·&nbsp; Sai → ra khỏi vòng lặp"));
+          (b.body || []).forEach((c) => add(FT(c), "proc", c, lp));
+          add("Tăng Lần lặp lên 1 đơn vị", "proc", "inc", lp);
+          lp.appendChild(el("div", "tt-back", "↺ quay lại kiểm tra điều kiện"));
+        } else if (b.op === "until") {
+          const lp = el("div", "tt-loop"); flow.insertAdjacentHTML("beforeend", '<span class="fc-arrow">↓</span>'); flow.appendChild(lp);
+          const w = el("div", "rn-step"); w.innerHTML = fcNode("Cách " + ((spec.rock && spec.rock.label) || "hòn đá") + " < " + b.lt + " bước?", "cond"); lp.appendChild(w); fnodes.push({ key: b, w });
+          lp.appendChild(el("div", "tt-yes", "Sai ↓ &nbsp;·&nbsp; Đúng → ra khỏi vòng lặp"));
+          (b.body || []).forEach((c) => add(FT(c), "proc", c, lp));
+          lp.appendChild(el("div", "tt-back", "↺ quay lại kiểm tra điều kiện"));
+        } else add(FT(b), "proc", b);
+      });
+      add("Kết thúc", "term", "end");
+    }
+    paintFlow();
+    const lit = (key) => fnodes.forEach((n) => n.w.classList.toggle("on", n.key === key));
+    // ---- chạy
+    let S, run = 0;
+    const reset = () => { S = { x: start.x, y: start.y, dir: start.dir, pen: false, color: "#1d4ed8", path: [] }; placeSpr(); };
+    const placeSpr = () => { Object.assign(spr.style, pos(S.x, S.y)); spr.style.transform = `translate(-50%,-50%) rotate(${spec.sprite === "bus" ? 0 : S.dir - 90}deg)`; };
+    const dist = () => (spec.rock ? Math.hypot(S.x - spec.rock.x, S.y - (spec.rock.y || 0)) : 0);
+    const monPaint = (loop) => { mon.innerHTML = (loop != null ? `<span class="sc-var">Lần lặp <b>${loop}</b></span>` : "") + (spec.rock ? `<span class="sc-var">khoảng cách đến ${esc((spec.rock && spec.rock.name) || "Rocks")} <b>${Math.round(dist())}</b></span>` : "") + `<span class="sc-var">x <b>${Math.round(S.x)}</b></span><span class="sc-var">y <b>${Math.round(S.y)}</b></span><span class="sc-var">hướng <b>${Math.round(((S.dir % 360) + 540) % 360 - 180)}</b></span>`; };
+    const sleep = (ms, id) => new Promise((ok) => setTimeout(() => ok(id === run), ms / (+spd.value || 1)));
+    const on = (b, v) => b._el && (b.op === "repeat" || b.op === "until" ? b._el.firstChild : b._el).classList.toggle("tt-on", v);
+    async function exec(list, id, loop) {
+      for (const b of list) {
+        if (id !== run) return false;
+        on(b, true); lit(b);
+        if (b.op === "clear") { ink.innerHTML = ""; S.path = []; }
+        else if (b.op === "pendown") { S.pen = true; }
+        else if (b.op === "penup") { S.pen = false; }
+        else if (b.op === "color") { S.color = b.c; }
+        else if (b.op === "goto") { S.x = +b.x || 0; S.y = +b.y || 0; placeSpr(); }
+        else if (b.op === "move") {
+          const n = Math.max(1, Math.min(24, Math.round(Math.abs(+b.steps || 0) / 6))), th = S.dir * Math.PI / 180;
+          const dx = Math.sin(th) * (+b.steps || 0), dy = Math.cos(th) * (+b.steps || 0), x0 = S.x, y0 = S.y;
+          let ln = null;
+          if (S.pen) { ln = document.createElementNS("http://www.w3.org/2000/svg", "line"); ln.setAttribute("x1", x0); ln.setAttribute("y1", -y0); ln.setAttribute("stroke", S.color); ln.setAttribute("stroke-width", "3"); ln.setAttribute("stroke-linecap", "round"); ink.appendChild(ln); }
+          for (let k = 1; k <= n; k++) {
+            S.x = x0 + dx * k / n; S.y = y0 + dy * k / n; placeSpr(); if (ln) { ln.setAttribute("x2", S.x); ln.setAttribute("y2", -S.y); }
+            monPaint(loop); if (!(await sleep(Math.max(60, Math.abs(+b.steps || 0) * 6) / n, id))) return false;
+          }
+          if (S.pen) S.path.push({ x0, y0, x1: S.x, y1: S.y, len: Math.abs(+b.steps || 0) });
+        } else if (b.op === "turn") {
+          const d = (+b.deg || 0) * (b.right ? 1 : -1), d0 = S.dir, n = 6;
+          for (let k = 1; k <= n; k++) { S.dir = d0 + d * k / n; placeSpr(); if (!(await sleep(40, id))) return false; }
+          if (S.path.length) S.path[S.path.length - 1].turn = (S.path[S.path.length - 1].turn || 0) + (+b.deg || 0) * (b.right ? -1 : 1);
+        } else if (b.op === "wait") { if (!(await sleep(Math.min(+b.secs || 0, 3) * 1000, id))) return false; }
+        else if (b.op === "repeat") {
+          const N = Math.max(0, Math.min(60, Math.round(+b.times || 0)));
+          lit("init"); await sleep(250, id);
+          for (let k = 1; k <= N + 1; k++) {
+            on(b, true); lit(b); monPaint(k); if (!(await sleep(300, id))) return false;
+            if (k > N) break;
+            if (!(await exec(b.body || [], id, k))) return false;
+            lit("inc"); if (!(await sleep(200, id))) return false;
+          }
+          monPaint(null);
+        } else if (b.op === "until") {
+          let guard = 0;
+          while (guard++ < 400) {
+            on(b, true); lit(b); monPaint(null); if (!(await sleep(60, id))) return false;
+            if (dist() < (+b.lt || 0)) break;
+            if (!(await exec(b.body || [], id, null))) return false;
+            if (Math.abs(S.x) > 260 || Math.abs(S.y) > 200) { say("⚠️ Nhân vật đã đi ra khỏi sân khấu mà chưa đến gần vật cản — kiểm tra lại điều kiện hoặc hướng đi."); return false; }
+          }
+        }
+        if (b.op !== "move") monPaint(loop);
+        on(b, false);
+      }
+      return true;
+    }
+    const goals = spec.goals || [], got = {};
+    const paintGoals = () => { goalsEl.innerHTML = goals.length ? "🎯 Thử thách: " + goals.map((n) => `<span class="tt-goal${got[n] ? " ok" : ""}">${got[n] ? "✅" : "⬜"} ${TT_SHAPE[n] || n + " cạnh"}</span>`).join("") : ""; };
+    function judge() {
+      const P = S.path;
+      if (spec.rock) { const d = Math.round(dist()); say(d < ((all.find((b) => b.op === "until") || {}).lt || 0) ? `🛑 Xe đã dừng lại, cách hòn đá <b>${d}</b> bước (nhỏ hơn ${(all.find((b) => b.op === "until") || {}).lt}).` : "Chương trình đã chạy xong."); return; }
+      if (!P.length) { say(all.some((b) => b.op === "pendown") ? "Chương trình đã chạy xong." : "🐞 Nhân vật đã di chuyển nhưng <b>chưa vẽ</b> — thêm lệnh <b>đặt bút</b> để vẽ đường đi."); return; }
+      const closed = Math.hypot(P[0].x0 - S.x, P[0].y0 - S.y) < 1.5, same = P.every((s) => Math.abs(s.len - P[0].len) < 0.01), turns = P.map((s) => Math.abs(s.turn || 0));
+      const n = P.length, sameTurn = turns.every((t) => Math.abs(t - turns[0]) < 0.01);
+      if (closed && same && sameTurn && Math.abs(turns[0] * n - 360) < 0.5 && n >= 3) {
+        const nm = TT_SHAPE[n] || "đa giác đều " + n + " cạnh";
+        say(`🎉 Bọ rùa đã vẽ <b>${nm}</b>: ${n} cạnh, mỗi lần xoay ${turns[0]}°.`);
+        if (goals.includes(n) && !got[n]) { got[n] = true; paintGoals(); celebrate(); }
+        sound("ok");
+      } else if (closed) say(`✅ Đường đi đã khép kín (${n} đoạn). Tổng các góc xoay: ${turns.reduce((s, t) => s + t, 0)}°.`);
+      else say(`🤔 Hình <b>chưa khép kín</b>: đã vẽ ${n} đoạn, mỗi lần xoay ${turns.join("°, ")}°. Gợi ý: số lần lặp × góc xoay phải bằng 360°.`);
+    }
+    bGo.onclick = async () => {
+      const id = ++run; bGo.disabled = true; all.forEach((b) => on(b, false));
+      reset();
+      say("▶ Đang chạy…"); monPaint(null);
+      const ok = await exec(script, id, null);
+      if (id === run) { bGo.disabled = false; all.forEach((b) => on(b, false)); lit(null); if (ok) judge(); }
+    };
+    bStop.onclick = () => { run++; bGo.disabled = false; all.forEach((b) => on(b, false)); lit(null); say("⏹ Đã dừng."); };
+    bClr.onclick = () => { run++; bGo.disabled = false; ink.innerHTML = ""; reset(); all.forEach((b) => on(b, false)); lit(null); monPaint(null); say("🧽 Đã xoá hình, nhân vật về vị trí xuất phát."); };
+    reset(); monPaint(null); paintGoals();
+    say(all.some((b) => b.edit) ? "✍️ Sửa các ô số trên khối lệnh (ô trắng) rồi bấm <b>🏁 Chạy</b>." : "Bấm <b>🏁 Chạy</b> để chạy chương trình.");
     return box;
   }
 
