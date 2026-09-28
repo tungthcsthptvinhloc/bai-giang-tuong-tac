@@ -81,7 +81,7 @@
   function judgeLocal(q, choice) {
     if (choice == null) return false;
     if (q.type === "sheet") return q.mode === "formula" ? FX.judge(q.answer, choice, q.sheet || {}, q.target).ok : addrMatch(q.answer, choice);
-    if (q.type === "short") return shortMatch(q.answer, choice);
+    if (q.type === "short") return shortMatch(q.answer, choice, q.exact);
     if (q.type === "abacus") return choice !== "" && abDigits(choice) === abDigits(q.answer);
     if (q.type === "true-false") return choice === q.answer;
     if (q.type === "multiple-select") return JSON.stringify([...(choice || [])].map(Number).sort()) === JSON.stringify([...(q.answer || [])].sort());
@@ -119,7 +119,9 @@
   const addrMatch = (answer, choice) => choice != null && choice !== "" && (Array.isArray(answer) ? answer : [answer]).some((x) => normAddr(x) === normAddr(choice));
   // Câu trả lời ngắn (type "short"): so khớp không phân biệt hoa/thường, dấu tiếng Việt, khoảng trắng — PHẢI khớp normShort trong core.js
   const normShort = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[đĐ]/g, "D").toUpperCase().replace(/[^A-Z0-9]/g, "");
-  const shortMatch = (answer, choice) => !!normShort(choice) && (Array.isArray(answer) ? answer : [answer]).some((x) => normShort(x) === normShort(choice));
+  // q.exact (VD gõ công thức bảng tính): chỉ bỏ khoảng trắng, dấu = ở đầu và không phân biệt hoa/thường — GIỮ các kí hiệu $ * + … (PHẢI khớp normExact trong core.js)
+  const normExact = (s) => String(s == null ? "" : s).replace(/\s+/g, "").replace(/^=/, "").toUpperCase();
+  const shortMatch = (answer, choice, exact) => { const n = exact ? normExact : normShort; return !!n(choice) && (Array.isArray(answer) ? answer : [answer]).some((x) => n(x) === n(choice)); };
   const firstOf = (x) => (Array.isArray(x) ? x[0] : x);
   // Địa chỉ -> hình chữ nhật {c1,r1,c2,r2} (0-based cột, 1-based hàng) trên lưới cols x rows
   function addrRect(addr, cols, rows) {
@@ -543,6 +545,7 @@
       if (b.kind === "image") return imageHTML(b.value, b.caption);
       if (b.kind === "list") return "<ul class='lead'>" + b.value.map((x) => `<li>${esc(x)}</li>`).join("") + "</ul>";
       if (b.kind === "ext") return `<p><span class="ext-tag">Mở rộng</span> ${esc(b.value)}</p>`;
+      if (b.kind === "chart") return `<div class="diagram">${chartHTML(b.value)}</div>`;
       if (b.kind === "svg" || b.kind === "html") return `<div class="diagram">${b.value}</div>`; // nội dung tin cậy (tự soạn)
       return "";
     }).join("");
@@ -554,6 +557,7 @@
     const sb = sgkButton(a.sgkImage); if (sb) cardEl.appendChild(sb);
     if (a.links && a.links.length) cardEl.appendChild(linksBox(a.links));
     if (a.html) { const hv = el("div", "kn-blocks"); hv.innerHTML = a.html; cardEl.appendChild(hv); } // hình minh hoạ hiện luôn cho trò chơi (ghép đôi, phân loại…)
+    if (a.chart) { const cv = el("div", "kn-blocks"); cv.innerHTML = chartHTML(a.chart); cardEl.appendChild(cv); } // biểu đồ minh hoạ (spec)
     if (a.sandbox) cardEl.appendChild(sandboxBox(a));
     if (a.mindmap) cardEl.appendChild(mindmapBox(a));
     if (a.mail) cardEl.appendChild(mailBox(a));
@@ -568,6 +572,12 @@
     if (a.scratch) cardEl.appendChild(scratchBox(a));
     if (a.abacus) cardEl.appendChild(abacusBox(a));
     if (a.vonneumann) cardEl.appendChild(vnBox(a));
+    if (a.spread) cardEl.appendChild(spreadBox(a));
+    if (a.listsim) cardEl.appendChild(listsimBox(a)); // mô phỏng danh sách dạng liệt kê
+    if (a.wrapsim) cardEl.appendChild(wrapsimBox(a)); // mô phỏng Wrap Text
+    if (a.flyer) cardEl.appendChild(flyerBox(a)); // thiết kế tờ rơi kéo thả
+    if (a.hfsim) cardEl.appendChild(hfsimBox(a)); // hộp thoại Header and Footer (PowerPoint)
+    if (a.colorsim) cardEl.appendChild(colorsimBox(a)); // phối màu trang chiếu
   }
   function appendRemember(items, cardOrView) {
     // "Em cần nhớ" — ẩn, bấm mới hiện
@@ -616,6 +626,8 @@
     card.appendChild(wrap);
     const sb = sgkButton(q.sgkImage); if (sb) card.appendChild(sb);
     if (q.image) { const im = el("div"); im.innerHTML = imageHTML(q.image, q.imageCaption); card.appendChild(im); }
+    if (q.chart) { const cv = el("div"); cv.innerHTML = chartHTML(q.chart); card.appendChild(cv); }
+    if (q.html) { const hv = el("div", "kn-blocks"); hv.innerHTML = q.html; card.appendChild(hv); } // hình HTML riêng của câu (nội dung tin cậy do GV soạn)
     const answered = { done: false };
 
     card._key = qKey(a, a._qi); card._a = a;
@@ -693,7 +705,7 @@
   }
 
   function afterAnswer(ok, q, card, choice) {
-    if (card._a && (card._a.type === "giftbox" || card._a.type === "crossword")) (card._a._res = card._a._res || {})[card._a._qi] = ok;
+    if (card._a && (card._a.type === "giftbox" || card._a.type === "crossword" || card._a.type === "ladder")) (card._a._res = card._a._res || {})[card._a._qi] = ok;
     if (ok) { let pts = S.basePoints; if (S.streakEnabled) { state.streak++; pts = Math.round(pts * Math.min(2, 1 + (state.streak - 1) * 0.2)); } state.maxStreak = Math.max(state.maxStreak, state.streak); state.score += pts; celebrate(); }
     else { state.streak = 0; card.classList.add("shake"); setTimeout(() => card.classList.remove("shake"), 500); }
     setScore();
@@ -703,6 +715,7 @@
     answerFeedback(ok, q, card, false);
     sound(ok ? "ok" : "no");
     if (card._penguin) card._penguin(ok); // cập nhật đàn cánh cụt (trò chơi penguin)
+    if (card._ladder) card._ladder(ok); // trò chơi 2 đội leo bậc thang
     if (card._cw) card._cw(); // lật hàng ô chữ
     if (card._chat) card._chat(ok, choice); // khung chat: thêm tin nhắn trả lời
   }
@@ -734,6 +747,8 @@
     card.appendChild(head);
     const sb = sgkButton(q.sgkImage); if (sb) card.appendChild(sb);
     if (q.image) { const im = el("div"); im.innerHTML = imageHTML(q.image, q.imageCaption); card.appendChild(im); }
+    if (q.chart) { const cv = el("div"); cv.innerHTML = chartHTML(q.chart); card.appendChild(cv); }
+    if (q.html) { const hv = el("div", "kn-blocks"); hv.innerHTML = q.html; card.appendChild(hv); } // hình HTML riêng của câu (nội dung tin cậy do GV soạn)
     if (q.type === "sheet") return sheetQuestionDeferred(card, a, qs, q, key, rec, st);
     if (q.type === "short") return shortQuestionDeferred(card, a, qs, q, key, rec, st);
     if (q.type === "abacus") return abacusQuestionDeferred(card, a, qs, q, key, rec, st);
@@ -1186,7 +1201,7 @@
     input.placeholder = q.placeholder || "Gõ câu trả lời…"; input.autocomplete = "off"; input.spellcheck = false; row.appendChild(input); card.appendChild(row);
     return {
       input, choice: () => input.value.trim(), set: (ch) => { if (ch != null) input.value = ch; },
-      result(ch) { input.disabled = true; const ok = shortMatch(q.answer, ch); input.classList.add(ok ? "ok" : "no"); if (!ok) row.insertAdjacentHTML("beforeend", ` <b class="fill-ans">Đáp án: ${esc(firstOf(q.answer))}</b>`); return ok; },
+      result(ch) { input.disabled = true; const ok = shortMatch(q.answer, ch, q.exact); input.classList.add(ok ? "ok" : "no"); if (!ok) row.insertAdjacentHTML("beforeend", ` <b class="fill-ans">Đáp án: ${esc(firstOf(q.answer))}</b>`); return ok; },
     };
   }
   function shortQuestionFree(card, a, q, answered) {
@@ -1212,7 +1227,7 @@
     let note = deferNote(st, !!rec, "short"), last = rec ? rec.choice : null;
     const send = () => {
       const ch = P.choice(); if (!ch || ch === last) return; last = ch;
-      emit("onAttempt", { key, activityId: aid(a._parent || a), ok: shortMatch(q.answer, ch), fraction: shortMatch(q.answer, ch) ? 1 : 0, choice: ch });
+      emit("onAttempt", { key, activityId: aid(a._parent || a), ok: shortMatch(q.answer, ch, q.exact), fraction: shortMatch(q.answer, ch, q.exact) ? 1 : 0, choice: ch });
       const n2 = deferNote(st, true, "short"); note.replaceWith(n2); note = n2;
       const pill = card.querySelector(".q-pill.cur"); if (pill) pill.classList.add("done");
       if (card._cw) card._cw();
@@ -2630,6 +2645,58 @@
     return box;
   }
 
+  // ---- MÔ PHỎNG LAN TRUYỀN THÔNG TIN SỐ (activity.spread) — Tin 8 Bài 2: dễ nhân bản, lan truyền nhưng khó xoá bỏ hoàn toàn ----
+  //  spread: { title?, intro?, thumb?: "assets/…jpg" (ảnh bản sao) | emoji?: "🏞️", steps: [{ text: "📸 Khoa chụp lại bức ảnh…",
+  //    nodes: [{ id, icon: "📱", name: "Điện thoại của Khoa", from?: "id", via?: "thư điện tử", edited?: true, paper?: true (bản in, không phải thông tin số),
+  //              lock?: "Máy chủ của dịch vụ thư điện tử — Khoa không có quyền xoá" }] }], end?: "kết luận hiện khi thử xoá" }
+  //  ▶ Bước tiếp: thêm thiết bị nhận bản sao (sáng lên); 🗑️ trên từng thiết bị để thử xoá — thiết bị `lock` báo không xoá được.
+  //  Bộ đếm "bản sao số đang tồn tại". Không chấm, không gửi.
+  function spreadBox(a) {
+    const spec = a.spread, steps = spec.steps || [], all = [];
+    steps.forEach((s, si) => (s.nodes || []).forEach((n) => all.push(Object.assign({ si }, n))));
+    const byId = (id) => all.find((n) => n.id === id);
+    const box = el("div", "sr-box sp-box");
+    box.appendChild(el("h3", "sr-title", "🌐 " + esc(spec.title || "Mô phỏng lan truyền thông tin số")));
+    if (spec.intro) box.appendChild(el("p", "subtitle", esc(spec.intro)));
+    const ctrl = el("div", "sr-top"), bStep = el("button", "btn", "▶ Bước tiếp"), bAll = el("button", "btn ghost", "⏩ Hiện hết"), bReset = el("button", "btn ghost", "🔄 Làm lại");
+    ctrl.append(bStep, bAll, bReset);
+    const stat = el("div", "sp-stat"), msg = el("div", "sp-msg"), grid = el("div", "sp-grid");
+    box.append(ctrl, stat, msg, grid);
+    let shown = 0, dead = {}, tried = false;
+    const thumb = (n) => (spec.thumb ? `<img src="${esc(spec.thumb)}" alt=""${n.edited ? ' class="ed"' : ""}>` : `<span>${esc(spec.emoji || "🖼️")}</span>`) + (n.edited ? '<i class="sp-ed">✨ đã chỉnh sửa</i>' : "");
+    function paint(newIds) {
+      grid.innerHTML = "";
+      const vis = all.filter((n) => n.si < shown), digital = vis.filter((n) => !n.paper), alive = digital.filter((n) => !dead[n.id]);
+      vis.forEach((n) => {
+        const c = el("div", "sp-node" + (n.paper ? " paper" : "") + (dead[n.id] ? " dead" : "") + (newIds && newIds.includes(n.id) ? " new" : "") + (n.lock ? " locked" : ""));
+        const src = n.from && byId(n.from);
+        c.innerHTML = `<div class="sp-dev">${esc(n.icon || "💻")}</div><div class="sp-name">${esc(n.name)}</div><div class="sp-copy">${dead[n.id] ? '<span class="sp-x">🗑️ đã xoá</span>' : thumb(n)}</div>`
+          + (src ? `<div class="sp-from">⬅ từ ${esc(src.name)}${n.via ? " · " + esc(n.via) : ""}</div>` : n.paper ? '<div class="sp-from">🖨️ ảnh in trên giấy</div>' : "");
+        if (!n.paper && !dead[n.id]) {
+          const d = el("button", "sp-del", n.lock ? "🔒" : "🗑️"); d.type = "button"; d.title = n.lock ? "Thử xoá" : "Xoá bản sao này";
+          d.onclick = () => {
+            tried = true;
+            if (n.lock) { msg.className = "sp-msg warn"; msg.innerHTML = "🔒 " + esc(n.lock); sound("no"); c.classList.add("shake"); setTimeout(() => c.classList.remove("shake"), 400); }
+            else { dead[n.id] = true; const left = digital.filter((x) => !dead[x.id]).length; msg.className = "sp-msg"; msg.innerHTML = `🗑️ Đã xoá bản sao ở <b>${esc(n.name)}</b>` + (left ? ` — nhưng vẫn còn <b>${left}</b> bản sao ở nơi khác!` : "."); }
+            paint(); if (tried && spec.end && shown >= steps.length) showEnd();
+          };
+          c.appendChild(d);
+        }
+        grid.appendChild(c);
+      });
+      stat.innerHTML = shown ? `📦 Bản sao số đang tồn tại: <b>${alive.length}</b>${digital.length > alive.length ? ` <small>(đã xoá ${digital.length - alive.length})</small>` : ""}` : "";
+      bStep.disabled = bAll.disabled = shown >= steps.length;
+    }
+    function showEnd() { if (!box.querySelector(".sp-end")) box.appendChild(el("div", "sp-end", "💡 " + esc(spec.end))); }
+    function step() { if (shown >= steps.length) return; const s = steps[shown]; shown++; msg.className = "sp-msg"; msg.innerHTML = esc(s.text); paint((s.nodes || []).map((n) => n.id)); if (shown >= steps.length) msg.innerHTML += "<br>👉 Giờ hãy thử bấm 🗑️ / 🔒 để xoá bức ảnh khỏi mọi nơi!"; }
+    function reset() { shown = 0; dead = {}; tried = false; const e = box.querySelector(".sp-end"); if (e) e.remove(); msg.className = "sp-msg"; msg.innerHTML = "👆 Bấm ▶ Bước tiếp để xem bức ảnh đi đến đâu."; paint(); }
+    bStep.onclick = step;
+    bAll.onclick = () => { while (shown < steps.length) step(); };
+    bReset.onclick = reset;
+    reset();
+    return box;
+  }
+
   // ---- MÁY MÔ PHỎNG SẮP XẾP (activity.sorter) — nổi bọt / sắp xếp chọn như SGK Tin 7 Bài 16 ----
   //  sorter: { title?, intro?, algo: "bubble" | "selection", items: [3, 5, 4, 1, 2], editItems?, allowAlgo? (nút đổi thuật toán),
   //            allowDir? (nổi bọt: "Từ cuối dãy (SGK)" | "Từ đầu dãy (mở rộng)"), allowOrder? (tăng / giảm dần), practice? (HS tự quyết định) }
@@ -2809,7 +2876,7 @@
 
   // ---- HỘP THƯ ĐIỆN TỬ MÔ PHỎNG (activity.mail) — giao diện giống Gmail ------------------------
   // mail: { key?, me: { name, address }, login?: true (bắt đầu ở màn đăng nhập), signup?: true (có "Tạo tài khoản"),
-  //         inbox: [{ from, addr, subject, body ("{ten}" = tên chủ hộp thư), time, files?: [{ name }], spam?, trap?: "🎁 Nhận quà ngay", star? }],
+  //         inbox: [{ from, addr, subject, body ("{ten}" = tên chủ hộp thư), time, files?: [{ name, src? (ảnh thật: hiện xem trước, bấm để phóng to) }], spam?, trap?: "🎁 Nhận quà ngay", star? }],
   //         files?: ["Anh_lop_6A.jpg", …] (tệp có sẵn để đính kèm), compose?: { to, subject, body } (điền sẵn),
   //         check?: { attach: true, to: "địa chỉ bắt buộc" } (tiêu chí tự kiểm tra khi gửi), submit?: "nhãn gửi GV", intro? }
   //  Máy HS + submit: thư gửi đi được chuyển cho GV (texts …/mail); màn chiếu nối tiết học xem lại thư từng nhóm.
@@ -2847,7 +2914,7 @@
     return `<div class="gm-read"><h2>${esc(m.subject || "(không có chủ đề)")}</h2>
       <div class="gm-meta"><span class="gm-av">${esc((m.fromName || "?").trim().split(/\s+/).pop().charAt(0).toUpperCase())}</span><div><b>${esc(m.fromName || "")}</b> <small>&lt;${esc(m.from || "")}&gt;</small><br><small>tới ${esc(m.to || "tôi")}${m.time ? " · " + esc(m.time) : ""}</small></div></div>
       <div class="gm-bodytext">${esc(m.body || "")}</div>
-      ${(m.files || []).length ? `<div class="gm-files">${m.files.map((f) => `<span class="gm-file">${fileIco(f.name)} ${esc(f.name)}</span>`).join("")}</div>` : ""}
+      ${(m.files || []).length ? `<div class="gm-files">${m.files.map((f) => (f.src ? `<span class="gm-file gm-imgfile" data-src="${esc(f.src)}" title="Bấm để xem ảnh"><img src="${esc(f.src)}" alt=""><span>${fileIco(f.name)} ${esc(f.name)}</span></span>` : `<span class="gm-file">${fileIco(f.name)} ${esc(f.name)}</span>`)).join("")}</div>` : ""}
       ${checks ? `<div class="gm-checks"><b>📋 Tự kiểm tra thư:</b>${checks.map(([t, ok]) => `<div class="${ok ? "ok" : "no"}">${ok ? "✅" : "❌"} ${esc(t)}</div>`).join("")}</div>` : ""}</div>`;
   }
   function mailBox(a) {
@@ -2978,7 +3045,7 @@
         const d = el("div"); d.innerHTML = mailReadHTML({ fromName: m.box === "sent" ? S2.me.name : m.from, from: m.box === "sent" ? S2.me.address : m.addr, to: m.box === "sent" ? m.to : S2.me.address, subject: m.subject, body: bodyOf(m), files: m.files, time: m.time }, m.box === "sent" && m.checks ? m.checks : null);
         main.appendChild(d);
         if (m.trap) { const t = el("button", "gm-trap", esc(m.trap)); t.type = "button"; t.onclick = () => { const p = popup("⚠️ <b>Cẩn thận — thư lừa đảo!</b>"); p.card.appendChild(el("div", "mm-doc", "Đây là liên kết giả mạo (mô phỏng). Trên thực tế, nháy vào có thể:\n• đưa em tới trang web lấy cắp mật khẩu, thông tin cá nhân;\n• tải về virus làm hỏng máy tính.\n\n👉 Không nháy liên kết lạ, hãy Báo cáo thư rác và xoá thư.")); sound("no"); }; main.appendChild(wrapEl(t)); }
-        d.querySelectorAll(".gm-file").forEach((f) => { f.onclick = () => { if (m.box === "spam" || m.trap) { toast("⛔ Không mở tệp đính kèm từ thư lạ / thư rác!"); sound("no"); } else toast("(Mô phỏng) Mở tệp " + f.textContent.trim()); }; });
+        d.querySelectorAll(".gm-file").forEach((f) => { f.onclick = () => { if (m.box === "spam" || m.trap) { toast("⛔ Không mở tệp đính kèm từ thư lạ / thư rác!"); sound("no"); } else if (f.dataset.src) openLightbox(f.dataset.src); else toast("(Mô phỏng) Mở tệp " + f.textContent.trim()); }; });
       }
       function act(k, m) {
         if (k === "back") { S2.open = null; return draw(); }
@@ -3263,6 +3330,118 @@
 @media (max-width:760px){.vn-sim{grid-template-columns:1fr}.vn-arr{transform:rotate(90deg)}.vn-arr.on{animation:none}}
 .icon-btn.lh-paused{background:#d97706;color:#fff;animation:lh-pz 1.2s ease-in-out infinite}
 @keyframes lh-pz{50%{box-shadow:0 0 0 6px rgba(217,119,6,.3)}}
+.gm-imgfile{flex-direction:column;align-items:flex-start;padding:6px}.gm-imgfile img{display:block;max-width:min(420px,70vw);max-height:260px;border-radius:8px;object-fit:cover}
+.sp-box{border-color:#0d9488;background:#f0fdfa}.sp-box .sr-title{color:#0f766e}
+.sp-stat{font-size:1.15rem;font-weight:700;color:#0f766e;min-height:1.4em}.sp-stat b{font-size:1.5rem;color:#b91c1c}
+.sp-msg{margin:6px 0 10px;padding:9px 13px;border-radius:12px;background:#fff;border:2px dashed #14b8a6;font-size:1.08rem}.sp-msg.warn{border-color:#f59e0b;background:#fffbeb}
+.sp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}
+.sp-node{position:relative;background:#fff;border:3px solid #99f6e4;border-radius:16px;padding:10px;text-align:center;transition:opacity .3s,border-color .3s}
+.sp-node.new{animation:sp-in .5s ease;border-color:#f59e0b;box-shadow:0 0 0 4px #fde68a}
+.sp-node.paper{border-style:dashed;border-color:#d6d3d1;background:#fafaf9}
+.sp-node.locked{border-color:#a5b4fc}
+.sp-node.dead{opacity:.55;border-color:#e5e7eb}
+.sp-node.shake{animation:so-shake .35s}
+.sp-dev{font-size:2rem;line-height:1}.sp-name{font-weight:800;margin:4px 0;font-size:1rem}
+.sp-copy{min-height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.sp-copy img{width:100%;max-width:120px;height:64px;object-fit:cover;border-radius:8px}.sp-copy img.ed{filter:saturate(1.8) contrast(1.1) hue-rotate(-12deg)}
+.sp-copy>span{font-size:2.2rem}.sp-ed{font-size:.8rem;color:#b45309;font-style:normal;font-weight:700}.sp-x{font-size:1rem!important;color:#6b7280}
+.sp-from{font-size:.82rem;color:#475569;margin-top:4px}
+.sp-del{position:absolute;top:6px;right:6px;border:none;background:#f1f5f9;border-radius:8px;cursor:pointer;font-size:1rem;padding:2px 6px}.sp-del:hover{background:#fee2e2}
+.sp-end{margin-top:12px;padding:10px 14px;border-radius:12px;background:#ecfdf5;border:2px solid #10b981;font-weight:700;font-size:1.1rem}
+@keyframes sp-in{from{transform:scale(.6);opacity:0}}
+.ld-wrap{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin:8px 0 12px}
+.ld-team{flex:1 1 260px;max-width:440px;border:3px solid #e2e8f0;border-radius:16px;padding:8px 12px;background:#f8fafc;transition:box-shadow .2s,border-color .2s}
+.ld-team.turn{border-color:#f59e0b;box-shadow:0 0 0 4px #fde68a}
+.ld-head{display:flex;justify-content:space-between;gap:8px;font-weight:800;font-size:1.15rem}
+.ld-stair{display:flex;flex-direction:column-reverse;align-items:flex-end;gap:3px;margin-top:6px}
+.ld-step{height:32px;border-radius:6px 6px 2px 2px;background:#cbd5e1;display:flex;align-items:center;justify-content:center;font-size:1.5rem;line-height:1;transition:background .3s}
+.ld-step.done{background:#86efac}.ld-step.top{background:#fde68a}
+.ld-me.hop{display:inline-block;animation:ld-hop .6s ease 2}
+@keyframes ld-hop{50%{transform:translateY(-12px) scale(1.15)}}
+.ld-turnbar{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;margin:4px 0 8px}
+.ld-turnbar .btn.on{background:#f59e0b;color:#fff;border-color:#f59e0b}
+.ld-win{margin:4px 0 10px;padding:10px 14px;border-radius:14px;background:#fef3c7;border:3px solid #f59e0b;font-weight:900;font-size:1.25rem;text-align:center}
+.ls-win{border:1px solid #cbd5e1;border-radius:12px;overflow:hidden;background:#e2e8f0;max-width:860px;margin:8px auto}
+.ls-bar{background:#2b579a;color:#fff;padding:6px 12px;font-size:.95rem;display:flex;justify-content:space-between}.ls-bar span{background:#fff;color:#2b579a;border-radius:6px 6px 0 0;padding:0 10px;font-weight:700}
+.ls-rib{display:flex;flex-wrap:wrap;gap:6px;padding:8px;background:#f8fafc;border-bottom:1px solid #cbd5e1;align-items:center}
+.ls-b{font:inherit;font-size:.95rem;padding:6px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;cursor:pointer;color:#1e293b}
+.ls-b:hover{border-color:#2b579a;background:#eff6ff}.ls-dd{margin-left:-7px;border-radius:0 8px 8px 0;padding:6px 7px}.ls-sep{margin-left:10px}
+.ls-lib{background:#fff;border-bottom:1px solid #cbd5e1;padding:8px 10px}.ls-lib-t{font-weight:700;font-size:.9rem;margin-bottom:6px;color:#334155;background:#f1f5f9;padding:2px 6px}
+.ls-lib-g{display:flex;flex-wrap:wrap;gap:8px}
+.ls-tile{display:flex;flex-direction:column;justify-content:center;gap:3px;width:96px;height:82px;border:1px solid #cbd5e1;border-radius:4px;background:#fff;font:inherit;font-size:.85rem;cursor:pointer;padding:6px 8px;color:#1e293b}
+.ls-tile:hover{border-color:#2b579a;background:#eff6ff}.ls-tile.none{align-items:center;font-size:1rem}
+.ls-tile span{display:flex;align-items:center;gap:5px}.ls-tile i{flex:1;border-bottom:1.5px solid #64748b}
+.ls-page{background:#fff;margin:12px auto;max-width:660px;padding:18px 24px 22px 6px;box-shadow:0 2px 10px rgba(0,0,0,.15);font-family:"Times New Roman",Cambria,serif;font-size:1.2rem;color:#111;text-align:left}
+.ls-head{margin:3px 0 3px 30px}.ls-head.c{text-align:center;font-weight:700;margin-left:0}
+.ls-row{display:flex;align-items:center;gap:2px;border-radius:3px}.ls-row.sel{background:#d1d5db}.ls-row.l1{padding-left:36px}
+.ls-gut{width:28px;align-self:stretch;cursor:pointer;flex:none;border-radius:3px}.ls-gut:hover{background:#c7d2fe}
+.ls-mk{display:inline-block;min-width:30px;flex:none;cursor:pointer;border-radius:4px;text-align:center}.ls-mk.bump{animation:lsBump 1.3s}
+@keyframes lsBump{0%{background:#fde047;transform:scale(1.5)}100%{background:transparent;transform:none}}
+.ls-txt{flex:1;min-width:0;border:0;background:transparent;font:inherit;color:inherit;padding:3px 2px;outline:none}
+.ls-txt:focus{background:#f8fafc;box-shadow:inset 0 -2px 0 #2b579a}.ls-ck{flex:none;font-size:1.15rem;margin-left:6px}
+.ws-wrap{display:flex;flex-wrap:wrap;gap:18px;justify-content:center;align-items:flex-start;margin-top:6px}
+.ws-menu{display:flex;flex-direction:column;gap:6px;min-width:220px}.ws-mt{color:#2b579a;font-size:.95rem}
+.ws-opt{font:inherit;text-align:left;padding:9px 12px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;cursor:pointer;color:#1e293b}
+.ws-opt:hover{border-color:#2b579a}.ws-opt.on{background:#2b579a;color:#fff;border-color:#2b579a}.ws-reset{margin-top:6px;text-align:center}
+.ws-page{position:relative;width:min(330px,82vw);aspect-ratio:1/1.414;background:#fff;box-shadow:0 2px 14px rgba(0,0,0,.2);overflow:hidden;font-family:Arial,sans-serif;font-size:13px;flex:none}
+.ws-flow{position:relative;z-index:1;padding:7% 8%;text-align:center;color:#111;line-height:1.25}.ws-flow p{margin:.3em 0}
+.ws-img{position:relative;line-height:0;outline:2px solid rgba(43,87,154,.55);touch-action:none;text-align:left}
+.ws-img img{width:100%;height:auto;display:block;pointer-events:none;user-select:none}
+.ws-img.inline{margin:0 auto .3em 0}.ws-img.square{float:left;margin:0 .8em .4em 0}
+.ws-img.abs{position:absolute;cursor:move}.ws-img.behind{z-index:0}.ws-img.front{z-index:2}
+.ws-h{position:absolute;right:-8px;bottom:-8px;width:16px;height:16px;background:#fff;border:2px solid #2b579a;cursor:nwse-resize;z-index:5;touch-action:none}
+.fl-bar,.fl-tools{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center;margin:6px 0}
+.fl-lb{font-weight:700;color:#2b579a;font-size:.95rem}.fl-hint{color:#64748b;font-size:.95rem}
+.fl-ins{font:inherit;font-size:.92rem;padding:5px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;cursor:pointer;color:#1e293b;display:inline-flex;align-items:center;gap:4px}
+.fl-ins:hover{border-color:#2b579a;background:#eff6ff}.fl-ico svg{width:26px;height:26px;display:block}.fl-del{color:#b91c1c}
+.fl-sw{width:28px;height:28px;border-radius:50%;border:2px solid #94a3b8;cursor:pointer;padding:0}.fl-sw.on{outline:3px solid #2b579a;outline-offset:2px}
+.fl-wrap{display:flex;flex-wrap:wrap;gap:16px;justify-content:center;align-items:flex-start}
+.fl-page{position:relative;width:min(360px,86vw);aspect-ratio:1/1.414;overflow:hidden;box-shadow:0 2px 14px rgba(0,0,0,.25);background:#0b1e4d;flex:none;font-family:Arial,sans-serif;user-select:none}
+.fl-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none}.fl-layer{position:absolute;inset:0}
+.fl-el{position:absolute;transform:translate(-50%,-50%);cursor:move;touch-action:none;line-height:1.15;text-align:center;white-space:nowrap}
+.fl-el.sel{outline:2px dashed #fff;outline-offset:3px;box-shadow:0 0 0 1px #2b579a}
+.fl-shape svg,.fl-pic img{display:block;width:100%;height:auto;pointer-events:none}
+.fl-side{min-width:230px;max-width:320px;display:flex;flex-direction:column;gap:6px}.fl-ct{font-weight:800;color:#2b579a}
+.fl-ck{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;font-size:.95rem}.fl-ck.ok{background:#dcfce7;border-color:#86efac}
+.fl-win{background:#fef9c3;border:2px solid #facc15;border-radius:10px;padding:8px 10px;font-weight:700}
+.hf-wrap{display:flex;flex-wrap:wrap;gap:16px;justify-content:center;align-items:flex-start;margin-top:6px}
+.hf-dlg{width:min(390px,100%);background:#f3f4f6;border:1px solid #9ca3af;box-shadow:0 6px 18px rgba(0,0,0,.2);font-family:"Segoe UI",Arial,sans-serif;font-size:.95rem;color:#111;text-align:left}
+.hf-top{display:flex;justify-content:space-between;background:#fff;padding:7px 10px;border-bottom:1px solid #d1d5db}
+.hf-tabs{display:flex;gap:2px;padding:6px 8px 0}.hf-tabs button{font:inherit;font-size:.9rem;padding:4px 10px;border:1px solid #cbd5e1;border-bottom:0;background:#e5e7eb;cursor:pointer}.hf-tabs button.on{background:#fff;font-weight:700}
+.hf-body{background:#fff;margin:0 8px;border:1px solid #cbd5e1;padding:8px 10px}.hf-grp{color:#475569;font-size:.85rem;margin-bottom:2px}
+.hf-row{display:block;margin:4px 0;cursor:pointer}.hf-row input{width:17px;height:17px;accent-color:#2b579a;vertical-align:middle;margin:0 6px 0 0}
+.hf-sub{margin-left:24px}.hf-sub.off{opacity:.45}.hf-in{width:100%;box-sizing:border-box;font:inherit;padding:3px 6px;border:1px solid #9ca3af;background:#fff;margin:2px 0 4px}.hf-in:disabled{background:#f1f5f9}
+.hf-ro{background:#f8fafc}.hf-nt{margin-top:8px}.hf-note{background:#fef9c3;border:1px solid #fde047;border-radius:6px;padding:6px 8px;margin-bottom:6px;font-size:.9rem}
+.hf-btns{display:flex;justify-content:flex-end;gap:8px;padding:8px}.hf-btn{font:inherit;font-size:.9rem;padding:5px 12px;border:1px solid #9ca3af;background:#fff;cursor:pointer}.hf-btn.main{border:2px solid #2b579a}.hf-btn:hover{background:#eff6ff}
+.hf-right{flex:1 1 360px;max-width:560px}.hf-hint{font-size:.9rem;color:#475569;margin-bottom:4px}
+.hf-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.hf-cell{text-align:center}.hf-no{font-weight:700;color:#475569}
+.hf-sl{position:relative;aspect-ratio:16/9;background:#fff;border:2px solid #cbd5e1;border-radius:4px;cursor:pointer;overflow:hidden;font-family:Arial,sans-serif;text-align:left;display:flex;flex-direction:column;box-shadow:0 2px 6px rgba(0,0,0,.1)}
+.hf-sl.sel{border-color:#ea580c;box-shadow:0 0 0 3px rgba(234,88,12,.35)}
+.hf-in-sl{flex:1;padding:6% 7% 0;overflow:hidden}.hf-t1{color:#16a34a;font-weight:800;font-size:.95rem;margin-top:14%;text-align:center}.hf-sub1{font-size:.62rem;text-align:center;color:#334155;margin-top:4px}
+.hf-t2{color:#16a34a;font-weight:800;font-size:.72rem;text-align:center;margin-bottom:3px}.hf-sl ul{margin:0;padding-left:1.1em;font-size:.44rem;color:#111;line-height:1.3}
+.hf-ft{display:flex;justify-content:space-between;gap:4px;padding:0 5% 3%;font-size:.5rem;color:#64748b;font-style:italic;min-height:1.2em}.hf-ft span{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hf-ft span:nth-child(2){text-align:center}.hf-ft span:nth-child(3){text-align:right;font-style:normal;font-weight:700}
+.cs-wrap{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;justify-content:center;margin-top:6px}
+.cs-ctl{flex:1 1 330px;max-width:460px;display:flex;flex-direction:column;gap:8px;text-align:left}.cs-row{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.cs-chip{font:inherit;font-size:.9rem;padding:4px 10px;border:1px solid #cbd5e1;border-radius:999px;background:#fff;cursor:pointer}.cs-chip.on{background:var(--primary,#2563eb);color:#fff;border-color:var(--primary,#2563eb)}
+.cs-sw{width:28px;height:28px;border-radius:6px;border:2px solid #94a3b8;cursor:pointer;padding:0}.cs-sw.on{outline:3px solid #0f172a;outline-offset:2px}
+.cs-row select{font:inherit;font-size:.95rem;padding:2px 6px}
+.cs-right{flex:2 1 480px;max-width:680px}.cs-slide{container-type:inline-size;aspect-ratio:16/9;border:1px solid #94a3b8;box-shadow:0 3px 12px rgba(0,0,0,.18);padding:4% 6%;font-family:Arial,sans-serif;overflow:hidden;text-align:left}
+.cs-t{font-weight:800;text-align:center;line-height:1.15;margin-bottom:.3em}.cs-slide ul{margin:0;padding-left:1.2em;line-height:1.3}
+.cs-list{display:flex;flex-direction:column;gap:5px;margin-top:8px;text-align:left}.cs-it{border-radius:8px;padding:5px 9px;font-size:.93rem;border:1px solid #e2e8f0;background:#fff}
+.cs-it.ok{background:#dcfce7;border-color:#86efac}.cs-it.warn{background:#fef9c3;border-color:#fde047}.cs-it.bad{background:#fee2e2;border-color:#fca5a5}
+.chart-fig{margin:6px auto;max-width:640px}.ladder-card .chart-fig{max-width:500px}.chart-svg{display:block;width:100%;height:auto;border-radius:10px}
+.chart-row{display:flex;flex-wrap:wrap;gap:12px;justify-content:center}.chart-row>.chart-fig{flex:1 1 460px;max-width:600px;margin:0}
+.poll-tabs{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}.poll-tab.on{background:var(--primary,#2563eb);color:#fff;border-color:var(--primary,#2563eb)}
+.poll-chart{max-width:640px;width:100%;margin:0 auto}.poll-chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}.poll-chip{display:inline-flex;gap:2px;align-items:center;font-size:.9rem}
+.poll-box{display:flex;flex-direction:column;gap:8px;max-width:860px;margin:6px auto 0}
+.poll-opt{display:flex;align-items:center;gap:10px;text-align:left;font:inherit;font-size:1.15rem;padding:12px 16px;border:3px solid #cbd5e1;border-radius:14px;background:#fff;cursor:pointer}
+.poll-opt:hover{border-color:var(--primary,#2563eb)}.poll-opt.sel{border-color:var(--primary,#2563eb);background:var(--primary,#2563eb);color:#fff}
+.poll-row{display:flex;align-items:center;gap:10px;font-size:1.15rem}
+.poll-lb{flex:0 0 38%;font-weight:700}.poll-bar{flex:1;height:28px;background:#e2e8f0;border-radius:8px;overflow:hidden}
+.poll-bar i{display:block;height:100%;background:linear-gradient(90deg,#22c55e,#16a34a);transition:width .4s}
+.poll-row.top .poll-bar i{background:linear-gradient(90deg,#f59e0b,#ea580c)}.poll-n{min-width:2em;text-align:right;font-size:1.3rem}
+.poll-pm{padding:2px 10px;font-size:.95rem}
+@media (max-width:640px){.poll-lb{flex-basis:44%;font-size:1rem}}
 .mz-wrap{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
 .mz-stage{flex:1 1 360px;max-width:560px;min-width:260px}
 .mz-grid{position:relative;display:grid;width:100%;background:#fff;border-radius:8px;overflow:hidden}
@@ -3628,6 +3807,667 @@
       }
     };
     renderQuizInto(c, a);
+  }
+
+  // ---- BÌNH CHỌN / KHẢO SÁT NHANH (type "poll") — không chấm đúng/sai ----------------
+  //  { type: "poll", question: "Bạn muốn tìm hiểu thêm nội dung nào?", options: ["Ngôn ngữ lập trình", …] }
+  //  Máy HS: chọn một phương án (đổi được) — gửi qua texts (openQs, khoá aid:poll). Màn chiếu nối tiết học: biểu đồ cột kết quả cả lớp,
+  //  tự cập nhật. Mở file trực tiếp (chưa nối lớp): GV bấm +1 / −1 theo số bạn giơ tay.
+  // ---- KÉO BẰNG CON TRỎ / NGÓN TAY (dùng chung cho các mô phỏng Word) ----
+  function ptrDrag(elm, onStart, onMove, onEnd) {
+    elm.addEventListener("pointerdown", (e) => {
+      if (e.button > 0) return;
+      if (onStart(e) === false) return;
+      e.preventDefault(); e.stopPropagation();
+      try { elm.setPointerCapture(e.pointerId); } catch (x) {}
+      const mv = (ev) => onMove(ev.clientX - e.clientX, ev.clientY - e.clientY, ev);
+      const up = (ev) => { elm.removeEventListener("pointermove", mv); elm.removeEventListener("pointerup", up); elm.removeEventListener("pointercancel", up); if (onEnd) onEnd(ev); };
+      elm.addEventListener("pointermove", mv); elm.addEventListener("pointerup", up); elm.addEventListener("pointercancel", up);
+    });
+  }
+
+  // ---- MÔ PHỎNG DANH SÁCH DẠNG LIỆT KÊ (hoạt động `listsim`) — Tin 8 Bài 8a --------------------------------
+  //  listsim: { title?, intro?, doc?: "PhieuKhaoSat.docx", head?: ["dòng không thuộc danh sách" | { text, center? }], box?: true (ô ☐ cuối mục),
+  //    items: ["mục" | { text, level?: 0|1, kind?: "none"|"bullet"|"num", want?: 0|1 (mức cần đạt) }],
+  //    goal?: [{ kind: "num", fmt?: "1." }, { kind: "bullet" }] (yêu cầu cho mức 0, mức 1), success? }
+  //  Như Word: bấm lề trái để chọn đoạn (tô xám) → Bullets / Numbering (thư viện 1. 1) a) A. I.); Enter thêm mục (số phía sau tự tăng),
+  //  Enter ở mục trống thoát danh sách, Backspace đầu mục bỏ số, Tab / Shift+Tab (⇥ ⇤) đổi mức. Không chấm điểm.
+  const LS_NUM = { "1.": (n) => n + ".", "1)": (n) => n + ")", "a)": (n) => String.fromCharCode(96 + ((n - 1) % 26) + 1) + ")", "A.": (n) => String.fromCharCode(64 + ((n - 1) % 26) + 1) + ".", "I.": (n) => lsRoman(n) + "." };
+  const LS_BUL = ["•", "✓", "➢", "◆", "❖", "–"];
+  function lsRoman(n) { let s = ""; [[10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]].forEach(([v, r]) => { while (n >= v) { s += r; n -= v; } }); return s; }
+  function listsimBox(a) {
+    ensureEngineCSS();
+    const spec = a.listsim, goal = spec.goal ? [].concat(spec.goal) : null;
+    const fresh = () => ({ items: (spec.items || []).map((x) => Object.assign({ level: 0, kind: "none", _o: true }, typeof x === "string" ? { text: x } : x)), sel: [], fmt: ["1.", "a)"], bul: ["•", "•"], cur: -1, lib: null, done: false });
+    const S = a._ls || (a._ls = fresh());
+    const nOrig = (spec.items || []).length;
+    const box = el("div", "sr-box ls-box");
+    box.appendChild(el("h3", "sr-title", "📝 " + esc(spec.title || "Mô phỏng danh sách dạng liệt kê")));
+    if (spec.intro) box.appendChild(el("p", "subtitle", esc(spec.intro)));
+    const win = el("div", "ls-win");
+    win.innerHTML = `<div class="ls-bar">📄 ${esc(spec.doc || "Văn bản.docx")} — Word <span>Home</span></div>`;
+    const rib = el("div", "ls-rib"), libBox = el("div"), page = el("div", "ls-page"), msg = el("div", "sp-msg");
+    win.append(rib, libBox, page); box.append(win, msg);
+    const say = (t) => { msg.className = "sp-msg"; msg.innerHTML = t; };
+    const B = (cls, html, title, fn) => { const b = el("button", "ls-b " + cls, html); b.type = "button"; if (title) b.title = title; b.onclick = fn; rib.appendChild(b); return b; };
+    B("", "•☰ Bullets", "Danh sách dấu đầu dòng", () => apply("bullet"));
+    B("ls-dd", "▾", "Thư viện dấu đầu dòng", () => { S.lib = S.lib === "bul" ? null : "bul"; paint(); });
+    B("", "1☰ Numbering", "Danh sách có thứ tự", () => apply("num"));
+    B("ls-dd", "▾", "Numbering Library", () => { S.lib = S.lib === "num" ? null : "num"; paint(); });
+    B("", "⇤", "Decrease Indent (Shift+Tab)", () => setLevel(targets(), -1));
+    B("", "⇥", "Increase Indent (Tab)", () => setLevel(targets(), 1));
+    B("ls-sep", "☑ Chọn tất cả", "Chọn tất cả các mục", () => { S.sel = S.sel.length === S.items.length ? [] : S.items.map((_, i) => i); paint(); });
+    B("", "↵ Enter", "Thêm đoạn mới sau dòng đang chọn", () => { const i = S.cur >= 0 && S.cur < S.items.length ? S.cur : S.items.length - 1; enter(i, S.items[i] ? S.items[i].text.length : 0); });
+    B("", "🗑 Xoá mục", "Xoá các đoạn đang chọn", () => {
+      const t = targets(); if (!t.length) return say("👆 Chọn đoạn cần xoá trước (bấm lề trái của dòng).");
+      S.items = S.items.filter((_, i) => !t.includes(i)); S.sel = []; S.cur = -1;
+      say("🗑 Đã xoá " + t.length + " đoạn — số thứ tự của các mục còn lại <b>tự động cập nhật</b>."); paint();
+    });
+    B("", "🔄 Làm lại", "Trở về văn bản ban đầu", () => { Object.assign(S, fresh()); say("🔄 Đã trở về văn bản ban đầu."); paint(); });
+    const marker = (i) => {
+      const it = S.items[i];
+      if (it.kind === "bullet") return S.bul[it.level] || "•";
+      if (it.kind !== "num") return "";
+      let n = 1;
+      for (let j = i - 1; j >= 0; j--) { const p = S.items[j]; if (p.level < it.level) break; if (p.level === it.level && p.kind === "num") n++; }
+      return (LS_NUM[S.fmt[it.level]] || LS_NUM["1."])(n);
+    };
+    const targets = () => (S.sel.length ? S.sel.slice().sort((x, y) => x - y) : S.cur >= 0 && S.cur < S.items.length ? [S.cur] : []);
+    function apply(kind, fmt) {
+      const t = targets();
+      if (!t.length) return say("👆 Hãy <b>chọn các đoạn văn bản</b> trước: bấm vào lề trái của dòng (dòng được tô xám) hoặc bấm ☑ Chọn tất cả.");
+      const off = kind !== "none" && !fmt && t.every((i) => S.items[i].kind === kind);
+      t.forEach((i) => { const it = S.items[i]; it.kind = off ? "none" : kind; if (!off && fmt && kind !== "none") (kind === "num" ? S.fmt : S.bul)[it.level] = fmt; });
+      S.lib = null; S.sel = []; // bỏ chọn để lần chọn tiếp theo bắt đầu lại
+      say(off || kind === "none" ? "Đã bỏ danh sách ở các đoạn đã chọn." : kind === "num" ? "1️⃣ Đã tạo <b>danh sách có thứ tự</b> — số thứ tự do phần mềm tự tạo, em không cần gõ! Thử nhấn <b>Enter</b> ở cuối một mục xem sao." : "• Đã tạo <b>danh sách dấu đầu dòng</b> — mỗi đoạn bắt đầu bằng một dấu đầu dòng.");
+      paint();
+    }
+    function setLevel(t, d) {
+      if (!t.length) return say("👆 Chọn đoạn cần đổi mức trước (bấm lề trái của dòng).");
+      t.forEach((i) => { S.items[i].level = Math.max(0, Math.min(1, S.items[i].level + d)); });
+      say(d > 0 ? "⇥ Đã lùi đoạn vào một mức (mục con)." : "⇤ Đã đưa đoạn ra mức ngoài."); paint();
+    }
+    function enter(i, c) {
+      const it = S.items[i];
+      if (!it) { S.items.push({ text: "", level: 0, kind: "none" }); return paint(S.items.length - 1, 0); }
+      if (!it.text.trim() && it.kind !== "none") { it.kind = "none"; say("↵ Nhấn Enter ở một mục trống: mục đó <b>thoát khỏi danh sách</b> (không còn số / dấu đầu dòng)."); return paint(i, 0); }
+      const after = it.text.slice(c); it.text = it.text.slice(0, c);
+      S.items.splice(i + 1, 0, { text: after, level: it.level, kind: it.kind }); S.sel = [];
+      say(it.kind === "num" ? "↵ Đã thêm một đoạn mới — số thứ tự của các mục phía sau <b>tự động tăng lên</b>!" : it.kind === "bullet" ? "↵ Đã thêm một đoạn mới — dấu đầu dòng <b>tự động xuất hiện</b>." : "↵ Đã thêm một đoạn văn bản mới.");
+      paint(i + 1, 0);
+    }
+    function keys(e, i, inp) {
+      const it = S.items[i];
+      if (e.key === "Enter") { e.preventDefault(); return enter(i, inp.selectionStart); }
+      if (e.key === "Backspace" && inp.selectionStart === 0 && inp.selectionEnd === 0) {
+        if (it.kind !== "none") { e.preventDefault(); it.kind = "none"; say("⌫ Đã bỏ số / dấu đầu dòng của đoạn này — các mục khác <b>tự đánh số lại</b>."); return paint(i, 0); }
+        if (i > 0) { e.preventDefault(); const p = S.items[i - 1], pos = p.text.length; p.text += it.text; S.items.splice(i, 1); S.sel = []; say("⌫ Đã gộp đoạn với đoạn phía trên — thứ tự tự cập nhật."); return paint(i - 1, pos); }
+      }
+      if (e.key === "Tab") { e.preventDefault(); S.cur = i; return setLevel([i], e.shiftKey ? -1 : 1); }
+      if (e.key === "ArrowUp" && i > 0) { e.preventDefault(); page.querySelectorAll(".ls-txt")[i - 1].focus(); }
+      if (e.key === "ArrowDown" && i < S.items.length - 1) { e.preventDefault(); page.querySelectorAll(".ls-txt")[i + 1].focus(); }
+      e.stopPropagation(); // phím mũi tên/Space trong ô không chuyển màn bài giảng
+    }
+    function check() {
+      if (!goal) return;
+      const orig = S.items.filter((x) => x._o);
+      const ok = orig.length === nOrig && orig.every((x) => { const w = x.want || 0, g = goal[w]; return g && x.level === w && x.kind === g.kind && (!g.fmt || S.fmt[w] === g.fmt) && (!g.bul || S.bul[w] === g.bul); });
+      if (ok && !S.done) { S.done = true; say("🎉 " + esc(spec.success || "Hoàn thành! Văn bản đã được trình bày bằng danh sách dạng liệt kê.")); sound("ok"); celebrate(); }
+      if (!ok) S.done = false;
+    }
+    function paint(focusI, caret) {
+      libBox.innerHTML = "";
+      if (S.lib) {
+        const lib = el("div", "ls-lib"), isNum = S.lib === "num";
+        lib.appendChild(el("div", "ls-lib-t", isNum ? "Numbering Library" : "Bullet Library"));
+        const g = el("div", "ls-lib-g");
+        ["none"].concat(isNum ? Object.keys(LS_NUM) : LS_BUL).forEach((o) => {
+          const t = el("button", "ls-tile" + (o === "none" ? " none" : ""), o === "none" ? "None" : [1, 2, 3].map((n) => `<span>${esc(isNum ? LS_NUM[o](n) : o)}<i></i></span>`).join(""));
+          t.type = "button"; t.onclick = () => (o === "none" ? apply("none") : apply(isNum ? "num" : "bullet", o)); g.appendChild(t);
+        });
+        lib.appendChild(g); libBox.appendChild(lib);
+      }
+      const old = page._marks || [], marks = S.items.map((_, i) => marker(i));
+      page.innerHTML = "";
+      (spec.head || []).forEach((h) => page.appendChild(el("p", "ls-head" + (h.center ? " c" : ""), esc(typeof h === "string" ? h : h.text))));
+      S.items.forEach((it, i) => {
+        const row = el("div", "ls-row" + (S.sel.includes(i) ? " sel" : "") + (it.level ? " l1" : ""));
+        const gut = el("span", "ls-gut"); gut.title = "Bấm để chọn / bỏ chọn đoạn này";
+        const mk = el("span", "ls-mk" + (marks[i] && old.length && old[i] !== marks[i] ? " bump" : ""), esc(marks[i]));
+        const inp = document.createElement("input"); inp.className = "ls-txt"; inp.value = it.text; inp.spellcheck = false;
+        inp.oninput = () => { it.text = inp.value; };
+        inp.onfocus = () => { S.cur = i; };
+        inp.onkeydown = (e) => keys(e, i, inp);
+        const toggle = () => { S.sel = S.sel.includes(i) ? S.sel.filter((x) => x !== i) : S.sel.concat(i); paint(); };
+        gut.onclick = toggle; mk.onclick = toggle;
+        row.append(gut, mk, inp);
+        if (spec.box) row.appendChild(el("span", "ls-ck", "☐"));
+        page.appendChild(row);
+        if (focusI === i) setTimeout(() => { inp.focus(); const c = caret == null ? inp.value.length : caret; try { inp.setSelectionRange(c, c); } catch (x) {} }, 0);
+      });
+      page._marks = marks;
+      check();
+    }
+    say("👆 Bấm vào <b>lề trái</b> các dòng để chọn đoạn (tô xám) hoặc ☑ Chọn tất cả, rồi chọn <b>Numbering</b> / <b>Bullets</b>. Có thể gõ sửa chữ, nhấn Enter, Tab ngay trong văn bản.");
+    paint();
+    return box;
+  }
+
+  // ---- MÔ PHỎNG WRAP TEXT — LỚP CỦA ẢNH (hoạt động `wrapsim`) — Tin 8 Bài 8a, Hình 8a.9 ------------------------
+  //  wrapsim: { title?, intro?, img: "assets/nen.svg", lines: [{ text, size?: em, bold? }], success? }
+  //  Chọn In Line with Text / Square / Behind Text / In Front of Text; kéo ô vuông trắng góc dưới bên phải để đổi kích thước, kéo ảnh để
+  //  di chuyển (khi ảnh không nằm cùng dòng chữ). Ảnh Behind Text phủ kín trang → chúc mừng. Không chấm điểm.
+  function wrapsimBox(a) {
+    ensureEngineCSS();
+    const spec = a.wrapsim, S = a._ws || (a._ws = { mode: "inline", w: 0.62, x: 0.06, y: 0.04, done: false });
+    const box = el("div", "sr-box ws-box");
+    box.appendChild(el("h3", "sr-title", "🖼️ " + esc(spec.title || "Mô phỏng Wrap Text — lớp của ảnh")));
+    if (spec.intro) box.appendChild(el("p", "subtitle", esc(spec.intro)));
+    const wrap = el("div", "ws-wrap"), menu = el("div", "ws-menu"), page = el("div", "ws-page"), msg = el("div", "sp-msg");
+    wrap.append(menu, page); box.append(wrap, msg);
+    const MODES = [["inline", "In Line with Text"], ["square", "Square"], ["behind", "Behind Text"], ["front", "In Front of Text"]];
+    const INFO = {
+      inline: "📏 <b>In Line with Text</b>: ảnh nằm cùng dòng với chữ như một kí tự lớn — <b>đẩy nội dung văn bản xuống dưới</b> (Hình 8a.9b).",
+      square: "🔲 <b>Square</b>: chữ <b>bao quanh</b> ảnh theo khung hình vuông — hợp với ảnh nhỏ đặt cạnh chữ (VD ảnh ở góc tờ rơi).",
+      behind: "⬇️ <b>Behind Text</b>: ảnh ở <b>lớp dưới</b>, chữ ở <b>lớp trên</b> (Hình 8a.9c). Kéo ảnh về góc trên bên trái rồi kéo ô vuông trắng ở góc dưới bên phải để ảnh <b>phủ kín tờ rơi</b>!",
+      front: "⬆️ <b>In Front of Text</b>: ảnh ở <b>lớp trên</b> — <b>che mất</b> nội dung văn bản!",
+    };
+    function paint() {
+      menu.innerHTML = '<div class="ws-mt">Format › Arrange › <b>Wrap Text</b> ▾</div>';
+      MODES.forEach(([m, lb]) => { const b = el("button", "ws-opt" + (S.mode === m ? " on" : ""), esc(lb)); b.type = "button"; b.onclick = () => { S.mode = m; S.done = false; paint(); }; menu.appendChild(b); });
+      const rs = el("button", "ws-opt ws-reset", "🔄 Làm lại"); rs.type = "button"; rs.onclick = () => { Object.assign(S, { mode: "inline", w: 0.62, x: 0.06, y: 0.04, done: false }); paint(); }; menu.appendChild(rs);
+      page.innerHTML = "";
+      const flow = el("div", "ws-flow");
+      (spec.lines || []).forEach((l) => { const p = el("p", "", esc(l.text)); p.style.fontSize = (l.size || 1) + "em"; if (l.bold) p.style.fontWeight = "800"; flow.appendChild(p); });
+      const im = el("div", "ws-img" + (S.mode === "behind" || S.mode === "front" ? " abs " + S.mode : " " + S.mode));
+      im.innerHTML = `<img src="${esc(spec.img)}" alt="Ảnh nền" draggable="false"><span class="ws-h" title="Kéo để thay đổi kích thước"></span>`;
+      im.style.width = S.w * 100 + "%";
+      if (S.mode === "behind" || S.mode === "front") { im.style.left = S.x * 100 + "%"; im.style.top = S.y * 100 + "%"; page.append(im, flow); }
+      else { flow.insertBefore(im, flow.firstChild); page.appendChild(flow); }
+      const h = im.querySelector(".ws-h");
+      let w0, x0, y0;
+      ptrDrag(h, () => { w0 = S.w; }, (dx) => { S.w = Math.max(0.2, Math.min(1.4, w0 + dx / page.clientWidth)); im.style.width = S.w * 100 + "%"; }, status);
+      if (S.mode === "behind" || S.mode === "front")
+        ptrDrag(im, (e) => { if (e.target === h) return false; x0 = S.x; y0 = S.y; }, (dx, dy) => {
+          S.x = Math.max(-0.5, Math.min(0.9, x0 + dx / page.clientWidth)); S.y = Math.max(-0.5, Math.min(0.9, y0 + dy / page.clientHeight));
+          im.style.left = S.x * 100 + "%"; im.style.top = S.y * 100 + "%";
+        }, status);
+      status();
+    }
+    function status() {
+      let t = INFO[S.mode];
+      const im = page.querySelector(".ws-img");
+      if (S.mode === "behind" && im) {
+        const p = page.getBoundingClientRect(), r = im.getBoundingClientRect();
+        const full = p.width && r.left <= p.left + 3 && r.top <= p.top + 3 && r.right >= p.right - 3 && r.bottom >= p.bottom - 3;
+        if (full) { t = "🎉 " + esc(spec.success || "Tuyệt vời! Ảnh nền nằm ở lớp dưới và phủ kín tờ rơi, chữ nằm ở lớp trên (Hình 8a.9d)."); if (!S.done) { S.done = true; sound("ok"); celebrate(); } }
+      }
+      msg.className = "sp-msg"; msg.innerHTML = t;
+    }
+    paint();
+    return box;
+  }
+
+  // ---- THIẾT KẾ TỜ RƠI KÉO THẢ (hoạt động `flyer`) — Tin 8 Bài 8a, Hình 8a.6 ------------------------------------
+  //  flyer: { title?, intro?, bg: "assets/nen.svg", pic?: "assets/anh.svg", texts: [{ id, text, x, y, size (em theo 1% bề rộng), color, bold? }],
+  //    colors?: [...], checks?: [{ label, test: "color", ids, color } | { label, test: "inCircle", ids, circle: [cx, cy, r] (tỉ lệ bề rộng) }
+  //      | { label, test: "shapes", shapes: ["curveR", "curveL"], color? } | { label, test: "region", type: "pic", rect: [x1, y1, x2, y2] }], success? }
+  //  Insert › Shapes thêm hình đồ hoạ; chọn đối tượng → Shape Fill / Font Color, cỡ, Delete; kéo thả để di chuyển. Không chấm điểm.
+  const FL_SHAPES = {
+    curveR: { name: "Arrow: Curved Right", w: 0.1, svg: (c) => `<svg viewBox="0 0 60 100"><path d="M54 0 C22 0 0 22 0 52 C0 74 12 90 32 92 L32 100 L60 86 L32 70 L32 80 C16 78 9 66 9 52 C9 28 26 8 54 8 Z" fill="${c}"/></svg>` },
+    curveL: { name: "Arrow: Curved Left", w: 0.1, svg: (c) => `<svg viewBox="0 0 60 100"><g transform="translate(60 0) scale(-1 1)"><path d="M54 0 C22 0 0 22 0 52 C0 74 12 90 32 92 L32 100 L60 86 L32 70 L32 80 C16 78 9 66 9 52 C9 28 26 8 54 8 Z" fill="${c}"/></g></svg>` },
+    star: { name: "Star: 5 Points", w: 0.14, svg: (c) => `<svg viewBox="0 0 100 95"><polygon points="50,2 61,36 97,36 68,57 79,92 50,70 21,92 32,57 3,36 39,36" fill="${c}"/></svg>` },
+    frame: { name: "Rectangle: Rounded Corners", w: 0.6, svg: (c) => `<svg viewBox="0 0 200 70"><rect x="4" y="4" width="192" height="62" rx="14" fill="none" stroke="${c}" stroke-width="6"/></svg>` },
+  };
+  function flyerBox(a) {
+    ensureEngineCSS();
+    const spec = a.flyer, COLORS = spec.colors || ["#ffd400", "#ffffff", "#f97316", "#4472c4", "#111111", "#ef4444", "#22c55e"];
+    const fresh = () => ({ els: (spec.texts || []).map((t) => Object.assign({ type: "text", s: 4 }, t)), sel: null, n: 0, done: false });
+    const S = a._fl || (a._fl = fresh());
+    const box = el("div", "sr-box fl-box");
+    box.appendChild(el("h3", "sr-title", "🎨 " + esc(spec.title || "Thiết kế tờ rơi")));
+    if (spec.intro) box.appendChild(el("p", "subtitle", esc(spec.intro)));
+    const bar = el("div", "fl-bar"), tools = el("div", "fl-tools"), wrap = el("div", "fl-wrap"), page = el("div", "fl-page"), side = el("div", "fl-side");
+    wrap.append(page, side); box.append(bar, tools, wrap);
+    page.innerHTML = `<img class="fl-bg" src="${esc(spec.bg)}" alt="Ảnh nền" draggable="false">`;
+    const layer = el("div", "fl-layer"); page.appendChild(layer);
+    const setU = () => { if (page.clientWidth) page.style.setProperty("--u", page.clientWidth / 100 + "px"); };
+    if (window.ResizeObserver) new ResizeObserver(setU).observe(page); else setTimeout(setU, 50);
+    page.addEventListener("pointerdown", (e) => { if (e.target === page || e.target.classList.contains("fl-bg") || e.target === layer) { S.sel = null; paint(); } });
+    // Insert › Shapes
+    bar.appendChild(el("span", "fl-lb", "Insert › Shapes:"));
+    Object.keys(FL_SHAPES).forEach((k) => {
+      const b = el("button", "fl-ins", `<span class="fl-ico">${FL_SHAPES[k].svg("#4472c4")}</span>`); b.type = "button"; b.title = FL_SHAPES[k].name;
+      b.onclick = () => { const id = "s" + ++S.n; S.els.push({ id, type: "shape", shape: k, x: 0.5, y: 0.5, s: FL_SHAPES[k].w, color: "#4472c4" }); S.sel = id; paint(); };
+      bar.appendChild(b);
+    });
+    if (spec.pic) {
+      const b = el("button", "fl-ins fl-pic", "🖼️ Pictures"); b.type = "button"; b.title = "Insert › Pictures";
+      b.onclick = () => { const id = "p" + ++S.n; S.els.push({ id, type: "pic", x: 0.5, y: 0.5, s: 0.28 }); S.sel = id; paint(); };
+      bar.appendChild(b);
+    }
+    const rs = el("button", "fl-ins", "🔄 Làm lại"); rs.type = "button"; rs.onclick = () => { Object.assign(S, fresh()); paint(); }; bar.appendChild(rs);
+    const cur = () => S.els.find((x) => x.id === S.sel);
+    function paintTools() {
+      tools.innerHTML = "";
+      const e = cur();
+      if (!e) { tools.innerHTML = '<span class="fl-hint">👆 Bấm chọn một đối tượng trên tờ rơi để đổi màu, cỡ; kéo thả để di chuyển.</span>'; return; }
+      if (e.type !== "pic") {
+        tools.appendChild(el("span", "fl-lb", e.type === "text" ? "Font Color:" : "Shape Fill:"));
+        COLORS.forEach((c) => { const b = el("button", "fl-sw" + (e.color === c ? " on" : "")); b.type = "button"; b.style.background = c; b.title = c; b.onclick = () => { e.color = c; paint(); }; tools.appendChild(b); });
+      }
+      const sz = (d) => { if (e.type === "text") e.s = Math.max(2, Math.min(16, e.s + d * 0.6)); else e.s = Math.max(0.05, Math.min(1, e.s + d * 0.03)); paint(); };
+      const m = el("button", "fl-ins", "− Nhỏ"), p = el("button", "fl-ins", "+ To"), del = el("button", "fl-ins fl-del", "🗑 Delete");
+      m.type = p.type = del.type = "button"; m.onclick = () => sz(-1); p.onclick = () => sz(1);
+      del.onclick = () => { S.els = S.els.filter((x) => x !== e); S.sel = null; paint(); };
+      tools.append(m, p, del);
+    }
+    function paint() {
+      setU(); layer.innerHTML = "";
+      S.els.forEach((e) => {
+        const d = el("div", "fl-el fl-" + e.type + (S.sel === e.id ? " sel" : ""));
+        d.style.left = e.x * 100 + "%"; d.style.top = e.y * 100 + "%";
+        if (e.type === "text") { d.textContent = e.text; d.style.fontSize = "calc(var(--u, 3.4px) * " + e.s + ")"; d.style.color = e.color || "#111"; if (e.bold) d.style.fontWeight = "800"; }
+        else if (e.type === "shape") { d.innerHTML = FL_SHAPES[e.shape].svg(e.color); d.style.width = e.s * 100 + "%"; }
+        else { d.innerHTML = `<img src="${esc(spec.pic)}" alt="Hình ảnh" draggable="false">`; d.style.width = e.s * 100 + "%"; }
+        let x0, y0;
+        ptrDrag(d, () => { x0 = e.x; y0 = e.y; if (S.sel !== e.id) { S.sel = e.id; layer.querySelectorAll(".fl-el.sel").forEach((z) => z.classList.remove("sel")); d.classList.add("sel"); paintTools(); } },
+          (dx, dy) => { e.x = Math.max(0, Math.min(1, x0 + dx / page.clientWidth)); e.y = Math.max(0, Math.min(1, y0 + dy / page.clientHeight)); d.style.left = e.x * 100 + "%"; d.style.top = e.y * 100 + "%"; },
+          () => check());
+        layer.appendChild(d);
+      });
+      paintTools(); check();
+    }
+    function test(c) {
+      const els = S.els, same = (x, y) => String(x || "").toLowerCase() === String(y || "").toLowerCase();
+      if (c.test === "color") return c.ids.every((id) => { const e = els.find((x) => x.id === id); return e && same(e.color, c.color); });
+      if (c.test === "inCircle") { const r = page.clientHeight / (page.clientWidth || 1); return c.ids.every((id) => { const e = els.find((x) => x.id === id); return e && Math.hypot(e.x - c.circle[0], (e.y - c.circle[1]) * r) <= c.circle[2]; }); }
+      if (c.test === "shapes") return c.shapes.every((k) => els.some((e) => e.type === "shape" && e.shape === k && (!c.color || same(e.color, c.color))));
+      if (c.test === "region") return els.some((e) => e.type === (c.type || "pic") && e.x >= c.rect[0] && e.y >= c.rect[1] && e.x <= c.rect[2] && e.y <= c.rect[3]);
+      return false;
+    }
+    function check() {
+      side.innerHTML = "";
+      const cs = spec.checks || [];
+      if (!cs.length) return;
+      side.appendChild(el("div", "fl-ct", "✅ Tự kiểm tra theo mẫu"));
+      const res = cs.map((c) => test(c));
+      cs.forEach((c, i) => side.appendChild(el("div", "fl-ck" + (res[i] ? " ok" : ""), (res[i] ? "✅ " : "⬜ ") + esc(c.label))));
+      const all = res.every(Boolean);
+      if (all) { side.appendChild(el("div", "fl-win", "🎉 " + esc(spec.success || "Tờ rơi đã hoàn chỉnh như mẫu!"))); if (!S.done) { S.done = true; sound("ok"); celebrate(); } }
+      else S.done = false;
+    }
+    paint();
+    return box;
+  }
+
+  // ---- MÔ PHỎNG HỘP THOẠI HEADER AND FOOTER CỦA POWERPOINT (hoạt động `hfsim`) — Tin 8 Bài 10a, Hình 10a.5 ----------
+  //  hfsim: { title?, intro?, slides: [{ title, sub?, bullets?: [...], titleSlide?: true }], footer?: "gợi ý chân trang",
+  //    goal?: { date?: true, num?: true, footer?: "CLB Tin học", noTitle?: true }, success? }
+  //  Tích Date and time (Update automatically / Fixed), Slide number, Footer, Don't show on title slide → Apply (chỉ trang đang chọn)
+  //  hoặc Apply to All (mọi trang); 4 trang chiếu thu nhỏ hiện kết quả ngay (ngày ở trái, chân trang ở giữa, số trang ở phải). Không chấm.
+  function hfsimBox(a) {
+    ensureEngineCSS();
+    const spec = a.hfsim, slides = spec.slides || [];
+    const d = new Date(), today = String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + d.getFullYear();
+    const blank = () => ({ date: false, auto: true, fixed: "", num: false, footer: false, ftext: "" });
+    const fresh = () => ({ sel: slides.findIndex((s) => !s.titleSlide) >= 0 ? slides.findIndex((s) => !s.titleSlide) : 0, dlg: Object.assign(blank(), { ftext: spec.footer || "", noTitle: false }), st: slides.map(blank), tab: "slide", done: false });
+    const S = a._hf || (a._hf = fresh());
+    const box = el("div", "sr-box hf-box");
+    box.appendChild(el("h3", "sr-title", "🗂️ " + esc(spec.title || "Mô phỏng hộp thoại Header and Footer")));
+    if (spec.intro) box.appendChild(el("p", "subtitle", esc(spec.intro)));
+    const wrap = el("div", "hf-wrap"), dlg = el("div", "hf-dlg"), right = el("div", "hf-right"), msg = el("div", "sp-msg");
+    wrap.append(dlg, right); box.append(wrap, msg);
+    const say = (t) => { msg.className = "sp-msg"; msg.innerHTML = t; };
+    function apply(all) {
+      const D = S.dlg, idx = all ? slides.map((_, i) => i) : [S.sel];
+      idx.forEach((i) => {
+        if (D.noTitle && slides[i].titleSlide) { S.st[i] = blank(); return; }
+        S.st[i] = { date: D.date, auto: D.auto, fixed: D.fixed, num: D.num, footer: D.footer, ftext: D.ftext };
+      });
+      say(all ? "✅ <b>Apply to All</b>: đã áp dụng cho <b>tất cả</b> các trang chiếu" + (D.noTitle && slides.some((s) => s.titleSlide) ? " (trừ trang tiêu đề vì đã chọn Don't show on title slide)." : ".")
+        : "☝️ <b>Apply</b>: chỉ áp dụng cho <b>trang " + (S.sel + 1) + "</b> đang chọn — các trang khác chưa thay đổi. Muốn áp dụng cho mọi trang, bấm <b>Apply to All</b>.");
+      paint(); check();
+    }
+    function check() {
+      const g = spec.goal; if (!g) return;
+      const norm = (x) => String(x || "").toLowerCase().replace(/\s+/g, " ").trim();
+      const ok = slides.every((s, i) => {
+        const t = S.st[i];
+        if (s.titleSlide && g.noTitle) return !t.date && !t.num && !t.footer;
+        return (!g.date || (t.date && t.auto)) && (!g.num || t.num) && (!g.footer || (t.footer && norm(t.ftext).includes(norm(g.footer))));
+      });
+      if (ok && !S.done) { S.done = true; say("🎉 " + esc(spec.success || "Hoàn thành! Các trang chiếu đã có ngày, số trang và chân trang; trang tiêu đề không hiện.")); sound("ok"); celebrate(); }
+      if (!ok) S.done = false;
+    }
+    function paint() {
+      const D = S.dlg;
+      dlg.innerHTML = `<div class="hf-top"><b>Header and Footer</b><span>? ✕</span></div>
+        <div class="hf-tabs"><button type="button" data-t="slide" class="${S.tab === "slide" ? "on" : ""}">Slide</button><button type="button" data-t="notes" class="${S.tab === "notes" ? "on" : ""}">Notes and Handouts</button></div>`;
+      const body = el("div", "hf-body"); dlg.appendChild(body);
+      dlg.querySelectorAll("[data-t]").forEach((b) => (b.onclick = () => { S.tab = b.dataset.t; paint(); }));
+      if (S.tab === "notes") {
+        body.innerHTML = `<div class="hf-note">📄 Ở chế độ <b>Notes and Handouts</b> (tài liệu in phát cho người nghe) mới có mục <b>Header</b> (đầu trang). Ở chế độ <b>Slide</b> không thêm được đầu trang.</div>
+          <label class="hf-row"><input type="checkbox" disabled> Date and time</label><label class="hf-row"><input type="checkbox" checked disabled> <b>Header</b></label>
+          <label class="hf-row"><input type="checkbox" disabled> Page number</label><label class="hf-row"><input type="checkbox" disabled> Footer</label>`;
+      } else {
+        body.innerHTML = `<div class="hf-grp">Include on slide</div>
+          <label class="hf-row"><input type="checkbox" data-k="date"${D.date ? " checked" : ""}> <u>D</u>ate and time</label>
+          <div class="hf-sub${D.date ? "" : " off"}">
+            <label class="hf-row"><input type="radio" name="hfa" data-k="auto1"${D.auto ? " checked" : ""}${D.date ? "" : " disabled"}> <u>U</u>pdate automatically</label>
+            <div class="hf-in hf-ro">${today}</div>
+            <label class="hf-row"><input type="radio" name="hfa" data-k="auto0"${D.auto ? "" : " checked"}${D.date ? "" : " disabled"}> Fi<u>x</u>ed</label>
+            <input class="hf-in" data-k="fixed" value="${esc(D.fixed)}" placeholder="VD: 19/10/2022"${D.date && !D.auto ? "" : " disabled"}>
+          </div>
+          <label class="hf-row"><input type="checkbox" data-k="num"${D.num ? " checked" : ""}> Slide <u>n</u>umber</label>
+          <label class="hf-row"><input type="checkbox" data-k="footer"${D.footer ? " checked" : ""}> <u>F</u>ooter</label>
+          <input class="hf-in" data-k="ftext" value="${esc(D.ftext)}" placeholder="Nhập thông tin xuất hiện ở chân trang"${D.footer ? "" : " disabled"}>
+          <label class="hf-row hf-nt"><input type="checkbox" data-k="noTitle"${D.noTitle ? " checked" : ""}> Don't show on title <u>s</u>lide</label>`;
+        body.querySelectorAll("[data-k]").forEach((inp) => {
+          const k = inp.dataset.k;
+          if (k === "fixed" || k === "ftext") { inp.oninput = () => { D[k] = inp.value; }; inp.onkeydown = (e) => e.stopPropagation(); return; }
+          inp.onchange = () => { if (k === "auto1") D.auto = true; else if (k === "auto0") D.auto = false; else D[k] = inp.checked; paint(); };
+        });
+      }
+      const btns = el("div", "hf-btns");
+      [["Apply", () => apply(false)], ["Apply to All", () => apply(true)], ["Cancel", () => { S.dlg = Object.assign(blank(), S.st[S.sel], { noTitle: S.dlg.noTitle }); paint(); say("Đã huỷ các thay đổi chưa áp dụng."); }]].forEach(([t, fn]) => { const b = el("button", "hf-btn" + (t === "Apply to All" ? " main" : ""), t); b.type = "button"; b.onclick = fn; btns.appendChild(b); });
+      dlg.appendChild(btns);
+      // các trang chiếu thu nhỏ
+      right.innerHTML = '<div class="hf-hint">👆 Bấm chọn một trang (để thử <b>Apply</b>)</div>';
+      const grid = el("div", "hf-grid"); right.appendChild(grid);
+      slides.forEach((s, i) => {
+        const t = S.st[i], c = el("div", "hf-sl" + (i === S.sel ? " sel" : "") + (s.titleSlide ? " ttl" : ""));
+        c.innerHTML = `<div class="hf-in-sl">${s.titleSlide ? `<div class="hf-t1">${esc(s.title)}</div>${s.sub ? `<div class="hf-sub1">${esc(s.sub)}</div>` : ""}`
+          : `<div class="hf-t2">${esc(s.title)}</div><ul>${(s.bullets || []).map((b) => `<li>${esc(b)}</li>`).join("")}</ul>`}</div>
+          <div class="hf-ft"><span>${t.date ? esc(t.auto ? today : t.fixed || "") : ""}</span><span>${t.footer ? esc(t.ftext) : ""}</span><span>${t.num ? i + 1 : ""}</span></div>`;
+        c.onclick = () => { S.sel = i; paint(); };
+        const wr = el("div", "hf-cell"); wr.append(c, el("div", "hf-no", String(i + 1))); grid.appendChild(wr);
+      });
+    }
+    say("✍️ Tích chọn các mục trong hộp thoại, nhập thông tin chân trang, rồi bấm <b>Apply</b> hoặc <b>Apply to All</b> và quan sát các trang chiếu.");
+    paint();
+    return box;
+  }
+
+  // ---- MÔ PHỎNG PHỐI MÀU TRANG CHIẾU (hoạt động `colorsim`) — Tin 8 Bài 10a -----------------------------------------------
+  //  colorsim: { title?, intro?, slide: { title, bullets: [...] }, palette?: [{ name, hex }] }
+  //  Chọn chủ đề, màu nền, màu tiêu đề, màu chữ, cỡ chữ → app nhận xét: độ tương phản (dễ/khó đọc), nhóm màu nóng/lạnh/trung tính,
+  //  hài hoà với chủ đề, số màu, cỡ chữ. Không chấm điểm.
+  const CS_PAL = [["Đỏ", "#dc2626"], ["Da cam", "#f97316"], ["Vàng", "#facc15"], ["Nâu", "#92400e"], ["Xanh lục", "#16a34a"], ["Xanh dương", "#1d4ed8"],
+    ["Xanh nhạt", "#bae6fd"], ["Tím", "#7c3aed"], ["Trắng", "#ffffff"], ["Be", "#f5f0e1"], ["Xám", "#6b7280"], ["Đen", "#111111"]];
+  function csRGB(h) { const x = parseInt(h.slice(1), 16); return [(x >> 16) & 255, (x >> 8) & 255, x & 255]; }
+  function csLum(h) { return csRGB(h).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }).reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0); }
+  function csContrast(a, b) { const x = csLum(a), y = csLum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+  function csGroup(h) {
+    const [r, g, b] = csRGB(h).map((v) => v / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, s = mx === mn ? 0 : (mx - mn) / (1 - Math.abs(2 * l - 1));
+    if (s < 0.25 || l > 0.9 || l < 0.1) return "trung tính";
+    let hue = mx === r ? ((g - b) / (mx - mn)) % 6 : mx === g ? (b - r) / (mx - mn) + 2 : (r - g) / (mx - mn) + 4; hue = (hue * 60 + 360) % 360;
+    return hue < 70 || hue >= 330 ? "nóng" : "lạnh";
+  }
+  function colorsimBox(a) {
+    ensureEngineCSS();
+    const spec = a.colorsim, P = spec.palette ? spec.palette.map((p) => [p.name, p.hex]) : CS_PAL;
+    const TOP = { le: ["🎉 Lễ hội, giải trí", "nóng"], hoc: ["📚 Giáo dục, học tập", "trung tính"], tri: ["🎨 Nghệ thuật, tri ân", "lạnh"] };
+    const S = a._cs || (a._cs = { topic: "hoc", bg: "#ffffff", tc: "#16a34a", bc: "#111111", size: 32, tsize: 54 });
+    const box = el("div", "sr-box cs-box");
+    box.appendChild(el("h3", "sr-title", "🎨 " + esc(spec.title || "Phối màu trang chiếu")));
+    if (spec.intro) box.appendChild(el("p", "subtitle", esc(spec.intro)));
+    const wrap = el("div", "cs-wrap"), ctl = el("div", "cs-ctl"), right = el("div", "cs-right");
+    wrap.append(ctl, right); box.appendChild(wrap);
+    const nameOf = (h) => (P.find((p) => p[1] === h) || ["", h])[0];
+    function paint() {
+      ctl.innerHTML = "";
+      const tp = el("div", "cs-row"); tp.appendChild(el("b", "", "Chủ đề: "));
+      Object.keys(TOP).forEach((k) => { const b = el("button", "cs-chip" + (S.topic === k ? " on" : ""), TOP[k][0]); b.type = "button"; b.onclick = () => { S.topic = k; paint(); }; tp.appendChild(b); });
+      ctl.appendChild(tp);
+      [["bg", "Màu nền"], ["tc", "Màu tiêu đề"], ["bc", "Màu chữ nội dung"]].forEach(([k, lb]) => {
+        const r = el("div", "cs-row"); r.appendChild(el("b", "", lb + ": "));
+        P.forEach(([n, h]) => { const b = el("button", "cs-sw" + (S[k] === h ? " on" : "")); b.type = "button"; b.style.background = h; b.title = n; b.onclick = () => { S[k] = h; paint(); }; r.appendChild(b); });
+        ctl.appendChild(r);
+      });
+      const sz = el("div", "cs-row");
+      sz.innerHTML = `<b>Cỡ chữ tiêu đề: </b><select data-k="tsize">${[24, 28, 32, 40, 44, 54, 60].map((v) => `<option${S.tsize === v ? " selected" : ""}>${v}</option>`).join("")}</select>
+        <b style="margin-left:12px">Cỡ chữ nội dung: </b><select data-k="size">${[12, 14, 16, 18, 20, 24, 28, 32, 40].map((v) => `<option${S.size === v ? " selected" : ""}>${v}</option>`).join("")}</select>`;
+      sz.querySelectorAll("select").forEach((s) => (s.onchange = () => { S[s.dataset.k] = +s.value; paint(); }));
+      ctl.appendChild(sz);
+      // trang chiếu
+      right.innerHTML = "";
+      const sl = el("div", "cs-slide"); sl.style.background = S.bg;
+      sl.innerHTML = `<div class="cs-t" style="color:${S.tc};font-size:${S.tsize / 18}em;font-size:${(S.tsize * 100 / 960).toFixed(2)}cqw">${esc(spec.slide.title)}</div><ul style="color:${S.bc};font-size:${S.size / 26}em;font-size:${(S.size * 100 / 960).toFixed(2)}cqw">${spec.slide.bullets.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>`;
+      right.appendChild(sl);
+      // nhận xét
+      const out = [], cb = csContrast(S.bc, S.bg), ct = csContrast(S.tc, S.bg);
+      const rate = (c) => (c >= 4.5 ? ["ok", "dễ đọc"] : c >= 3 ? ["warn", "hơi khó đọc"] : ["bad", "khó đọc"]);
+      const [rb, tb] = [rate(cb), rate(ct)];
+      out.push([rb[0], `Chữ nội dung ${esc(nameOf(S.bc))} trên nền ${esc(nameOf(S.bg))}: độ tương phản ${cb.toFixed(1)} — <b>${rb[1]}</b>${rb[0] !== "ok" ? ". Nên chọn màu chữ có độ tương phản cao với màu nền." : "."}`]);
+      out.push([tb[0], `Tiêu đề ${esc(nameOf(S.tc))} trên nền: độ tương phản ${ct.toFixed(1)} — <b>${tb[1]}</b>.`]);
+      const g = csGroup(S.bg), want = TOP[S.topic][1];
+      out.push([g === want ? "ok" : "warn", `Màu nền thuộc nhóm màu <b>${g}</b>. Chủ đề ${esc(TOP[S.topic][0].replace(/^\S+\s/, "").toLowerCase())} gợi ý dùng gam màu <b>${want}</b>${g === want ? " — hài hoà với nội dung." : "."}`]);
+      const n = new Set([S.bg, S.tc, S.bc]).size;
+      if (n < 3) out.push(["warn", "Có màu bị trùng nhau (chữ trùng màu nền sẽ không nhìn thấy)."]);
+      const gs = [csGroup(S.tc), csGroup(S.bc)].filter((x) => x !== "trung tính");
+      if (gs.includes("nóng") && gs.includes("lạnh")) out.push(["warn", "Tiêu đề và nội dung dùng màu nóng lẫn màu lạnh — nên kết hợp các màu cùng nhóm với nhau."]);
+      out.push([S.size >= 20 ? "ok" : "bad", S.size >= 20 ? `Cỡ chữ nội dung ${S.size} — đủ lớn để cả lớp đọc được.` : `Cỡ chữ nội dung ${S.size} — quá nhỏ, người ngồi xa khó đọc.`]);
+      out.push([S.tsize > S.size ? "ok" : "warn", S.tsize > S.size ? "Tiêu đề lớn hơn nội dung — thể hiện rõ mức phân cấp." : "Tiêu đề nên có cỡ chữ lớn hơn nội dung."]);
+      const list = el("div", "cs-list");
+      out.forEach(([k, t]) => list.appendChild(el("div", "cs-it " + k, (k === "ok" ? "✅ " : k === "warn" ? "⚠️ " : "❌ ") + t)));
+      right.appendChild(list);
+    }
+    paint();
+    return box;
+  }
+
+  // ---- BIỂU ĐỒ SVG (cột / quạt tròn / đoạn thẳng) — vẽ như Excel, sắc nét trên máy chiếu -----------------------
+  //  Dùng ở: content.blocks { kind: "chart", value: spec } · câu hỏi `chart: spec` · hoạt động `chart: spec` · poll `chart: true`.
+  //  `chart` nhận 1 spec hoặc mảng spec (xếp cạnh nhau). spec: { type: "column" | "pie" | "line", title?, labels: [...],
+  //   values: [...] | series: [{ name, values }], dataLabels?, percent? (quạt tròn: nhãn %), legend?, gridlines? (mặc định có),
+  //   yMin?, yMax?, yStep?, yTitle?, xTitle?, color?, colors?, thousands? (3.038), markers? (đoạn thẳng), caption? }
+  const CH_COLORS = ["#4472c4", "#ed7d31", "#a5a5a5", "#ffc000", "#5b9bd5", "#70ad47", "#264478", "#9e480e"];
+  function chNum(v, s) { const r = Math.round(v * 100) / 100; return s && s.thousands ? String(r).replace(/\B(?=(\d{3})+(?!\d))/g, ".") : String(r); }
+  function chPct(vals) { // làm tròn % theo phần dư lớn nhất để tổng đúng 100 (giống số liệu SGK)
+    const tot = vals.reduce((s, v) => s + v, 0); if (!tot) return vals.map(() => 0);
+    const raw = vals.map((v) => v * 100 / tot), fl = raw.map(Math.floor); let rest = 100 - fl.reduce((s, v) => s + v, 0);
+    raw.map((r, i) => [r - fl[i], i]).sort((a, b) => b[0] - a[0]).forEach(([, i]) => { if (rest > 0) { fl[i]++; rest--; } });
+    return fl;
+  }
+  function chWrap(t, max) {
+    const w = String(t).split(" "), lines = [""];
+    w.forEach((x) => { const cur = lines[lines.length - 1]; if (cur && (cur + " " + x).length > max && lines.length < 3) lines.push(x); else lines[lines.length - 1] = cur ? cur + " " + x : x; });
+    return lines;
+  }
+  function chText(x, y, s, o) {
+    o = o || {};
+    return `<text x="${x}" y="${y}" font-size="${o.size || 14}" text-anchor="${o.anchor || "middle"}" fill="${o.fill || "#404040"}"${o.bold ? ' font-weight="700"' : ""}${o.halo ? ' stroke="rgba(0,0,0,.35)" stroke-width="3" paint-order="stroke"' : ""}>${esc(s)}</text>`;
+  }
+  function chartSVG(s) {
+    s = s || {};
+    const W = 640, H = 400, t = s.type || "column", labels = s.labels || [];
+    const series = s.series || [{ name: s.seriesName || s.title || "", values: s.values || [] }];
+    const cols = s.colors || (s.color ? [s.color] : CH_COLORS);
+    let o = `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(s.title || "Biểu đồ")}"><rect x=".5" y=".5" width="${W - 1}" height="${H - 1}" fill="#fff" stroke="#d4d4d8"/>`;
+    let top = 18;
+    if (s.title) { o += chText(W / 2, 38, s.title, { size: 21, fill: "#404040" }); top = 58; }
+    if (t === "pie") {
+      const vals = series[0].values.map(Number), tot = vals.reduce((a, b) => a + b, 0), pc = chPct(vals), leg = s.legend !== false;
+      const cx = leg ? 225 : W / 2, cy = (top + H) / 2, r = Math.min((H - top) / 2 - 14, leg ? 175 : 200);
+      if (!tot) o += chText(cx, cy, "Chưa có dữ liệu", { size: 18, fill: "#94a3b8" });
+      let ang = -Math.PI / 2;
+      vals.forEach((v, i) => {
+        if (!tot || !v) return;
+        const a2 = ang + v / tot * Math.PI * 2, c = cols[i % cols.length];
+        if (v === tot) o += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${c}" stroke="#fff" stroke-width="2"/>`;
+        else {
+          const x1 = cx + r * Math.cos(ang), y1 = cy + r * Math.sin(ang), x2 = cx + r * Math.cos(a2), y2 = cy + r * Math.sin(a2);
+          o += `<path d="M${cx},${cy} L${x1.toFixed(1)},${y1.toFixed(1)} A${r},${r} 0 ${a2 - ang > Math.PI ? 1 : 0} 1 ${x2.toFixed(1)},${y2.toFixed(1)} Z" fill="${c}" stroke="#fff" stroke-width="2"/>`;
+        }
+        if (s.dataLabels || s.percent) {
+          const m = (ang + a2) / 2, lx = cx + r * 0.66 * Math.cos(m), ly = cy + r * 0.66 * Math.sin(m) + 6;
+          o += chText(lx.toFixed(1), ly.toFixed(1), s.percent ? pc[i] + "%" : chNum(v, s), { size: 17, fill: "#fff", bold: true, halo: true });
+        }
+        ang = a2;
+      });
+      if (leg) {
+        const lh = 30, y0 = cy - (labels.length * lh) / 2 + 10;
+        labels.forEach((lb, i) => { o += `<rect x="440" y="${y0 + i * lh - 12}" width="14" height="14" fill="${cols[i % cols.length]}"/>` + chText(462, y0 + i * lh, lb, { size: 15, anchor: "start" }); });
+      }
+      return o + "</svg>";
+    }
+    const all = series.reduce((a, se) => a.concat(se.values.map(Number)), []), maxV = Math.max(0, ...all);
+    const yMin = s.yMin != null ? s.yMin : 0;
+    let step = s.yStep;
+    if (!step) { const raw = Math.max(1e-9, (maxV - yMin) / 8), p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p; step = (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p; }
+    const yMax = s.yMax != null ? s.yMax : Math.max(yMin + step, Math.ceil((maxV - 1e-9) / step) * step);
+    const leg = s.legend != null ? s.legend : series.length > 1;
+    const L = 70, R = W - (s.xTitle ? 58 : 24), T = top + (s.yTitle ? 22 : 10) + (s.dataLabels ? 10 : 0), B = H - (leg ? 88 : 62);
+    const y = (v) => B - (Math.max(yMin, Math.min(yMax, v)) - yMin) / (yMax - yMin) * (B - T);
+    if (s.yTitle) o += chText(14, top + 8, s.yTitle, { size: 15, anchor: "start", fill: "#262626", bold: true });
+    for (let v = yMin; v <= yMax + 1e-9; v += step) {
+      const yy = y(v).toFixed(1);
+      if (s.gridlines !== false) o += `<line x1="${L}" y1="${yy}" x2="${R}" y2="${yy}" stroke="#e4e4e7"/>`;
+      o += chText(L - 10, +yy + 5, chNum(v, s), { size: 14, anchor: "end", fill: "#595959" });
+    }
+    o += `<line x1="${L}" y1="${B}" x2="${R}" y2="${B}" stroke="#a1a1aa"/>`;
+    if (s.xTitle) o += chText(R + 8, B + 5, s.xTitle, { size: 15, anchor: "start", fill: "#262626", bold: true });
+    const n = Math.max(1, labels.length), gw = (R - L) / n, maxCh = Math.max(6, Math.floor(gw / 8.2));
+    labels.forEach((lb, i) => chWrap(lb, maxCh).forEach((ln, k) => { o += chText(L + gw * (i + .5), B + 22 + k * 17, ln, { size: 14, fill: "#595959" }); }));
+    const k = series.length, bw = Math.min(70, gw * 0.5 / k);
+    series.forEach((se, si) => {
+      const c = cols[si % cols.length], vals = se.values.map(Number);
+      if (t === "line") {
+        const pts = vals.map((v, i) => [L + gw * (i + .5), y(v)]);
+        o += `<polyline points="${pts.map((p) => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}" fill="none" stroke="${c}" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>`;
+        pts.forEach((p, i) => {
+          if (s.markers) o += `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="5" fill="${c}" stroke="#fff" stroke-width="2"/>`;
+          if (s.dataLabels) o += chText(p[0].toFixed(1), (p[1] - 12).toFixed(1), chNum(vals[i], s), { size: 14, fill: "#404040" });
+        });
+      } else {
+        vals.forEach((v, i) => {
+          const x = L + gw * (i + .5) - (bw * k) / 2 + bw * si, yy = y(v), h = Math.max(0, B - yy);
+          o += `<rect x="${x.toFixed(1)}" y="${yy.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${c}"/>`;
+          if (s.dataLabels) o += chText((x + bw / 2).toFixed(1), (yy - 7).toFixed(1), chNum(v, s), { size: 14, fill: "#404040" });
+        });
+      }
+    });
+    if (leg) {
+      const items = series.map((se, i) => [se.name || "Chuỗi " + (i + 1), cols[i % cols.length]]), iw = 190, x0 = W / 2 - (items.length * iw) / 2;
+      items.forEach(([nm, c], i) => { o += `<rect x="${x0 + i * iw}" y="${H - 30}" width="14" height="14" fill="${c}"/>` + chText(x0 + i * iw + 22, H - 18, nm, { size: 15, anchor: "start" }); });
+    }
+    return o + "</svg>";
+  }
+  function chartHTML(spec) {
+    const one = (s) => `<figure class="chart-fig">${chartSVG(s)}${s && s.caption ? `<figcaption class="caption">${esc(s.caption)}</figcaption>` : ""}</figure>`;
+    return Array.isArray(spec) ? `<div class="chart-row">${spec.map(one).join("")}</div>` : one(spec);
+  }
+
+  function renderPoll(a) {
+    ensureEngineCSS();
+    const c = el("div", "card poll-card"); activityHead(a, c);
+    const opts = a.options || [], key = aid(a) + ":poll";
+    if (a.question) c.appendChild(el("p", "prompt", esc(a.question)));
+    const box = el("div", "poll-box"); c.appendChild(box); view.appendChild(c);
+    if (STUDENT) {
+      const sent = ask("getText", key); let cur = sent ? sent.text : null;
+      const draw = () => {
+        box.innerHTML = "";
+        opts.forEach((o, i) => {
+          const b = el("button", "poll-opt" + (cur === o ? " sel" : ""), '<span class="key">' + (KEYS[i] || i + 1) + "</span> " + esc(o));
+          b.onclick = () => { cur = o; emit("onText", { key, activityId: aid(a), text: o }); sound("ok"); draw(); };
+          box.appendChild(b);
+        });
+        box.appendChild(el("p", "ta-status", cur ? "✓ Đã gửi lựa chọn: <b>" + esc(cur) + "</b> — có thể đổi đến khi thầy/cô chuyển hoạt động" : "👆 Chọn một phương án để gửi cho thầy/cô"));
+      };
+      draw(); return;
+    }
+    const counts = a._counts || (a._counts = opts.map(() => 0));
+    const draw = () => {
+      const list = ask("groupTexts", key), live = Array.isArray(list);
+      const n = live ? opts.map((o) => list.filter((g) => g.text === o).length) : counts;
+      const total = n.reduce((s, x) => s + x, 0), max = Math.max(1, ...n);
+      box.innerHTML = "";
+      const pv = a.chartView ? a._pv || "bars" : "bars";
+      if (a.chartView) { // chartView: true → GV đổi qua lại thanh ngang / biểu đồ cột / biểu đồ hình quạt tròn
+        const tabs = el("div", "poll-tabs");
+        [["bars", "📊 Thanh ngang"], ["column", "📶 Biểu đồ cột"], ["pie", "🥧 Biểu đồ hình quạt tròn"]].forEach(([v, lb]) => {
+          const b = el("button", "btn ghost poll-tab" + (pv === v ? " on" : ""), lb); b.onclick = () => { a._pv = v; draw(); }; tabs.appendChild(b);
+        });
+        box.appendChild(tabs);
+      }
+      if (pv !== "bars") {
+        const cv = el("div", "poll-chart");
+        cv.innerHTML = chartSVG({ type: pv, title: a.chartTitle || "Kết quả bình chọn", labels: opts, values: n, dataLabels: true, percent: pv === "pie" });
+        box.appendChild(cv);
+        if (!live) {
+          const chips = el("div", "poll-chips");
+          opts.forEach((o, i) => {
+            const sp = el("span", "poll-chip"), minus = el("button", "btn ghost poll-pm", "−"), plus = el("button", "btn ghost poll-pm", "+1 " + esc(o));
+            minus.onclick = () => { counts[i] = Math.max(0, counts[i] - 1); draw(); }; plus.onclick = () => { counts[i]++; draw(); };
+            sp.append(minus, plus); chips.appendChild(sp);
+          });
+          box.appendChild(chips);
+        }
+      }
+      if (pv === "bars") opts.forEach((o, i) => {
+        const row = el("div", "poll-row" + (total && n[i] === max ? " top" : ""));
+        row.innerHTML = '<span class="poll-lb">' + (KEYS[i] || i + 1) + ". " + esc(o) + '</span><span class="poll-bar"><i style="width:' + (n[i] / max * 100) + '%"></i></span><b class="poll-n">' + n[i] + "</b>";
+        if (!live) {
+          const minus = el("button", "btn ghost poll-pm", "−1"), plus = el("button", "btn ghost poll-pm", "+1");
+          minus.onclick = () => { counts[i] = Math.max(0, counts[i] - 1); draw(); }; plus.onclick = () => { counts[i]++; draw(); };
+          row.append(minus, plus);
+        }
+        box.appendChild(row);
+      });
+      box.appendChild(el("p", "ta-status", live ? "📡 " + total + " lượt đã gửi — kết quả tự cập nhật" : "✋ Chưa nối lớp học: bấm +1 theo số bạn giơ tay (tổng " + total + ")"));
+    };
+    draw();
+    if (Array.isArray(ask("groupTexts", key))) { const t = setInterval(() => { if (!box.isConnected) return clearInterval(t); draw(); }, 2500); }
+  }
+
+  // ---- TRÒ CHƠI 2 ĐỘI LEO BẬC THANG (type "ladder") — VD “Ai lên cao hơn” (Thỏ và Rùa) ----------------
+  //  teams: [{ name: "Đội Thỏ", icon: "🐰" }, { name: "Đội Rùa", icon: "🐢" }], goalIcon?: "🏆", questions: [… trắc nghiệm như quiz]
+  //  Màn chiếu: câu i mặc định là lượt của đội (i % 2); GV bấm đổi đội trước khi trả lời. Đúng → nhân vật của đội lên 1 bậc.
+  //  Hết câu → công bố đội lên cao hơn. Máy HS (lớp học): mỗi nhóm trả lời tất cả câu, nhân vật của nhóm leo theo số câu đúng.
+  function renderLadder(a) {
+    ensureEngineCSS();
+    const qs = a.questions || [], T = a.teams && a.teams.length >= 2 ? a.teams.slice(0, 2) : [{ name: "Đội 1", icon: "🐰" }, { name: "Đội 2", icon: "🐢" }];
+    a._res = a._res || {}; a._team = a._team || {};
+    const teamOf = (i) => (i in a._team ? a._team[i] : i % 2), goal = a.goalIcon || "🏆";
+    const c = el("div", "card ladder-card"); activityHead(a, c);
+    if (a.intro) c.appendChild(el("p", "subtitle", esc(a.intro)));
+    const wrap = el("div", "ld-wrap"); c.appendChild(wrap);
+    const solo = STUDENT, N = solo ? qs.length : Math.ceil(qs.length / 2);
+    const stepsOf = (t) => {
+      if (solo) { const st = actStateOf(a); if (st === "open" || st === "locked") return 0; return qs.filter((q, i) => { const r = ask("getAttempt", qKey(a, i)); return r && judgeLocal(q, r.choice); }).length; }
+      return qs.filter((_, i) => teamOf(i) === t && a._res[i] === true).length;
+    };
+    function paint(hop) {
+      wrap.innerHTML = "";
+      (solo ? [{ name: "Nhóm em", icon: T[0].icon }] : T).forEach((tm, t) => {
+        const k = Math.min(N, stepsOf(t)), box = el("div", "ld-team" + (!solo && teamOf(a._qi || 0) === t && !((a._qi || 0) in a._res) ? " turn" : ""));
+        box.appendChild(el("div", "ld-head", "<span>" + esc(tm.icon) + " " + esc(tm.name) + "</span><span>" + k + "/" + N + " bậc</span>"));
+        const stair = el("div", "ld-stair");
+        for (let j = 0; j <= N; j++) {
+          const st = el("div", "ld-step" + (j <= k && j > 0 ? " done" : "") + (j === N ? " top" : ""));
+          st.style.width = (28 + 72 * j / Math.max(1, N)) + "%";
+          st.innerHTML = j === k ? '<span class="ld-me' + (hop === t ? " hop" : "") + '">' + esc(tm.icon) + "</span>" : j === N ? "<span>" + esc(goal) + "</span>" : "";
+          stair.appendChild(st);
+        }
+        box.appendChild(stair); wrap.appendChild(box);
+      });
+      if (!solo && qs.length && Object.keys(a._res).length >= qs.length && !c.querySelector(".ld-win")) {
+        const s0 = stepsOf(0), s1 = stepsOf(1), w = s0 === s1 ? null : s0 > s1 ? T[0] : T[1];
+        const win = el("div", "ld-win", w ? "🏆 " + esc(w.icon) + " " + esc(w.name) + " lên cao hơn — chiến thắng! (" + Math.max(s0, s1) + " : " + Math.min(s0, s1) + ")" : "🤝 Hai đội bằng nhau (" + s0 + " : " + s1 + ") — hoà!");
+        c.insertBefore(win, wrap.nextSibling); celebrate(); if (S.sound) { try { fanfare(); } catch (e) {} }
+      }
+    }
+    if (!solo && qs.length && !((a._qi || 0) in a._res)) { // chọn đội trả lời câu này
+      const bar = el("div", "ld-turnbar", "<b>Lượt trả lời:</b>");
+      T.forEach((tm, t) => { const b = el("button", "btn ghost" + (teamOf(a._qi || 0) === t ? " on" : ""), esc(tm.icon) + " " + esc(tm.name)); b.onclick = () => { a._team[a._qi || 0] = t; render(); }; bar.appendChild(b); });
+      c.appendChild(bar);
+    }
+    view.appendChild(c);
+    c._ladder = (ok) => { paint(ok ? (solo ? 0 : teamOf(a._qi)) : null); const tb = c.querySelector(".ld-turnbar"); if (tb) tb.remove(); };
+    renderQuizInto(c, a);
+    paint(null);
   }
 
   // ---- TRÒ CHUYỆN TÌNH HUỐNG (type "chat") — khung tin nhắn giống ứng dụng nhắn tin ----------------
@@ -4177,7 +5017,7 @@ Kết quả hoạt động này của tất cả các nhóm sẽ bị xóa; máy
     quiz: renderQuiz, matching: renderMatching, dragdrop: renderDragDrop,
     ordering: renderOrdering, fillblank: renderFillBlank, flashcard: renderFlashcard,
     scenario: renderScenario, remember: renderRemember, summary: renderSummary,
-    penguin: renderPenguin, vandung: renderVanDung, giftbox: renderGiftbox, checklist: renderChecklist, crossword: renderCrossword,
+    penguin: renderPenguin, ladder: renderLadder, poll: renderPoll, vandung: renderVanDung, giftbox: renderGiftbox, checklist: renderChecklist, crossword: renderCrossword,
   };
 
   render();

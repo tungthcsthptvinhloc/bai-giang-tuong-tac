@@ -370,6 +370,56 @@ HS bấm ▶ Bước tiếp: thẻ đang xét sáng lên, bảng lần lặp t�
 - **Sơ đồ cấu trúc máy tính (kéo thả)**: `dragdrop` thêm `layout: "vonneumann"` — đúng 4 `groups` theo thứ tự [Thiết bị vào, Bộ xử lí,
   Bộ nhớ, Thiết bị ra] → vùng thả xếp như Hình 1.3 Tin 8 (vào ➜ [xử lí ⇅ nhớ] ➜ ra). Nên ghi nhiệm vụ vào tên nhóm (ô trên/dưới ở giữa
   đối xứng, HS cần căn cứ để phân biệt). `layout: "cols"`: 3–6 nhóm xếp thành hàng cột như bảng (phiếu học tập nhiều cột).
+- **Trò chơi 2 đội leo bậc thang** (VD “Ai lên cao hơn” — Thỏ và Rùa): `{ type: "ladder", teams: [{ name: "Đội Thỏ", icon: "🐰" },
+  { name: "Đội Rùa", icon: "🐢" }], goalIcon?: "🏆", questions: [trắc nghiệm] }` — màn chiếu: câu i là lượt đội (i % 2), GV bấm đổi đội
+  trước khi trả lời; đúng → nhân vật đội đó lên 1 bậc; hết câu công bố đội thắng (pháo giấy + kèn). Máy HS: nhân vật của nhóm leo theo số
+  câu đúng. Chấm điểm như quiz. (🐇 hiện đen trắng trên Windows → dùng 🐰.)
+- **Gõ công thức / chuỗi chính xác**: câu `short` thêm `exact: true` — chỉ bỏ khoảng trắng, dấu = ở đầu, không phân biệt hoa/thường,
+  GIỮ kí hiệu $ * + … (VD đoán công thức sau khi sao chép: "=E8*$F$2" ≠ "=E8*F2"). Chấm cả ở core.js (normExact).
+- **Khảo sát nhanh cả lớp** (Tin 8 Bài 6 — phiếu khảo sát): `{ type: "poll", question: "…", options: [2–6 lựa chọn] }` — không
+  chấm. Máy HS: nhóm bấm chọn 1 lựa chọn (chọn lại được), gửi qua texts (khoá `<aid>:poll`, luật Firebase `texts` chung — không đổi
+  luật). Màn chiếu nối tiết học: biểu đồ cột cả lớp tự cập nhật (2,5 giây), cột nhiều nhất màu cam; mở file trực tiếp: GV bấm +1/−1
+  (giơ tay). Bảng GV: hiện ở tab ✍️ Tự luận ("📊 Bình chọn — …"). Dùng làm dữ liệu thật cho bài sắp xếp/lọc, thống kê.
+  Thêm `chartView: true, chartTitle?: "…"` → màn chiếu có nút đổi 📊 Thanh ngang / 📶 Biểu đồ cột / 🥧 Biểu đồ hình quạt tròn.
+- **Biểu đồ SVG vẽ như Excel** (Tin 8 Bài 7 — mọi bài có biểu đồ): spec `{ type: "column" | "pie" | "line", title?, labels: [...],
+  values: [số] | series: [{ name, values }] (nhiều chuỗi → có chú giải), dataLabels?, percent? (quạt tròn: nhãn %, làm tròn để tổng
+  = 100 như SGK), legend? (quạt tròn mặc định có; false = ẩn), gridlines?, yMin?, yMax?, yStep?, yTitle?, xTitle?, color?, colors?,
+  thousands? (3.038), markers? (đoạn thẳng), caption? }`. Dùng ở: `content.blocks { kind: "chart", value: spec | [spec, spec] }`
+  (mảng → xếp cạnh nhau), câu hỏi `chart: spec` (quiz, ladder… — mỗi câu một biểu đồ), hoạt động `chart: spec` (hiện luôn).
+  Vẽ lại biểu đồ SGK theo ĐÚNG số liệu SGK (đừng ước lượng từ hình — biểu đồ không có số thì dùng ảnh SGK). Có thể cố ý vẽ biểu đồ
+  có lỗi cho trò “Thám tử biểu đồ” (sai loại, thừa chuỗi TT, thiếu tiêu đề, `legend: false`, `yMin` ≠ 0). Validator kiểm tra spec.
+- **Hình HTML riêng cho từng câu hỏi**: câu trắc nghiệm (quiz, ladder, …) thêm `html: "<div>…</div>"` → hiện ngay dưới câu hỏi (sau
+  `image`, `chart`). Dùng cho hình tự vẽ bằng hàm trong `data/lesson.js` (VD Tin 8 Bài 9a: hàm `PG` vẽ trang văn bản mẫu có đầu trang,
+  chân trang, số trang ở vị trí tuỳ chọn) — thay cho ảnh chụp trong giáo án có nội dung/ảnh của người khác.
+- **Mô phỏng thao tác Word** (Tin 8 Bài 8a — dùng cho mọi bài soạn thảo văn bản; đặt ở BẤT KỲ hoạt động nào, hiện dưới Nhiệm vụ,
+  không chấm điểm → kèm `questions` để chấm; trạng thái giữ khi chuyển câu):
+  - `listsim: { title, doc?: "Tệp.docx", head?: ["dòng thường" | { text, center }], items: ["đoạn" | { text, level?, kind?, want?: 0|1 }],
+    box?: true (ô ☐ cuối mục), goal?: [{ kind: "num", fmt?: "1." | "1)" | "a)" | "A." | "I." }, { kind: "bullet", bul?: "•" }], success? }` —
+    khung Word: bấm lề trái chọn đoạn (tô xám) → Bullets / Numbering (▾ thư viện) / ⇤ ⇥; gõ chữ, Enter thêm mục (số sau tự tăng, số đổi
+    nhấp nháy), Enter ở mục trống thoát danh sách, Backspace đầu mục bỏ số, Tab/Shift+Tab đổi mức. Đạt `goal` (mục có `want` đúng mức
+    và kiểu) → 🎉. Danh sách 2 mức kiểu Hình 8a.3: mục cha `want: 0`, mục con `want: 1`, goal `[{num "1)"}, {bullet}]`.
+  - `wrapsim: { title, intro?, img, lines: [{ text, size?, bold? }], success? }` — In Line with Text / Square / Behind Text / In Front of
+    Text; kéo ô vuông trắng góc ảnh để co dãn, kéo ảnh để di chuyển; Behind Text phủ kín trang → 🎉 (Hình 8a.9).
+  - `flyer: { title, intro?, bg, pic?, texts: [{ id, text, x, y (0–1, tâm), s (cỡ theo 1% bề rộng), color, bold? }], colors?, checks: [
+    { label, test: "color", ids, color } | { label, test: "inCircle", ids, circle: [cx, cy, r] } | { label, test: "shapes", shapes: ["curveR",
+    "curveL", "star", "frame"], color? } | { label, test: "region", type: "pic", rect: [x1, y1, x2, y2] }], success? }` — Insert › Shapes /
+    Pictures, chọn đối tượng → Font Color / Shape Fill, cỡ, Delete; kéo thả; tiêu chí tự kiểm tra ✅ bên cạnh. Ảnh nền/ảnh góc nên TỰ VẼ
+    SVG (không dùng ảnh có bản quyền), tỉ lệ trang A4 dọc (600×850).
+- **Mô phỏng PowerPoint** (Tin 8 Bài 10a — dùng cho các bài trình chiếu; không chấm, kèm `questions`):
+  - `hfsim: { title, slides: [{ title, sub?, bullets?, titleSlide? }], footer?: "gợi ý", goal?: { date, num, footer: "chuỗi cần có",
+    noTitle }, success? }` — hộp thoại Header and Footer như Hình 10a.5 (Date and time Update automatically/Fixed, Slide number, Footer,
+    Don't show on title slide; thẻ Notes and Handouts giải thích đầu trang) → Apply (trang đang chọn) / Apply to All; các trang chiếu
+    thu nhỏ hiện ngày | chân trang | số trang ngay. Đạt `goal` → 🎉.
+  - `colorsim: { title, slide: { title, bullets }, palette?: [{ name, hex }] }` — chọn chủ đề (lễ hội → nóng, học tập → trung tính,
+    nghệ thuật/tri ân → lạnh), màu nền/tiêu đề/chữ, cỡ chữ (pt, tỉ lệ đúng trang 16:9) → nhận xét độ tương phản (WCAG ≥ 4,5 dễ đọc),
+    nhóm màu, trộn nóng–lạnh, cỡ chữ ≥ 20, tiêu đề lớn hơn nội dung.
+  - Trang chiếu mẫu cho câu hỏi: tự vẽ bằng hàm `SL` trong `data/lesson.js` (xem Tin 8 Bài 10a) đặt vào `html` của câu.
+- **Mô phỏng lan truyền thông tin số** (Tin 8 Bài 2): `spread: { title, intro, thumb?: "assets/anh.jpg" | emoji?, steps: [{ text,
+  nodes: [{ id, icon, name, from?: "id", via?: "thư điện tử", edited?, paper? (bản in), lock?: "lí do không xoá được" }] }], end? }` —
+  ▶ Bước tiếp thêm thiết bị nhận bản sao, bộ đếm bản sao số; 🗑️ xoá bản sao của mình, 🔒 báo không xoá được → minh hoạ “dễ nhân
+  bản, lan truyền nhưng khó xoá bỏ hoàn toàn”. Không chấm.
+- **Ảnh thật trong hộp thư mô phỏng**: tệp đính kèm `files: [{ name: "Anh.jpg", src: "assets/anh.jpg" }]` → hiện ảnh xem trước
+  trong thư, bấm để phóng to (lightbox). Ảnh GV cần thay (ảnh trường) thì đặt tên rõ và ghi trong TEACHER_GUIDE “chép đè tệp”.
 - **Bàn tính ảo** (Tin 8 Bài 1, Hình 1.1 — mỗi cột 2 hạt trên = 5, 5 hạt dưới = 1, chỉ tính hạt sát thanh ngang):
   thử tự do `abacus: { title, intro, cols: 10, value?: "6302715408", presets?: [{ label, value }], showDigits?: true }` (không chấm);
   câu chấm điểm `{ type: "abacus", question, answer: "1642", cols?: 4, mode?: "set" (HS gẩy hạt) | "read" (bàn tính hiện sẵn số, HS gõ

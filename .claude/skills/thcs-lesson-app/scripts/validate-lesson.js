@@ -273,6 +273,28 @@ function checkMindmapsChecklists(L) {
       if (!["ifchain", "vonneumann", "cols"].includes(a.layout)) err(`HĐ "${a.id}": layout "${a.layout}" không hợp lệ (ifchain / vonneumann / cols).`);
       else if (a.layout === "vonneumann" && (a.groups || []).length !== 4) err(`HĐ "${a.id}": layout vonneumann cần đúng 4 nhóm [Thiết bị vào, Bộ xử lí, Bộ nhớ, Thiết bị ra].`);
     }
+    if (a.spread) { // mô phỏng lan truyền thông tin số
+      const where = `HĐ "${a.id}" spread`, st = a.spread.steps || [], ids = [];
+      if (!st.length) err(`${where}: cần \`steps\`.`);
+      st.forEach((s, i) => { if (!s.text) err(`${where}: bước ${i + 1} thiếu \`text\`.`); (s.nodes || []).forEach((n) => { if (!n.id || !n.name) err(`${where}: bước ${i + 1} có thiết bị thiếu \`id\`/\`name\`.`); if (n.from && !ids.includes(n.from)) err(`${where}: "${n.id}" nhận từ "${n.from}" chưa xuất hiện ở bước trước.`); ids.push(n.id); }); });
+    }
+    if (a.listsim && (!Array.isArray(a.listsim.items) || !a.listsim.items.length)) err(`HĐ "${a.id}" listsim: cần \`items\` (các đoạn của danh sách).`);
+    if (a.wrapsim && (!a.wrapsim.img || !Array.isArray(a.wrapsim.lines))) err(`HĐ "${a.id}" wrapsim: cần \`img\` và \`lines\`.`);
+    if (a.flyer) { if (!a.flyer.bg || !Array.isArray(a.flyer.texts)) err(`HĐ "${a.id}" flyer: cần \`bg\` và \`texts\`.`); (a.flyer.checks || []).forEach((c, i) => { if (!["color", "inCircle", "shapes", "region"].includes(c.test)) err(`HĐ "${a.id}" flyer: checks[${i}] có test "${c.test}" không hợp lệ.`); }); }
+    if (a.hfsim && (!Array.isArray(a.hfsim.slides) || !a.hfsim.slides.length)) err(`HĐ "${a.id}" hfsim: cần \`slides\`.`);
+    if (a.colorsim && (!a.colorsim.slide || !a.colorsim.slide.title || !Array.isArray(a.colorsim.slide.bullets))) err(`HĐ "${a.id}" colorsim: cần \`slide: { title, bullets }\`.`);
+    { // biểu đồ SVG: a.chart, q.chart, content.blocks { kind: "chart" }
+      const chk = (spec, where) => [].concat(spec).forEach((s, i) => {
+        const w = Array.isArray(spec) ? `${where} [${i + 1}]` : where, ser = s && (s.series || [{ values: s.values }]);
+        if (!s || !["column", "pie", "line"].includes(s.type || "column")) return err(`${w}: chart.type phải là column / pie / line.`);
+        if (!Array.isArray(s.labels) || !s.labels.length) return err(`${w}: chart cần \`labels\`.`);
+        ser.forEach((se, k) => { if (!Array.isArray(se.values) || se.values.length !== s.labels.length || se.values.some((v) => typeof v !== "number")) err(`${w}: chuỗi ${k + 1} cần \`values\` là số, cùng độ dài với labels.`); });
+      });
+      if (a.chart) chk(a.chart, `HĐ "${a.id}" chart`);
+      (a.questions || []).forEach((q, i) => { if (q.chart) chk(q.chart, `HĐ "${a.id}" câu ${i + 1} chart`); });
+      ((a.content && a.content.blocks) || []).forEach((b, i) => { if (b.kind === "chart") chk(b.value, `HĐ "${a.id}" block ${i + 1} chart`); });
+    }
+    if (a.type === "poll" && (!a.question || !Array.isArray(a.options) || a.options.length < 2 || a.options.length > 6)) err(`HĐ "${a.id}" poll: cần \`question\` và 2–6 \`options\`.`);
     if (a.maze) { // mê cung robot
       const where = `HĐ "${a.id}" maze`;
       if (!["sim", "race"].includes(a.maze.mode)) err(`${where}: \`mode\` phải là "sim" hoặc "race".`);

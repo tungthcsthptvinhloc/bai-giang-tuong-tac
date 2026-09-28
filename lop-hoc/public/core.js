@@ -52,6 +52,7 @@
       if (a.type === "summary" && a.content && a.content.challenge) a.content.challenge.forEach((q, qi) => items.push({ ...base, iid: "c" + qi, key: keyOf(aid, "c" + qi), label: q.question, q, type: q.type }));
       if (a.type === "vandung") (a.cases || []).forEach((cs, i) => openQs.push({ ...base, iid: "t" + i, key: keyOf(aid, "t" + i), label: cs.question }));
       if (a.type === "scenario" && a.content && a.content.question) openQs.push({ ...base, iid: "t0", key: keyOf(aid, "t0"), label: a.content.question });
+      if (a.type === "poll") openQs.push({ ...base, iid: "poll", key: keyOf(aid, "poll"), label: "📊 Bình chọn — " + (a.question || a.name) });
       if (a.type === "checklist") openQs.push({ ...base, iid: "t0", key: keyOf(aid, "t0"), label: a.target ? "🤝 Phiếu chấm chéo — " + a.target : "📋 Phiếu tự đánh giá (tick Làm được / Chưa làm được)" });
       if (a.mail && a.mail.submit) openQs.push({ ...base, iid: "mail", key: keyOf(aid, "mail"), label: "📧 " + a.mail.submit });
       if (a.mindmap && a.mindmap.submit) openQs.push({ ...base, iid: "mm", key: keyOf(aid, "mm"), label: "🧠 " + a.mindmap.submit });
@@ -78,6 +79,8 @@
   // Thống kê địa chỉ HS chọn (câu bảng tính) -> [{label, n, right}] — vài lựa chọn nhiều nhất + "Khác"; luôn có dòng đáp án đúng
   // Câu trả lời ngắn (type "short"): bỏ dấu, hoa/thường, khoảng trắng — PHẢI khớp normShort trong app.js
   const normShort = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[đĐ]/g, "D").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  // q.exact (gõ công thức): chỉ bỏ khoảng trắng, dấu = đầu, không phân biệt hoa/thường — PHẢI khớp normExact trong app.js
+  const normExact = (s) => String(s == null ? "" : s).replace(/\s+/g, "").replace(/^=/, "").toUpperCase();
   // Bàn tính ảo (type "abacus"): so theo giá trị số — PHẢI khớp abDigits trong app.js
   const abDigits = (s) => String(s == null ? "" : s).replace(/\D/g, "").replace(/^0+/, "") || "0";
   function choiceDist(choices, answer, top, rightFn, normFn) {
@@ -333,7 +336,7 @@
     if (choice == null) return false;
     if (q.type === "sheet") return q.mode === "formula" ? FX.judge(q.answer, choice, q.sheet || {}, q.target).ok : addrMatch(q.answer, choice);
     if (q.type === "abacus") return choice !== "" && abDigits(choice) === abDigits(q.answer);
-    if (q.type === "short") return !!normShort(choice) && (Array.isArray(q.answer) ? q.answer : [q.answer]).some((x) => normShort(x) === normShort(choice));
+    if (q.type === "short") { const n = q.exact ? normExact : normShort; return !!n(choice) && (Array.isArray(q.answer) ? q.answer : [q.answer]).some((x) => n(x) === n(choice)); }
     if (q.type === "true-false") return choice === q.answer;
     if (q.type === "multiple-select") { const c = Array.isArray(choice) ? choice : Object.values(choice); return JSON.stringify(c.map(Number).sort()) === JSON.stringify([...(q.answer || [])].sort()); }
     return typeof choice !== "boolean" && choice !== "" && Number(choice) === q.answer;
@@ -599,6 +602,6 @@
   function loadManifest() { return fetch("/lessons/index.json", { cache: "no-store" }).then((r) => r.json()).then((m) => m.lessons || []); }
 
   return { NOT_QUIZ, WHOLE, clamp01, round1, esc, norm, fmt1, pad2, fmtDate, fmtTime, fmtClock, rid, splitKey, keyOf,
-    FX, lessonItems, judgeQuestion, judge, judgeWhole, normAddr, addrMatch, normShort, abDigits, choiceDist, actState, actControl, followFixups, actClock, answerOf, scoreGroup, groupName, sortedEntries, memberNames, machineList,
+    FX, lessonItems, judgeQuestion, judge, judgeWhole, normAddr, addrMatch, normShort, normExact, abDigits, choiceDist, actState, actControl, followFixups, actClock, answerOf, scoreGroup, groupName, sortedEntries, memberNames, machineList,
     parseClassBook, classesSheet, sessionWorkbook, gradeOf, reportWorkbook, loadLesson, loadManifest };
 });

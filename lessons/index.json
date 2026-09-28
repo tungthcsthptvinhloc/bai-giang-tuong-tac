@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-09-27T16:51:58.187Z",
+ "generatedAt": "2026-09-28T14:20:03.060Z",
  "lessons": [
   {
    "id": "tin6-bai01-thong-tin-va-du-lieu",
@@ -340,6 +340,96 @@
    "activities": 21,
    "items": 41,
    "open": 7
+  },
+  {
+   "id": "tin8-bai02-thong-tin-trong-moi-truong-so",
+   "title": "Bài 2: Thông tin trong môi trường số",
+   "grade": "8",
+   "subject": "Tin học",
+   "unit": "Chủ đề 2 — Tổ chức lưu trữ, tìm kiếm và trao đổi thông tin",
+   "activities": 14,
+   "items": 29,
+   "open": 8
+  },
+  {
+   "id": "tin8-bai03-thuc-hanh-khai-thac-thong-tin-so",
+   "title": "Bài 3: Thực hành: Khai thác thông tin số",
+   "grade": "8",
+   "subject": "Tin học",
+   "unit": "Chủ đề 2 — Tổ chức lưu trữ, tìm kiếm và trao đổi thông tin",
+   "activities": 13,
+   "items": 24,
+   "open": 6
+  },
+  {
+   "id": "tin8-bai04-dao-duc-va-van-hoa-trong-su-dung-cong-nghe-ki-thuat-so",
+   "title": "Bài 4: Đạo đức và văn hoá trong sử dụng công nghệ kĩ thuật số",
+   "grade": "8",
+   "subject": "Tin học",
+   "unit": "Chủ đề 3 — Đạo đức, pháp luật và văn hoá trong môi trường số",
+   "activities": 13,
+   "items": 31,
+   "open": 5
+  },
+  {
+   "id": "tin8-bai05-su-dung-bang-tinh-giai-quyet-bai-toan-thuc-te",
+   "title": "Bài 5: Sử dụng bảng tính giải quyết bài toán thực tế",
+   "grade": "8",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4 — Ứng dụng tin học",
+   "activities": 13,
+   "items": 35,
+   "open": 1
+  },
+  {
+   "id": "tin8-bai06-sap-xep-va-loc-du-lieu",
+   "title": "Bài 6: Sắp xếp và lọc dữ liệu",
+   "grade": "8",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4 — Ứng dụng tin học",
+   "activities": 14,
+   "items": 29,
+   "open": 1
+  },
+  {
+   "id": "tin8-bai07-trinh-bay-du-lieu-bang-bieu-do",
+   "title": "Bài 7: Trình bày dữ liệu bằng biểu đồ",
+   "grade": "8",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4 — Ứng dụng tin học",
+   "activities": 15,
+   "items": 46,
+   "open": 1
+  },
+  {
+   "id": "tin8-bai08a-lam-viec-voi-danh-sach-dang-liet-ke-va-hinh-anh-trong-van-ban",
+   "title": "Bài 8a: Làm việc với danh sách dạng liệt kê và hình ảnh trong văn bản",
+   "grade": "8",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4a — Soạn thảo văn bản và trình chiếu nâng cao",
+   "activities": 16,
+   "items": 37,
+   "open": 1
+  },
+  {
+   "id": "tin8-bai09a-tao-dau-trang-chan-trang-cho-van-ban",
+   "title": "Bài 9a: Tạo đầu trang, chân trang cho văn bản",
+   "grade": "8",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4a — Soạn thảo văn bản và trình chiếu nâng cao",
+   "activities": 11,
+   "items": 34,
+   "open": 0
+  },
+  {
+   "id": "tin8-bai10a-dinh-dang-nang-cao-cho-trang-chieu",
+   "title": "Bài 10a: Định dạng nâng cao cho trang chiếu",
+   "grade": "8",
+   "subject": "Tin học",
+   "unit": "Chủ đề 4a — Soạn thảo văn bản và trình chiếu nâng cao",
+   "activities": 14,
+   "items": 35,
+   "open": 0
   },
   {
    "id": "tin9-bai01-the-gioi-ki-thuat-so",

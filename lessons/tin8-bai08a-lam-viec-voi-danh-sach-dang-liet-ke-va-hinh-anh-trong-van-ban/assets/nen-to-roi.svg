@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 850" width="600" height="850">
+  <!-- Ảnh nền minh hoạ tự vẽ cho tờ rơi CLB Tin học (thay cho ảnh nền Hình 8a.9) -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0a1a4a"/><stop offset=".55" stop-color="#0f3c8c"/><stop offset="1" stop-color="#1565c0"/>
+    </linearGradient>
+    <radialGradient id="globe" cx=".42" cy=".38" r=".7">
+      <stop offset="0" stop-color="#9fd8ff"/><stop offset=".45" stop-color="#2f8be0"/><stop offset="1" stop-color="#0b3a8a"/>
+    </radialGradient>
+    <radialGradient id="glow" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#7dd3fc" stop-opacity=".55"/><stop offset="1" stop-color="#7dd3fc" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="gc"><circle cx="300" cy="330" r="150"/></clipPath>
+  </defs>
+  <rect width="600" height="850" fill="url(#sky)"/>
+  <g fill="#bae6fd" opacity=".55">
+    <circle cx="60" cy="80" r="1.6"/><circle cx="140" cy="40" r="1.2"/><circle cx="520" cy="70" r="1.6"/><circle cx="470" cy="150" r="1"/>
+    <circle cx="90" cy="200" r="1.2"/><circle cx="550" cy="240" r="1.4"/><circle cx="35" cy="330" r="1"/><circle cx="570" cy="400" r="1.2"/>
+  </g>
+  <circle cx="300" cy="330" r="235" fill="url(#glow)"/>
+  <ellipse cx="300" cy="330" rx="235" ry="62" fill="none" stroke="#7dd3fc" stroke-opacity=".55" stroke-width="3" transform="rotate(-14 300 330)"/>
+  <ellipse cx="300" cy="330" rx="205" ry="40" fill="none" stroke="#e0f2fe" stroke-opacity=".35" stroke-width="2" transform="rotate(10 300 330)"/>
+  <circle cx="300" cy="330" r="150" fill="url(#globe)"/>
+  <g clip-path="url(#gc)" fill="none" stroke="#e0f2fe" stroke-opacity=".55" stroke-width="1.6">
+    <ellipse cx="300" cy="330" rx="150" ry="50"/><ellipse cx="300" cy="330" rx="150" ry="100"/>
+    <line x1="150" y1="330" x2="450" y2="330"/><line x1="300" y1="180" x2="300" y2="480"/>
+    <ellipse cx="300" cy="330" rx="50" ry="150"/><ellipse cx="300" cy="330" rx="100" ry="150"/>
+    <line x1="160" y1="280" x2="440" y2="280"/><line x1="160" y1="380" x2="440" y2="380"/>
+  </g>
+  <circle cx="300" cy="330" r="150" fill="none" stroke="#bae6fd" stroke-width="3" stroke-opacity=".8"/>
+  <g font-family="Consolas, 'Courier New', monospace" font-weight="700" fill="#93c5fd" text-anchor="middle">
+    <text x="300" y="560" font-size="22" opacity=".35">1 0 1 1 0 0 1 0 1 0 1 1 0 1 0 0 1</text>
+    <text x="300" y="600" font-size="26" opacity=".45">0 1 0 0 1 1 0 1 0 1 1 0 0 1 0 1</text>
+    <text x="300" y="646" font-size="31" opacity=".55">1 1 0 1 0 0 1 0 1 1 0 1 0 0 1</text>
+    <text x="300" y="700" font-size="37" opacity=".65">0 1 1 0 1 0 1 1 0 0 1 0 1 1</text>
+    <text x="300" y="764" font-size="44" opacity=".75">1 0 0 1 1 0 1 0 1 0 0 1 1</text>
+    <text x="300" y="838" font-size="52" opacity=".85">0 1 0 1 0 1 1 0 0 1 0 1</text>
+  </g>
+</svg>

@@ -288,7 +288,7 @@
       if (!follow) html += `<p class="lh-pp-hint">HS tự làm: đồng hồ hiện trên máy HS, hết giờ chỉ báo. Bật <b>👣 theo nhịp GV</b> để khóa khi hết giờ và công bố kết quả cùng lúc.</p>`;
       const show = st === "revealed";
       if (it.q && (it.q.type === "sheet" || it.q.type === "short" || it.q.type === "abacus")) { // bảng tính / trả lời ngắn: các câu trả lời nhiều nhất
-        const max = Math.max(1, groups.length), dist = C.choiceDist(done.map((x) => x.r.choice), it.q.answer, 4, it.q.mode === "formula" || it.q.type === "short" || it.q.type === "abacus" ? (k) => C.judgeQuestion(it.q, k) : null, it.q.type === "short" ? C.normShort : it.q.type === "abacus" ? C.abDigits : null);
+        const max = Math.max(1, groups.length), dist = C.choiceDist(done.map((x) => x.r.choice), it.q.answer, 4, it.q.mode === "formula" || it.q.type === "short" || it.q.type === "abacus" ? (k) => C.judgeQuestion(it.q, k) : null, it.q.type === "short" ? (it.q.exact ? C.normExact : C.normShort) : it.q.type === "abacus" ? C.abDigits : null);
         html += `<div class="lh-pp-bars">` + dist.map((d) => `<div class="lh-bar ${show && d.right ? "right" : ""}"><b>📍</b><span class="t">${esc(d.label)}</span><span class="b"><i style="width:${d.n / max * 100}%"></i></span><span class="n">${d.n}</span></div>`).join("")
           + `<div class="lh-bar none"><b>–</b><span class="t">Chưa làm</span><span class="b"><i style="width:${none.length / max * 100}%"></i></span><span class="n">${none.length}</span></div></div>`;
       } else if (it.q) {
