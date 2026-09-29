@@ -580,6 +580,7 @@
     if (a.colorsim) cardEl.appendChild(colorsimBox(a)); // phối màu trang chiếu
     if (a.tplsim) cardEl.appendChild(tplsimBox(a)); // chọn bản mẫu File › New (PowerPoint)
     if (a.turtle) cardEl.appendChild(turtleBox(a)); // nhân vật di chuyển, vẽ hình như Scratch
+    if (a.wordsearch) cardEl.appendChild(wordsearchBox(a)); // bảng tìm chữ “Nhanh mắt, nhanh tay”
   }
   function appendRemember(items, cardOrView) {
     // "Em cần nhớ" — ẩn, bấm mới hiện
@@ -989,8 +990,8 @@
   const fcNode = (text, shape) => `<span class="fc-node fc-${FC_SHAPES[shape] ? shape : "proc"}">${esc(text)}</span>`;
   // Khối lệnh Scratch: a.blocks = ["event","looks","sensing","variables","operators","control","motion","sound"] (cùng thứ tự steps ĐÚNG)
   const SB_CATS = { event: 1, looks: 1, sensing: 1, variables: 1, operators: 1, control: 1, motion: 1, sound: 1, pen: 1 };
-  const sbNode = (text, cat) => `<span class="sb sb-${SB_CATS[cat] ? cat : "control"}${cat === "event" ? " sb-hat" : ""}">${esc(text)}</span>`;
-  const stepHTML = (a, i) => (a.flow ? fcNode((a.steps || [])[i], a.flow[i]) : a.blocks ? sbNode((a.steps || [])[i], a.blocks[i]) : esc((a.steps || [])[i]));
+  const sbNode = (text, cat, ind) => `<span class="sb sb-${SB_CATS[cat] ? cat : "control"}${cat === "event" ? " sb-hat" : ""}"${ind ? ` style="margin-left:${ind * 26}px"` : ""}>${esc(text)}</span>`;
+  const stepHTML = (a, i) => (a.flow ? fcNode((a.steps || [])[i], a.flow[i]) : a.blocks ? sbNode((a.steps || [])[i], a.blocks[i], (a.indent || [])[i]) : esc((a.steps || [])[i]));
   function orderingUI(a) {
     const steps = a.steps || [];
     return {
@@ -1242,6 +1243,7 @@
   }
 
   // ---- TRÒ CHƠI Ô CHỮ (type "crossword") — mỗi hàng ngang là 1 câu "short"; câu có keyword: true là từ khoá hàng dọc ----
+  //  (hàng ngang có thể là câu trắc nghiệm: thêm word: "LOGIC" là chữ hiện trên hàng khi trả lời đúng)
   //  questions: [{ type: "short", question, answer: "TAIKHOAN", key: 0 (vị trí chữ nằm ở cột từ khoá), show: [3] (chữ gợi ý hiện sẵn) }, …,
   //              { type: "short", keyword: true, question: "Từ khoá hàng dọc là gì?", answer: "THUDIENTU" }]
   //  Màn chiếu: bấm số hàng để chọn câu; trả lời đúng thì hàng lật chữ; chế độ GV "Hiện đáp án" lật cả ô chữ.
@@ -1257,12 +1259,12 @@
     if (a.intro) c.appendChild(el("p", "subtitle", esc(a.intro)));
     const grid = el("div", "cw-grid"); c.appendChild(grid);
     const maxK = Math.max(0, ...rows.map((r) => r.q.key || 0));
-    const W = Math.max(1, ...rows.map((r) => maxK - (r.q.key || 0) + normShort(firstOf(r.q.answer)).length));
+    const W = Math.max(1, ...rows.map((r) => maxK - (r.q.key || 0) + normShort(r.q.word || firstOf(r.q.answer)).length));
     const draw = () => {
       const all = state.showAnswers || (STUDENT && actStateOf(a) === "revealed"), kw = kwI >= 0 ? cwState(a, kwI) : null, kwOpen = kw === true || all;
       grid.style.setProperty("--cw-cols", W);
       grid.innerHTML = rows.map(({ q, i }, n) => {
-        const word = normShort(firstOf(q.answer)), off = maxK - (q.key || 0), s = cwState(a, i);
+        const word = normShort(q.word || firstOf(q.answer)), off = maxK - (q.key || 0), s = cwState(a, i);
         let h = `<button type="button" class="cw-num${i === a._qi ? " cur" : ""}${s === "sent" ? " sent" : s === true ? " ok" : s === false ? " no" : ""}" data-i="${i}" title="Câu ${n + 1}">${n + 1}</button><div class="cw-row">`;
         for (let k = 0; k < W; k++) {
           const j = k - off;
@@ -1941,11 +1943,11 @@
   //    { shape: "term", text: "Kết thúc" } ] }
   //  expr: số, tên biến, + - * / : ( ) (":" là chia). Không chấm điểm, không gửi — HS tự thử với đầu vào khác nhau.
   function rnEval(expr, vars) {
-    let e = String(expr || "");
+    let e = String(expr || "").replace(/round\(/g, "\u0003(");
     Object.keys(vars).sort((x, y) => y.length - x.length).forEach((k) => { e = e.split(k).join("(" + Number(vars[k]) + ")"); });
     e = e.replace(/:/g, "/").replace(/×/g, "*").replace(/,/g, ".");
-    if (!/^[\d\s+\-*/().]+$/.test(e)) return NaN;
-    try { return Function("return (" + e + ")")(); } catch (x) { return NaN; }
+    if (!/^[\d\s+\-*/%().]+$/.test(e.replace(/\u0003/g, ""))) return NaN;
+    try { return Function("return (" + e.replace(/\u0003/g, "Math.round") + ")")(); } catch (x) { return NaN; }
   }
   const rnFmt = (v) => (typeof v === "number" && isFinite(v) ? String(Math.round(v * 100) / 100).replace(".", ",") : "?");
   function runnerBox(a) {
@@ -2789,90 +2791,271 @@
   }
 
   // ---- CHẠY THỬ CHƯƠNG TRÌNH SCRATCH (activity.scratch) — khối lệnh giống Scratch + sân khấu có chú mèo ----------
-  //  scratch: { title?, intro?, sprite?: "🐱", script: [khối…] }   (mỗi khối có thể có n: 1 → hiện ① như SGK)
-  //   { op: "flag" } · { op: "say", text | join: ["chuỗi", { v: "tên biến" } | { e: "a - b" }], secs? } · { op: "ask", text }
-  //   { op: "set", var, answer: true } (đặt biến là trả lời) · { op: "set", var, expr: "a + b", show?: "a + b" }
-  //   { op: "if", cond: "a > b || a == b", show: "a > b hoặc a = b", then: [...], else?: [...] }
-  //   { op: "repeat", times: 10, body: [...] } · { op: "move", steps } · { op: "bounce" } · { op: "rotate", text? } · { op: "drum" }
+  //  scratch: { title?, intro?, sprite?: "🐱", script: [khối…] }   — hoặc MẢNG nhiều chương trình { tab: "Lặp 10 lần", … } → hiện thành các thẻ
+  //   answer?: "trả lời" (câu trả lời lưu vào biến này, dùng thẳng trong điều kiện như Scratch) · hide?: ["số bí mật"] (ô biến che, có nút 👁)
+  //   count?: "Số lần đoán" (đếm số lần hỏi) · flow?: true (sơ đồ khối tự sinh, sáng theo lệnh đang chạy)
+  //   trace?: ["a", "b"] (bảng giá trị mỗi lần kiểm tra điều kiện lặp) · step?: true (bật sẵn chế độ chạy từng bước)
+  //   { op: "flag" } · { op: "say", text | v: "tên biến" | join: ["chuỗi", { v } | { e }], show?, secs? } · { op: "ask", text } · { op: "wait", secs }
+  //   { op: "set", var, answer: true } · { op: "set", var, expr: "a % b", show? } · { op: "set", var, random: [1, 100] }
+  //   { op: "if", cond: "a > b", show | boolHTML, then: [...], else?: [...] } · { op: "repeat", times, body } · { op: "until", cond, show, body }
+  //   { op: "forever", body } · { op: "stop" } · { op: "move", steps } · { op: "bounce" } · { op: "rotate", text? } · { op: "drum" }
+  //   { op: "change", var, by: 1 } (thay đổi … một lượng) · ask cũng nhận join / html · cond so sánh chữ: "trả lời == 'd'" (không phân biệt hoa thường)
+  //   expr có round(…) (làm tròn) · vars?: { n: 0 } giá trị biến ban đầu (biến Scratch mới tạo = 0)
+  //   ft: "chữ trong sơ đồ khối" (ghi đè chữ tự sinh) · n: 1 → hiện ① như SGK · say.html / if.boolHTML: HTML khối lồng nhau vẽ sẵn
+  //   play?: true → chỉ hiện sân khấu (ẩn khối lệnh, sơ đồ) để HS chơi thử trước khi học
   //  Không chấm điểm, không gửi — HS bấm 🏁 để chạy, nhập câu trả lời khi mèo hỏi, xem khối đang chạy sáng lên.
   const SB_CIRC = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
   function scCond(expr, vars) {
-    let e = String(expr || "");
-    Object.keys(vars).sort((x, y) => y.length - x.length).forEach((k) => { e = e.split(k).join("(" + Number(vars[k]) + ")"); });
-    if (!/^[\d\s+\-*/().<>=!&|]+$/.test(e)) return false;
+    const S = [], lit = (v) => { S.push(String(v).trim().toLowerCase()); return "\u0001" + (S.length - 1) + "\u0002"; };
+    let e = String(expr || "").replace(/'([^']*)'/g, (m, t) => lit(t));
+    Object.keys(vars).sort((x, y) => y.length - x.length).forEach((k) => { const v = vars[k]; e = e.split(k).join(typeof v === "number" || (String(v).trim() !== "" && isFinite(+v)) ? "(" + Number(v) + ")" : lit(v)); });
+    if (!/^[\d\s+\-*/%().<>=!&|]+$/.test(e.replace(/\u0001\d+\u0002/g, "0"))) return false;
+    e = e.replace(/\u0001(\d+)\u0002/g, (m, i) => JSON.stringify(S[+i]));
     try { return !!Function("return (" + e + ")")(); } catch (x) { return false; }
   }
   function scratchBox(a) {
-    const spec = a.scratch, box = el("div", "sc-box");
+    ensureEngineCSS();
+    if (!Array.isArray(a.scratch)) return scratchOne(a.scratch);
+    const host = el("div", "sc-multi"), tabs = el("div", "sc-tabs"), slot = el("div");
+    const show = (i) => { tabs.querySelectorAll(".sc-tab").forEach((t, k) => t.classList.toggle("on", k === i)); slot.innerHTML = ""; slot.appendChild(scratchOne(a.scratch[i])); };
+    a.scratch.forEach((s, i) => { const t = el("button", "sc-tab", esc(s.tab || "Chương trình " + (i + 1))); t.onclick = () => show(i); tabs.appendChild(t); });
+    host.append(tabs, slot); show(0);
+    return host;
+  }
+  function scratchOne(spec) {
+    const box = el("div", "sc-box");
     if (spec.title) box.appendChild(el("h3", "rn-title", "🐱 " + esc(spec.title)));
     if (spec.intro) box.appendChild(el("p", "subtitle", esc(spec.intro)));
-    const wrap = el("div", "sc-wrap"), code = el("div", "sc-code"), right = el("div", "sc-right");
+    const wrap = el("div", "sc-wrap"), code = el("div", "sc-code"), flow = el("div", "sc-flow fc-chart"), right = el("div", "sc-right");
     const stage = el("div", "sc-stage"), sprite = el("div", "sc-sprite", `<span class="sc-cat">${esc(spec.sprite || "🐱")}</span><div class="sc-bubble" hidden></div>`);
     const askRow = el("div", "sc-ask"); askRow.hidden = true;
     const askIn = el("input"); askIn.type = "text"; askIn.placeholder = "Nhập câu trả lời rồi nhấn Enter"; const askOk = el("button", "btn", "✔");
+    askIn.onkeydown = (e) => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); submit(); } };
     askRow.append(askIn, askOk); stage.append(sprite, askRow);
     const mon = el("div", "sc-mon"), ctr = el("div", "rn-ctrl"), bGo = el("button", "btn", "🏁 Chạy chương trình"), bStop = el("button", "btn ghost", "⏹ Dừng");
-    ctr.append(bGo, bStop); right.append(ctr, stage, mon); wrap.append(code, right); box.appendChild(wrap);
+    const spd = el("select", "tt-spd"); spd.innerHTML = '<option value="0.5">🐢 Chậm</option><option value="1" selected>Vừa</option><option value="3">⚡ Nhanh</option>';
+    const stepLb = el("label", "sc-steplb"), stepChk = el("input"); stepChk.type = "checkbox"; stepChk.checked = !!spec.step; stepLb.append(stepChk, document.createTextNode(" 👣 Từng bước"));
+    const bNext = el("button", "btn sc-next", "⏭ Bước tiếp"); bNext.disabled = true;
+    ctr.append(bGo, bStop, spd, stepLb, bNext);
+    const msg = el("div", "sc-msg"), trace = el("div", "sc-trace");
+    right.append(ctr, stage, mon, msg, trace); if (!spec.play) wrap.append(code); if (spec.flow && !spec.play) wrap.append(flow); wrap.append(right); box.appendChild(wrap);
+    if (spec.play) wrap.classList.add("sc-play");
     const bubble = sprite.querySelector(".sc-bubble"), cat = sprite.querySelector(".sc-cat");
     const txt = (t) => `<span class="sb-in">${esc(t)}</span>`, num = (t) => `<span class="sb-in sb-num">${esc(t)}</span>`, rv = (t) => `<span class="sb-rep sb-rv">${esc(t)}</span>`, rop = (t) => `<span class="sb-rep sb-rop">${esc(t)}</span>`, rsen = (t) => `<span class="sb-rep sb-rsen">${esc(t)}</span>`;
+    const dd = (t) => `<span class="sb-in sb-dd">${esc(t)} ▾</span>`, bool = (b) => `<span class="sb-bool">${b.boolHTML || esc(b.show || b.cond)}</span>`;
     const label = (b) => {
       switch (b.op) {
-        case "flag": return "khi nhấn vào <b class='sb-flag'>🏁</b>";
-        case "say": return "nói " + (b.join ? rop("nối " + b.join.map((p) => (typeof p === "string" ? "[" + p + "]" : "(" + (p.v || p.e) + ")")).join(" và ")) : txt(b.text)) + (b.secs ? " trong " + num(b.secs) + " giây" : "");
-        case "ask": return "hỏi " + txt(b.text) + " và đợi";
-        case "set": return "đặt " + `<span class="sb-in sb-dd">${esc(b.var)} ▾</span>` + " là " + (b.answer ? rsen("trả lời") : rop(b.show || b.expr));
-        case "repeat": return "lặp lại " + num(b.times) + " lần";
+        case "flag": return "khi bấm vào <b class='sb-flag'>🏁</b>";
+        case "say": return "nói " + (b.html ? b.html : b.show ? rop(b.show) : b.join ? rop("kết hợp " + b.join.map((p) => (typeof p === "string" ? "[" + p + "]" : "(" + (p.v || p.e) + ")")).join(" và ")) : b.v ? rv(b.v) : txt(b.text)) + (b.secs ? " trong " + num(b.secs) + " giây" : "");
+        case "ask": return "hỏi " + (b.html ? b.html : b.join ? rop("kết hợp " + b.join.map((p) => (typeof p === "string" ? "[" + p + "]" : "(" + (p.v || p.e) + ")")).join(" và ")) : txt(b.text)) + " và đợi";
+        case "change": return "thay đổi " + dd(b.var) + " một lượng " + num(b.by == null ? 1 : b.by);
+        case "set": return "đặt " + dd(b.var) + " thành " + (b.answer ? rsen("trả lời") : b.random ? `<span class="sb-rep sb-rop">lấy ngẫu nhiên từ ${num(b.random[0])} đến ${num(b.random[1])}</span>` : rop(b.show || b.expr));
+        case "wait": return "đợi " + num(b.secs) + " giây";
+        case "repeat": return "lặp lại " + num(b.times);
+        case "until": return "lặp lại cho đến khi " + bool(b);
+        case "forever": return "liên tục";
+        case "stop": return "dừng lại " + dd("tất cả");
         case "move": return "di chuyển " + num(b.steps) + " bước";
         case "bounce": return "nếu chạm biên, bật lại";
-        case "rotate": return "chỉnh kiểu quay thành " + `<span class="sb-in sb-dd">${esc(b.text || "left-right")} ▾</span>`;
-        case "drum": return "chơi trống " + `<span class="sb-in sb-dd">1 ▾</span>` + " trong " + num("0.25") + " nhịp";
+        case "rotate": return "chỉnh kiểu quay thành " + dd(b.text || "left-right");
+        case "drum": return "chơi trống " + dd("1") + " trong " + num("0.25") + " nhịp";
         default: return esc(b.op);
       }
     };
-    const CAT = { flag: "event", say: "looks", ask: "sensing", set: "variables", if: "control", repeat: "control", move: "motion", bounce: "motion", rotate: "motion", drum: "sound" };
+    const CAT = { flag: "event", say: "looks", ask: "sensing", set: "variables", change: "variables", wait: "control", stop: "control", move: "motion", bounce: "motion", rotate: "motion", drum: "sound" };
+    const C_OPS = { if: 1, repeat: 1, until: 1, forever: 1 };
     const nTag = (b) => (b.n ? `<i class="sb-n">${SB_CIRC[b.n - 1] || b.n}</i>` : "");
     const draw = (list, host) => list.forEach((b) => {
-      if (b.op === "if" || b.op === "repeat") {
+      if (C_OPS[b.op]) {
         const c = el("div", "sb sb-c sb-control"); b._el = c;
-        c.appendChild(el("div", "sb-row", (b.op === "if" ? "nếu " + `<span class="sb-bool">${esc(b.show || b.cond)}</span>` + " thì" : label(b)) + nTag(b)));
+        c.appendChild(el("div", "sb-row", (b.op === "if" ? "nếu " + bool(b) + " thì" : label(b)) + nTag(b)));
         const inner = el("div", "sb-inner"); draw(b.then || b.body || [], inner); c.appendChild(inner);
-        if (b.else) { c.appendChild(el("div", "sb-row", "còn không thì")); const i2 = el("div", "sb-inner"); draw(b.else, i2); c.appendChild(i2); }
-        c.appendChild(el("div", "sb-foot", b.op === "repeat" ? "↻" : "")); host.appendChild(c);
-      } else { const d = el("div", "sb sb-" + CAT[b.op] + (b.op === "flag" ? " sb-hat" : ""), label(b) + nTag(b)); b._el = d; host.appendChild(d); }
+        if (b.else) { c.appendChild(el("div", "sb-row", "nếu không thì")); const i2 = el("div", "sb-inner"); draw(b.else, i2); c.appendChild(i2); }
+        c.appendChild(el("div", "sb-foot", b.op === "if" ? "" : "↻")); host.appendChild(c);
+      } else { const d = el("div", "sb sb-" + CAT[b.op] + (b.op === "flag" ? " sb-hat" : "") + (b.op === "stop" ? " sb-cap" : ""), label(b) + nTag(b)); b._el = d; host.appendChild(d); }
     });
-    draw(spec.script || [], code);
-    let vars = {}, answer = "", x = 0, dir = 1, flip = false, run = 0, askDone = null;
-    const paintMon = () => { const ks = Object.keys(vars); mon.innerHTML = ks.length ? ks.map((k) => `<span class="sc-var">${esc(k)} <b>${esc(typeof vars[k] === "number" ? rnFmt(vars[k]) : vars[k])}</b></span>`).join("") : ""; };
+    const script = spec.script || [];
+    draw(script, code);
+    // ---- sơ đồ khối sinh từ chương trình (Bắt đầu → … → Kết thúc; rẽ nhánh 2 cột Đúng / Sai; vòng lặp trong khung nét đứt)
+    const ansName = spec.answer || "trả lời";
+    const FT = (b) => {
+      if (b.ft) return b.ft;
+      switch (b.op) {
+        case "set": return b.var + " ← " + (b.answer ? ansName : b.random ? "số ngẫu nhiên từ " + b.random[0] + " đến " + b.random[1] : b.show || b.expr);
+        case "ask": return ansName + " ← Máy hỏi, người trả lời";
+        case "change": return b.var + " ← " + b.var + " + " + (b.by == null ? 1 : b.by);
+        case "say": return b.text ? "“" + b.text + "”" : b.v ? "Hiển thị " + b.v : "Hiển thị " + (b.show || "kết quả");
+        case "wait": return "Đợi " + b.secs + " giây"; case "move": return "Di chuyển " + b.steps + " bước";
+        case "bounce": return "Nếu chạm biên, bật lại"; case "rotate": return "Chỉnh kiểu quay"; case "drum": return "Chơi trống";
+        default: return b.op;
+      }
+    };
+    const fmap = new Map(); let fEnd = null, fStart = null;
+    const node = (text, shape, host, key) => { const w = el("div", "rn-step"); w.innerHTML = fcNode(text, shape); if (host.childElementCount && !host.lastElementChild.classList.contains("fc-lab")) host.insertAdjacentHTML("beforeend", '<span class="fc-arrow">↓</span>'); host.appendChild(w); if (key) fmap.set(key, w); return w; };
+    const drawFlow = (list, host) => list.forEach((b) => {
+      if (b.op === "flag" || b.op === "stop") return;
+      if (b.op === "if") {
+        node(b.ft || (b.show || b.cond) + "?", "cond", host, b);
+        const br = el("div", "fc-br"), cT = el("div", "fc-col"), cF = el("div", "fc-col");
+        cT.appendChild(el("span", "fc-lab", "Đúng ↓")); cF.appendChild(el("span", "fc-lab", "Sai ↓"));
+        drawFlow(b.then || [], cT); drawFlow(b.else || [], cF); br.append(cT, cF);
+        host.insertAdjacentHTML("beforeend", '<span class="fc-arrow">↓</span>'); host.appendChild(br);
+      } else if (C_OPS[b.op]) {
+        const lp = el("div", "tt-loop"); if (host.childElementCount) host.insertAdjacentHTML("beforeend", '<span class="fc-arrow">↓</span>'); host.appendChild(lp);
+        if (b.op === "forever") { lp.appendChild(el("div", "tt-yes", "↻ Lặp mãi mãi (đến khi bấm Dừng)")); fmap.set(b, lp); }
+        else {
+          const w = el("div", "rn-step"); w.innerHTML = fcNode(b.ft || (b.op === "repeat" ? "Đã lặp đủ " + b.times + " lần?" : (b.show || b.cond) + "?"), "cond"); lp.appendChild(w); fmap.set(b, w);
+          lp.appendChild(el("div", "tt-yes", "Sai ↓ &nbsp;·&nbsp; Đúng → ra khỏi vòng lặp"));
+        }
+        const inner = el("div", "fc-chart fc-inner"); drawFlow(b.body || [], inner); lp.appendChild(inner);
+        lp.appendChild(el("div", "tt-back", "↺ quay lại " + (b.op === "forever" ? "đầu vòng lặp" : "kiểm tra điều kiện")));
+      } else node(FT(b), b.op === "say" ? "io" : "proc", host, b);
+    });
+    if (spec.flow) { fStart = node("Bắt đầu", "term", flow); drawFlow(script, flow); fEnd = node("Kết thúc", "term", flow); }
+    const lit = (w) => { if (!spec.flow) return; flow.querySelectorAll(".rn-step.on,.tt-loop.on").forEach((e) => e.classList.remove("on")); if (w) w.classList.add("on"); };
+    // ---- chạy
+    let vars = {}, answer = "", x = 0, dir = 1, flip = false, run = 0, askDone = null, stepGo = null, asks = 0, peek = false, stopped = false, tr = [];
+    const hidden = spec.hide || [];
+    const fmt = (v) => (typeof v === "number" ? rnFmt(v) : String(v));
+    const paintMon = () => {
+      const ks = Object.keys(vars);
+      mon.innerHTML = (spec.count ? `<span class="sc-var sc-cnt">${esc(spec.count)} <b>${asks}</b></span>` : "") + ks.map((k) => `<span class="sc-var">${esc(k)} <b>${hidden.includes(k) && !peek ? "?" : esc(fmt(vars[k]))}</b></span>`).join("");
+      if (hidden.length && ks.some((k) => hidden.includes(k))) { const e = el("button", "sc-peek", peek ? "🙈 Che" : "👁 Hiện " + esc(hidden.join(", "))); e.onclick = () => { peek = !peek; paintMon(); }; mon.appendChild(e); }
+    };
+    const paintTrace = () => {
+      if (!spec.trace || !tr.length) { trace.innerHTML = ""; return; }
+      trace.innerHTML = `<table><tr><th>Lần kiểm tra</th>${spec.trace.map((k) => `<th>${esc(k)}</th>`).join("")}<th>Điều kiện</th></tr>${tr.map((r, i) => `<tr><td>${i + 1}</td>${r.v.map((v) => `<td>${esc(v)}</td>`).join("")}<td class="${r.ok ? "ok" : "no"}">${r.ok ? "Đúng → dừng lặp" : "Sai → lặp tiếp"}</td></tr>`).join("")}</table>`;
+    };
     const place = () => { const W = Math.max(0, stage.clientWidth - 60); sprite.style.left = Math.round(W / 2 + x * (W / 480)) + "px"; cat.style.transform = flip && dir < 0 ? "scaleX(-1)" : ""; };
     const say = (t) => { bubble.hidden = !t; bubble.textContent = t || ""; };
-    const sleep = (ms, id) => new Promise((ok) => setTimeout(() => ok(id === run), ms));
-    const val = (p) => (typeof p === "string" ? p : p.e ? rnFmt(rnEval(p.e, vars)) : typeof vars[p.v] === "number" ? rnFmt(vars[p.v]) : String(vars[p.v] == null ? "" : vars[p.v]));
+    const alive = (id) => id === run && box.isConnected;
+    const sleep = (ms, id) => new Promise((ok) => setTimeout(() => ok(alive(id)), ms / (+spd.value || 1)));
+    const gate = async (id) => { if (!stepChk.checked) return alive(id); bNext.disabled = false; await new Promise((ok) => { stepGo = ok; }); bNext.disabled = true; return alive(id); };
+    const val = (p) => (typeof p === "string" ? p : p.e ? rnFmt(rnEval(p.e, vars)) : fmt(vars[p.v] == null ? "" : vars[p.v]));
+    const on = (b, v) => b._el && (C_OPS[b.op] ? b._el.firstChild : b._el).classList.toggle("on", v);
     async function exec(list, id) {
       for (const b of list) {
-        if (id !== run) return false;
-        b._el && b._el.classList.add("on");
-        if (b.op === "say") { say(b.join ? b.join.map(val).join("") : b.text); if (!(await sleep(b.secs ? Math.min(b.secs, 3) * 1000 : 900, id))) return false; if (b.secs) say(""); }
+        if (!alive(id)) return false;
+        on(b, true); lit(fmap.get(b) || (b.op === "flag" ? fStart : b.op === "stop" ? fEnd : null));
+        if (!(await gate(id))) return false;
+        if (b.op === "say") { say(b.join ? b.join.map(val).join("") : b.v ? val({ v: b.v }) : b.text); if (!(await sleep(b.secs ? Math.min(b.secs, 3) * 1000 : 900, id))) return false; if (b.secs) say(""); }
         else if (b.op === "ask") {
-          say(b.text); askRow.hidden = false; askIn.value = ""; askIn.focus();
-          answer = await new Promise((ok) => { askDone = ok; }); askRow.hidden = true; say(""); if (id !== run) return false;
-        } else if (b.op === "set") { const v = b.answer ? String(answer).trim().replace(",", ".") : null; vars[b.var] = b.answer ? (v !== "" && isFinite(+v) ? +v : String(answer)) : rnEval(b.expr, vars); paintMon(); if (!(await sleep(500, id))) return false; }
-        else if (b.op === "if") { if (!(await sleep(500, id))) return false; b._el.classList.remove("on"); if (!(await exec(scCond(b.cond, vars) ? b.then || [] : b.else || [], id))) return false; }
-        else if (b.op === "repeat") { for (let k = 0; k < (+b.times || 0); k++) { b._el.classList.add("on"); if (!(await exec(b.body || [], id))) return false; } }
+          say(b.join ? b.join.map(val).join("") : b.text); askRow.hidden = false; askIn.value = ""; askIn.focus();
+          answer = await new Promise((ok) => { askDone = ok; }); askRow.hidden = true; say(""); if (!alive(id)) return false;
+          asks++; if (spec.answer) { const v = String(answer).trim().replace(",", "."); vars[spec.answer] = v !== "" && isFinite(+v) ? +v : String(answer); } paintMon();
+        } else if (b.op === "set") {
+          if (b.answer) { const v = String(answer).trim().replace(",", "."); vars[b.var] = v !== "" && isFinite(+v) ? +v : String(answer); }
+          else if (b.random) { const lo = +b.random[0], hi = +b.random[1]; vars[b.var] = lo + Math.floor(Math.random() * (hi - lo + 1)); }
+          else vars[b.var] = rnEval(b.expr, vars);
+          paintMon(); if (!(await sleep(500, id))) return false;
+        }
+        else if (b.op === "change") { vars[b.var] = (Number(vars[b.var]) || 0) + (b.by == null ? 1 : +b.by); paintMon(); if (!(await sleep(500, id))) return false; }
+        else if (b.op === "wait") { if (!(await sleep(Math.min(+b.secs || 0, 3) * 1000, id))) return false; }
+        else if (b.op === "if") { if (!(await sleep(500, id))) return false; on(b, false); if (!(await exec(scCond(b.cond, vars) ? b.then || [] : b.else || [], id))) return false; }
+        else if (b.op === "repeat") { for (let k = 0; k < (+b.times || 0); k++) { on(b, true); lit(fmap.get(b)); if (!(await sleep(300, id))) return false; on(b, false); if (!(await exec(b.body || [], id))) return false; } on(b, true); lit(fmap.get(b)); if (!(await sleep(300, id))) return false; }
+        else if (b.op === "until") {
+          for (let k = 0; k < 300; k++) {
+            on(b, true); lit(fmap.get(b)); if (k && !(await gate(id))) return false;
+            const ok = scCond(b.cond, vars);
+            if (spec.trace) { tr.push({ v: spec.trace.map((n) => fmt(vars[n] == null ? "" : vars[n])), ok }); paintTrace(); }
+            if (!(await sleep(450, id))) return false;
+            if (ok) break;
+            on(b, false); if (!(await exec(b.body || [], id))) return false;
+          }
+        } else if (b.op === "forever") { for (let k = 0; k < 5000; k++) { on(b, true); lit(fmap.get(b)); if (!(await sleep(120, id))) return false; on(b, false); if (!(await exec(b.body || [], id))) return false; } }
+        else if (b.op === "stop") { stopped = true; on(b, false); return false; }
         else if (b.op === "move") { x += (+b.steps || 0) * dir; place(); if (!(await sleep(250, id))) return false; }
         else if (b.op === "bounce") { if (x > 210 || x < -210) { dir = -dir; x = Math.max(-210, Math.min(210, x)); place(); } if (!(await sleep(150, id))) return false; }
         else if (b.op === "rotate") { flip = true; if (!(await sleep(150, id))) return false; }
         else if (b.op === "drum") { stage.classList.add("sc-beat"); if (!(await sleep(200, id))) return false; stage.classList.remove("sc-beat"); }
         else if (!(await sleep(400, id))) return false;
-        b._el && b._el.classList.remove("on");
+        on(b, false);
       }
       return true;
     }
-    const clearOn = () => code.querySelectorAll(".sb.on").forEach((e) => e.classList.remove("on"));
+    const clearOn = () => { code.querySelectorAll(".on").forEach((e) => e.classList.remove("on")); lit(null); };
     const submit = () => { if (askDone) { const f = askDone; askDone = null; f(askIn.value); } };
-    askOk.onclick = submit; askIn.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } };
-    bGo.onclick = async () => { const id = ++run; submit(); clearOn(); vars = {}; answer = ""; x = 0; dir = 1; flip = false; say(""); paintMon(); place(); bGo.disabled = true; const ok = await exec(spec.script || [], id); if (id === run) { bGo.disabled = false; clearOn(); if (ok) sound("ok"); } };
-    bStop.onclick = () => { run++; submit(); askRow.hidden = true; say(""); clearOn(); bGo.disabled = false; };
-    setTimeout(place, 0); paintMon();
+    const release = () => { if (stepGo) { const f = stepGo; stepGo = null; f(); } };
+    askOk.onclick = submit;
+    bNext.onclick = release;
+    stepChk.onchange = () => { if (!stepChk.checked) release(); };
+    bGo.onclick = async () => {
+      const id = ++run; submit(); release(); clearOn(); vars = Object.assign({}, spec.vars || {}); answer = ""; x = 0; dir = 1; flip = false; asks = 0; peek = false; stopped = false; tr = [];
+      say(""); paintMon(); paintTrace(); place(); msg.textContent = "▶ Đang chạy…"; bGo.disabled = true;
+      const ok = await exec(script, id);
+      if (id === run) { bGo.disabled = false; bNext.disabled = true; clearOn(); if (ok || stopped) { lit(fEnd); msg.textContent = "✅ Chương trình đã chạy xong."; sound("ok"); } }
+    };
+    bStop.onclick = () => { run++; submit(); release(); askRow.hidden = true; say(""); clearOn(); bGo.disabled = false; bNext.disabled = true; msg.textContent = "⏹ Đã dừng."; };
+    vars = Object.assign({}, spec.vars || {}); setTimeout(place, 0); paintMon();
+    msg.textContent = "Bấm 🏁 để chạy" + (spec.flow ? " — ô sáng trên sơ đồ khối cho biết máy đang ở bước nào." : ".");
+    return box;
+  }
+
+  // ---- BẢNG TÌM CHỮ “NHANH MẮT, NHANH TAY” (activity.wordsearch) --------------------------------------------------
+  //  wordsearch: { title?, intro?, grid: ["TUANTUXQ…", …] (mỗi chuỗi một hàng, cùng độ dài), words: [{ w: "TUANTU", label: "tuần tự", group?: "Câu 1" }] }
+  //  HS kéo qua các chữ (ngang, dọc, chéo, xuôi hoặc ngược) hoặc bấm chữ đầu rồi chữ cuối. Tìm đủ → 🎉. Không chấm điểm, không gửi.
+  function wordsearchBox(a) {
+    ensureEngineCSS();
+    const spec = a.wordsearch, G = (spec.grid || []).map((r) => Array.from(String(r).toUpperCase())), R = G.length, C = R ? G[0].length : 0;
+    const words = (spec.words || []).map((w, i) => ({ w: String(w.w).toUpperCase(), label: w.label || w.w, group: w.group || "", i, found: false }));
+    const box = el("div", "ws-box");
+    if (spec.title) box.appendChild(el("h3", "rn-title", "🔎 " + esc(spec.title)));
+    if (spec.intro) box.appendChild(el("p", "subtitle", esc(spec.intro)));
+    const wrap = el("div", "ws-wrap"), grid = el("div", "ws-grid"), side = el("div", "ws-side"), list = el("div", "ws-list"), msg = el("div", "sp-msg");
+    grid.style.gridTemplateColumns = `repeat(${C}, 1fr)`;
+    const cells = [];
+    G.forEach((row, r) => row.forEach((ch, c) => { const d = el("div", "ws-cell", esc(ch)); d.dataset.r = r; d.dataset.c = c; grid.appendChild(d); (cells[r] = cells[r] || [])[c] = d; }));
+    const ctr = el("div", "rn-ctrl"), bHint = el("button", "btn ghost", "💡 Gợi ý"), bAll = el("button", "btn ghost", "👀 Hiện đáp án"), bReset = el("button", "btn ghost", "🔄 Làm lại");
+    ctr.append(bHint, bAll, bReset);
+    side.append(list, ctr, msg); wrap.append(grid, side); box.appendChild(wrap);
+    const COLORS = ["#fde047", "#86efac", "#93c5fd", "#f9a8d4", "#fdba74", "#c4b5fd", "#5eead4", "#fca5a5"];
+    const paintList = () => {
+      const groups = [...new Set(words.map((w) => w.group))];
+      list.innerHTML = groups.map((g) => (g ? `<div class="ws-g">${esc(g)}</div>` : "") + words.filter((w) => w.group === g).map((w) => `<span class="ws-word${w.found ? " ok" : ""}" style="${w.found ? "background:" + COLORS[w.i % COLORS.length] : ""}">${w.found ? "✅ " + esc(w.label) : "⬜ " + "_ ".repeat(w.w.length).trim()}</span>`).join("")).join("");
+    };
+    const line = (r0, c0, r1, c1) => {
+      const dr = Math.sign(r1 - r0), dc = Math.sign(c1 - c0), n = Math.max(Math.abs(r1 - r0), Math.abs(c1 - c0));
+      if (!(r0 === r1 || c0 === c1 || Math.abs(r1 - r0) === Math.abs(c1 - c0))) return null;
+      const out = []; for (let k = 0; k <= n; k++) out.push([r0 + dr * k, c0 + dc * k]); return out;
+    };
+    const mark = (w, path) => { w.found = true; path.forEach(([r, c]) => { const d = cells[r][c]; d.classList.add("found"); d.style.background = COLORS[w.i % COLORS.length]; }); paintList(); };
+    const locate = (w) => { for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) for (const [dr, dc] of [[0, 1], [1, 0], [1, 1], [-1, 1], [0, -1], [-1, 0], [-1, -1], [1, -1]]) { let ok = true; for (let k = 0; k < w.w.length; k++) { const rr = r + dr * k, cc = c + dc * k; if (rr < 0 || cc < 0 || rr >= R || cc >= C || G[rr][cc] !== w.w[k]) { ok = false; break; } } if (ok) return Array.from(w.w, (_, k) => [r + dr * k, c + dc * k]); } return null; };
+    let start = null, sel = [], anchor = null;
+    const clearSel = () => { sel.forEach(([r, c]) => cells[r][c].classList.remove("sel")); sel = []; };
+    const showSel = (p) => { clearSel(); sel = p || []; sel.forEach(([r, c]) => cells[r][c].classList.add("sel")); };
+    const cellAt = (e) => { const t = document.elementFromPoint(e.clientX, e.clientY); return t && t.classList && t.classList.contains("ws-cell") ? [+t.dataset.r, +t.dataset.c] : null; };
+    const check = (p) => {
+      if (!p || p.length < 2) return false;
+      const s = p.map(([r, c]) => G[r][c]).join(""), rs = Array.from(s).reverse().join("");
+      const w = words.find((x) => !x.found && (x.w === s || x.w === rs));
+      if (w) {
+        mark(w, p); sound("ok");
+        const left = words.filter((x) => !x.found).length;
+        msg.innerHTML = left ? `🎯 Tìm được <b>${esc(w.label)}</b>! Còn ${left} từ khoá.` : "🎉 Tuyệt vời! Em đã tìm đủ các từ khoá.";
+        if (!left) celebrate();
+        return true;
+      }
+      if (words.some((x) => x.found && (x.w === s || x.w === rs))) msg.textContent = "Từ này đã tìm rồi, tìm từ khác nhé!";
+      else { msg.textContent = "❌ " + s + " chưa phải từ khoá. Thử lại nhé!"; sound("no"); }
+      return false;
+    };
+    grid.onpointerdown = (e) => { const p = cellAt(e); if (!p) return; e.preventDefault(); start = p; showSel([p]); try { grid.setPointerCapture(e.pointerId); } catch (x) {} };
+    grid.onpointermove = (e) => { if (!start) return; const p = cellAt(e); if (!p) return; const l = line(start[0], start[1], p[0], p[1]); if (l) showSel(l); };
+    grid.onpointerup = (e) => {
+      if (!start) return; const p = cellAt(e) || start, s0 = start; start = null;
+      if (p[0] === s0[0] && p[1] === s0[1]) { // bấm 1 chữ: chữ đầu → chờ chữ cuối
+        if (anchor && !(anchor[0] === p[0] && anchor[1] === p[1])) { const l = line(anchor[0], anchor[1], p[0], p[1]); cells[anchor[0]][anchor[1]].classList.remove("anchor"); anchor = null; if (l) { showSel(l); check(l); } else msg.textContent = "Các chữ phải nằm trên một hàng ngang, cột dọc hoặc đường chéo."; setTimeout(clearSel, 350); return; }
+        if (anchor) cells[anchor[0]][anchor[1]].classList.remove("anchor");
+        anchor = p; cells[p[0]][p[1]].classList.add("anchor"); clearSel(); msg.textContent = "Bấm tiếp vào chữ cuối của từ khoá."; return;
+      }
+      if (anchor) { cells[anchor[0]][anchor[1]].classList.remove("anchor"); anchor = null; }
+      check(sel); setTimeout(clearSel, 350);
+    };
+    grid.onpointercancel = () => { start = null; clearSel(); };
+    bHint.onclick = () => { const w = words.find((x) => !x.found); if (!w) return; const p = locate(w); if (!p) return; const d = cells[p[0][0]][p[0][1]]; d.classList.add("hint"); setTimeout(() => d.classList.remove("hint"), 2200); msg.innerHTML = `💡 Từ khoá <b>${w.w.length}</b> chữ cái, bắt đầu ở ô đang nhấp nháy.`; };
+    bAll.onclick = () => { words.forEach((w) => { if (!w.found) { const p = locate(w); if (p) mark(w, p); } }); msg.textContent = "👀 Đã hiện tất cả từ khoá."; };
+    bReset.onclick = () => { words.forEach((w) => { w.found = false; }); cells.flat().forEach((d) => { d.classList.remove("found", "sel", "anchor"); d.style.background = ""; }); anchor = null; paintList(); msg.textContent = "Kéo qua các chữ cái (hoặc bấm chữ đầu rồi chữ cuối) để tìm từ khoá."; };
+    paintList(); msg.textContent = "Kéo qua các chữ cái (hoặc bấm chữ đầu rồi chữ cuối) để tìm từ khoá.";
     return box;
   }
 
@@ -3471,6 +3654,28 @@
 .tt-spd{font:inherit;font-size:.95rem;padding:4px 6px;border-radius:8px;border:2px solid #cbd5e1}
 .tt-goals{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-weight:700}.tt-goals:empty{display:none}
 .tt-goal{background:#fff;border:2px solid #cbd5e1;border-radius:999px;padding:2px 10px;font-weight:600}.tt-goal.ok{border-color:#16a34a;background:#dcfce7}
+.sc-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0}.sc-tab{border:2px solid #9966ff;background:#fff;color:#5b21b6;border-radius:12px 12px 0 0;padding:7px 16px;font-weight:800;font-size:1rem;cursor:pointer}.sc-tab.on{background:#9966ff;color:#fff}
+.sc-multi .sc-box{margin-top:0;border-top-left-radius:0}
+.sc-code,.sc-flow{overflow-wrap:normal}.sc-wrap>*{min-width:0}.sc-flow .fc-io{padding:5px 20px}.sc-flow .fc-node{max-width:230px}
+.sc-code .sb-row,.sc-code .sb:not(.sb-c){display:flex;flex-wrap:wrap;gap:4px;align-items:center}.sc-code .sb-bool{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center;padding:3px 14px}
+.sc-flow{flex:1 1 240px;min-width:0;max-width:100%;overflow-x:auto;margin:0;font-size:.86rem;gap:1px;padding:4px}.sc-flow .fc-node{min-width:0;padding:5px 12px}.sc-flow .fc-cond{padding:15px 26px}.sc-flow .fc-arrow{font-size:1.05rem}
+.fc-inner{margin:0;gap:1px}.fc-br{display:flex;gap:8px;align-items:flex-start;justify-content:center;max-width:100%}
+.fc-col{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:1px;border-top:2px solid #94a3b8;padding-top:2px}
+.fc-lab{font-size:.78rem;color:#475569;font-weight:800}.tt-loop.on{box-shadow:0 0 0 4px #bae6fd;background:#e0f2fe}
+.sb-cap{border-radius:6px 6px 10px 10px}.sc-steplb{display:flex;align-items:center;gap:4px;font-weight:700;cursor:pointer}.sc-steplb input{width:20px;height:20px}
+.sc-next:not(:disabled){animation:scPulse 1s infinite}@keyframes scPulse{50%{box-shadow:0 0 0 6px #fde68a}}
+.sc-msg{font-weight:700;color:#334155}.sc-msg:empty{display:none}
+.sc-peek{border:2px dashed #ff8c1a;background:#fff7ed;border-radius:8px;padding:2px 10px;font-weight:700;cursor:pointer}.sc-cnt{border-color:#9966ff}.sc-cnt b{background:#9966ff}
+.sc-trace:empty{display:none}.sc-trace{max-height:230px;overflow:auto}.sc-trace table{border-collapse:collapse;width:100%;font-size:.95rem;background:#fff}.sc-trace th,.sc-trace td{border:1px solid #cbd5e1;padding:3px 8px;text-align:center}.sc-trace th{background:#fff7ed}.sc-trace td.ok{color:#15803d;font-weight:800}.sc-trace td.no{color:#b45309}
+.ws-box{margin:14px 0;border:3px solid #f59e0b;border-radius:18px;background:#fffbeb;padding:12px 16px}
+.ws-wrap{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start}
+.ws-grid{flex:0 1 480px;display:grid;gap:3px;touch-action:none;user-select:none;-webkit-user-select:none;min-width:0;max-width:100%}
+.ws-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;background:#fff;border:2px solid #fcd34d;border-radius:8px;font-weight:900;font-size:clamp(.9rem,2.6vw,1.45rem);color:#1f2937;cursor:pointer;transition:transform .1s}
+.ws-cell.sel{background:#fde68a;transform:scale(1.08)}.ws-cell.anchor{outline:3px solid #ea580c}.ws-cell.found{border-color:rgba(0,0,0,.18)}
+.ws-cell.hint{animation:scPulse .5s 4}
+.ws-side{flex:1 1 240px;display:flex;flex-direction:column;gap:10px}
+.ws-list{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.ws-g{width:100%;font-weight:800;color:#b45309;margin-top:4px}
+.ws-word{background:#fff;border:2px solid #fcd34d;border-radius:10px;padding:4px 12px;font-weight:800;letter-spacing:1px}.ws-word.ok{border-color:transparent}
 .chart-fig{margin:6px auto;max-width:640px}.ladder-card .chart-fig{max-width:500px}.chart-svg{display:block;width:100%;height:auto;border-radius:10px}
 .chart-row{display:flex;flex-wrap:wrap;gap:12px;justify-content:center}.chart-row>.chart-fig{flex:1 1 460px;max-width:600px;margin:0}
 .poll-tabs{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}.poll-tab.on{background:var(--primary,#2563eb);color:#fff;border-color:var(--primary,#2563eb)}
@@ -3564,7 +3769,7 @@
 .sc-box{margin:14px 0;border:3px solid #9966ff;border-radius:18px;background:#faf8ff;padding:12px 16px}
 .sc-wrap{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
 .sc-code{flex:1 1 320px;display:flex;flex-direction:column;align-items:flex-start;gap:2px;background:#f9f9fb;border:1px solid #e5e7eb;border-radius:12px;padding:10px;overflow-x:auto;max-width:100%}
-.sc-right{flex:1 1 280px;display:flex;flex-direction:column;gap:10px}
+.sc-right{flex:1 1 280px;display:flex;flex-direction:column;gap:10px}.sc-play{justify-content:center}.sc-play .sc-right{flex:0 1 640px;min-width:0}.sc-play .sc-stage{height:260px}
 .sc-stage{position:relative;height:210px;background:linear-gradient(#e0f2fe,#fff 70%);border:2px solid #cbd5e1;border-radius:12px;overflow:hidden;transition:background .1s}
 .sc-stage.sc-beat{background:linear-gradient(#fde68a,#fff 70%)}
 .sc-sprite{position:absolute;bottom:18px;left:40%;width:60px;text-align:center;transition:left .22s linear}
@@ -3836,12 +4041,14 @@
     const row = el("div", "penguin-row"); let enemyEl = null;
     if (a.enemy) { ensureEngineCSS(); enemyEl = el("span", "penguin-enemy", a.enemy); row.appendChild(enemyEl); }
     const pets = [];
-    for (let i = 0; i < qs.length; i++) { const k = el("span", "penguin" + (i < a._home ? " home" : ""), i < a._home ? homeI : pet); pets.push(k); row.appendChild(k); }
+    // a.pets: ["🐶", "🐱", …] — mỗi câu một nhân vật khác nhau; về nhà hiện homeIcon + nhân vật
+    const petOf = (i) => (a.pets && a.pets.length ? a.pets[i % a.pets.length] : pet), homeOf = (i) => (a.pets && a.pets.length ? homeI + petOf(i) : homeI);
+    for (let i = 0; i < qs.length; i++) { const k = el("span", "penguin" + (i < a._home ? " home" : ""), i < a._home ? homeOf(i) : petOf(i)); pets.push(k); row.appendChild(k); }
     c.appendChild(row); view.appendChild(c);
     c._penguin = (ok) => {
       if (ok) a._home = Math.min(qs.length, a._home + 1);
       else if (enemyEl) { enemyEl.classList.remove("howl"); void enemyEl.offsetWidth; enemyEl.classList.add("howl"); }
-      pets.forEach((k, i) => { const done = i < a._home; k.textContent = done ? homeI : pet; k.classList.toggle("home", done); });
+      pets.forEach((k, i) => { const done = i < a._home; k.textContent = done ? homeOf(i) : petOf(i); k.classList.toggle("home", done); });
       if (a._qi >= qs.length - 1) {
         const done = el("div", "feedback ok");
         done.innerHTML = `🎉 Đã giúp <b>${a._home}/${qs.length}</b> ${esc(word)}! ` + (a._home === qs.length ? esc(a.winText || "Tất cả đều an toàn — xuất sắc!") : "Cùng ôn lại các câu chưa đúng nhé.");

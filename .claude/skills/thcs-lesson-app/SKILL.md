@@ -284,6 +284,7 @@ nội tuyến (thẻ `<script>` KHÔNG chạy) — VD thanh trượt đổi kíc
 **Trò chơi nhân vật** (`type: "penguin"`): đổi nhân vật theo tên trò chơi trong giáo án —
 `pet: "🐑", homeIcon: "🏡", enemy: "🐺", saveWord: "chú cừu thoát khỏi Sói xám", winText: "…"`.
 Mỗi câu đúng một nhân vật về nhà; sai thì kẻ đuổi theo rung lên. Mặc định vẫn là cánh cụt.
+`pets: ["🐶", "🐱", "🐰", "🐹"]` = mỗi câu một nhân vật khác nhau (về nhà hiện homeIcon + nhân vật) — VD “Giải cứu thú cưng” (Tin 8 Bài 16).
 
 ## Sơ đồ tư duy mô phỏng & phiếu tự đánh giá (engine v5)
 
@@ -343,7 +344,22 @@ cond: hình thoi kiểm tra điều kiện) nối bằng mũi tên; chấm, nộ
   { op: "ask", text }, { op: "set", var: "a", answer: true }, { op: "set", var: "tong", expr: "a + b", show: "a + b" },
   { op: "if", cond: "a > b || a == b", show: "a > b hoặc a = b", then: [...], else: [...] }, { op: "repeat", times: 10, body: [...] },
   { op: "move", steps: 10 }, { op: "bounce" }, { op: "rotate" }, { op: "drum" }] }` (`n` = số ①② như SGK).
-- Ghép khối lệnh: `ordering` thêm `blocks: ["event","looks","sensing","variables","operators","control","motion","sound"]` (cùng thứ tự steps).
+  Thêm (Tin 8 Bài 14): `{ op: "until", cond, show, body }` (lặp lại cho đến khi) · `{ op: "forever", body }` (liên tục, dừng bằng ⏹) ·
+  `{ op: "stop" }` · `{ op: "wait", secs }` · `{ op: "set", var, random: [1, 100] }` · `{ op: "say", v: "biến" }` · `expr` có `%` (chia lấy dư) ·
+  `boolHTML` / `say.html` = HTML khối lồng nhau vẽ sẵn (dùng `SEN`, `V`, `OP` như Bài 14) · `ft` = chữ riêng trong sơ đồ khối.
+  Tuỳ chọn: `answer: "trả lời"` (câu trả lời thành biến dùng thẳng trong `cond`), `flow: true` (sơ đồ khối tự sinh, rẽ nhánh 2 cột
+  Đúng/Sai, sáng theo lệnh), `hide: ["số bí mật"]` (che, nút 👁), `count: "Số lần đoán"`, `trace: ["a", "b"]` (bảng giá trị mỗi lần
+  kiểm tra điều kiện lặp), `step: true` (bật sẵn 👣 Từng bước), `play: true` (chỉ sân khấu — chơi thử trước khi học).
+  `scratch: [{ tab: "🔢 Lặp 10 lần", … }, …]` = nhiều chương trình hiện thành thẻ (VD ba dạng lặp; bài gỡ lỗi: thẻ ❌ có lỗi / ✅ đã sửa).
+  Thêm (Tin 8 Bài 15): `{ op: "change", var, by: 1 }` (thay đổi … một lượng) · `ask` nhận `join`/`html` (câu hỏi ghép biến) ·
+  `cond` so sánh chữ `"trả lời == 'd'"` (không phân biệt hoa thường như Scratch) · `expr` có `round(…)` (làm tròn) ·
+  `vars: { n: 0 }` giá trị biến ban đầu (biến Scratch mới tạo = 0). `count` dùng làm ô “Số lần em đã đoán thật” để đối chiếu.
+- **Ô chữ** (`type: "crossword"`): hàng ngang có thể là câu trắc nghiệm — thêm `word: "LOGIC"` (chữ của hàng) và `key`; từ khoá hàng dọc vẫn là câu `short`.
+- **Bảng tìm chữ** (trò “Nhanh mắt, nhanh tay”, không chấm): `wordsearch: { title, intro?, grid: ["TUANTU…", …], words: [{ w: "TUANTU",
+  label: "tuần tự", group?: "Câu 1" }] }` — chữ HOA không dấu, ngang/dọc/chéo, xuôi/ngược; kéo hoặc bấm chữ đầu rồi chữ cuối. Validator
+  kiểm tra mọi từ có trong lưới. Kèm câu trắc nghiệm để chấm điểm.
+- Ghép khối lệnh: `ordering` thêm `blocks: ["event","looks","sensing","variables","operators","control","motion","sound"]` (cùng thứ tự steps);
+  `indent: [0, 0, 1, 2, …]` thụt lề khối nằm trong lặp / rẽ nhánh (ghi “nếu không thì” thành một bước riêng).
   Khi các cặp lệnh đổi chỗ được (nhập a/b), ghi rõ thứ tự trong `task` (ví dụ “nhập a trước, b sau”).
 - Nút mở Scratch thật: `links: [{ label, url: "https://scratch.mit.edu/projects/editor/" }]`.
 - **Nhân vật di chuyển, vẽ hình** (Tin 8 Bài 12 — sân khấu 480×360 toạ độ như Scratch, bọ rùa/xe buýt tự vẽ SVG):

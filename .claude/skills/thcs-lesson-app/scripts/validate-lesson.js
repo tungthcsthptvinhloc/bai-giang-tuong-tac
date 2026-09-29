@@ -133,10 +133,10 @@ function checkCrosswordsMail(L) {
   (L.activities || []).forEach((a) => {
     if (a.type === "crossword") {
       const where = `HĐ "${a.id}" (crossword)`, qs = a.questions || [], rows = qs.filter((q) => !q.keyword), kw = qs.find((q) => q.keyword);
-      if (qs.some((q) => q.type !== "short")) err(`${where}: mọi câu phải là \`type: "short"\`.`);
+      qs.forEach((q, i) => { if (q.type !== "short" && (q.keyword || !q.word)) err(`${where}: câu ${i + 1} phải là \`type: "short"\` (hoặc câu trắc nghiệm có \`word\` — chữ của hàng ngang).`); });
       let letters = "";
       rows.forEach((q, i) => {
-        const w = normShort(Array.isArray(q.answer) ? q.answer[0] : q.answer), k = q.key || 0;
+        const w = normShort(q.word || (Array.isArray(q.answer) ? q.answer[0] : q.answer)), k = q.key || 0;
         if (k < 0 || k >= w.length) err(`${where}: hàng ${i + 1} có \`key\` = ${k} nằm ngoài từ "${w}".`); else letters += w[k];
         (q.show || []).forEach((j) => { if (j < 0 || j >= w.length) err(`${where}: hàng ${i + 1} có \`show\` ${j} nằm ngoài từ "${w}".`); });
       });
@@ -202,16 +202,23 @@ function checkMindmapsChecklists(L) {
       else if (!Array.isArray(a.blocks) || a.blocks.length !== (a.steps || []).length) err(`${where}: cần mảng cùng độ dài với \`steps\`.`);
       else a.blocks.forEach((c, i) => { if (!CATS.includes(c)) err(`${where}: khối ${i + 1} có nhóm "${c}" không hợp lệ (${CATS.join(", ")}).`); });
     }
-    if (a.scratch) { // chạy thử chương trình Scratch
-      const where = `HĐ "${a.id}" scratch`, OPS = ["flag", "say", "ask", "set", "if", "repeat", "move", "bounce", "rotate", "drum"];
-      if (!Array.isArray(a.scratch.script) || !a.scratch.script.length) err(`${where}: cần \`script: [khối…]\`.`);
+    if (a.scratch) [].concat(a.scratch).forEach((sc, k) => { // chạy thử chương trình Scratch (một hoặc mảng nhiều chương trình)
+      const where = `HĐ "${a.id}" scratch${Array.isArray(a.scratch) ? "[" + k + "]" : ""}`, OPS = ["flag", "say", "ask", "set", "change", "if", "repeat", "until", "forever", "stop", "wait", "move", "bounce", "rotate", "drum"];
+      if (!Array.isArray(sc.script) || !sc.script.length) err(`${where}: cần \`script: [khối…]\`.`);
       else (function walk(list) { list.forEach((b) => {
         if (!OPS.includes(b.op)) err(`${where}: khối "${b.op}" không hợp lệ (${OPS.join(", ")}).`);
         if (b.op === "set" && !b.var) err(`${where}: khối set thiếu \`var\`.`);
-        if (b.op === "set" && !b.answer && typeof b.expr !== "string") err(`${where}: khối set "${b.var}" cần \`answer: true\` hoặc \`expr\`.`);
-        if (b.op === "if") { if (typeof b.cond !== "string") err(`${where}: khối if thiếu \`cond\`.`); walk(b.then || []); walk(b.else || []); }
-        if (b.op === "repeat") walk(b.body || []);
-      }); })(a.scratch.script);
+        if (b.op === "set" && !b.answer && !b.random && typeof b.expr !== "string") err(`${where}: khối set "${b.var}" cần \`answer: true\`, \`random: [a, b]\` hoặc \`expr\`.`);
+        if ((b.op === "if" || b.op === "until") && typeof b.cond !== "string") err(`${where}: khối ${b.op} thiếu \`cond\`.`);
+        if (b.op === "if") { walk(b.then || []); walk(b.else || []); }
+        if (b.op === "repeat" || b.op === "until" || b.op === "forever") walk(b.body || []);
+      }); })(sc.script);
+    });
+    if (a.wordsearch) { // bảng tìm chữ: mọi từ khoá phải có trong lưới
+      const g = (a.wordsearch.grid || []).map((r) => String(r).toUpperCase()), where = `HĐ "${a.id}" wordsearch`;
+      if (!g.length || g.some((r) => r.length !== g[0].length)) err(`${where}: \`grid\` cần các hàng cùng độ dài.`);
+      const has = (w) => { for (let r = 0; r < g.length; r++) for (let c = 0; c < g[0].length; c++) for (const [dr, dc] of [[0, 1], [1, 0], [1, 1], [-1, 1], [0, -1], [-1, 0], [-1, -1], [1, -1]]) { let ok = true; for (let t = 0; t < w.length; t++) { const rr = r + dr * t, cc = c + dc * t; if (!g[rr] || g[rr][cc] !== w[t]) { ok = false; break; } } if (ok) return true; } return false; };
+      (a.wordsearch.words || []).forEach((w) => { if (!has(String(w.w).toUpperCase())) err(`${where}: không tìm thấy từ "${w.w}" trong lưới.`); });
     }
     if (a.search) { // máy tìm kiếm tuần tự
       const r = a.search, where = `HĐ "${a.id}" search`;

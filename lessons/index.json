@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-09-28T15:17:17.129Z",
+ "generatedAt": "2026-09-29T01:25:28.252Z",
  "lessons": [
   {
    "id": "tin6-bai01-thong-tin-va-du-lieu",
@@ -460,6 +460,36 @@
    "activities": 13,
    "items": 40,
    "open": 0
+  },
+  {
+   "id": "tin8-bai14-cau-truc-dieu-khien",
+   "title": "Bài 14: Cấu trúc điều khiển",
+   "grade": "8",
+   "subject": "Tin học",
+   "unit": "Chủ đề 5 — Giải quyết vấn đề với sự trợ giúp của máy tính",
+   "activities": 17,
+   "items": 37,
+   "open": 0
+  },
+  {
+   "id": "tin8-bai15-go-loi",
+   "title": "Bài 15: Gỡ lỗi",
+   "grade": "8",
+   "subject": "Tin học",
+   "unit": "Chủ đề 5 — Giải quyết vấn đề với sự trợ giúp của máy tính",
+   "activities": 13,
+   "items": 36,
+   "open": 0
+  },
+  {
+   "id": "tin8-bai16-tin-hoc-voi-nghe-nghiep",
+   "title": "Bài 16: Tin học với nghề nghiệp",
+   "grade": "8",
+   "subject": "Tin học",
+   "unit": "Chủ đề 6 — Hướng nghiệp với tin học",
+   "activities": 13,
+   "items": 23,
+   "open": 4
   },
   {
    "id": "tin9-bai01-the-gioi-ki-thuat-so",
