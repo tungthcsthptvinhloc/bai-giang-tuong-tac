@@ -387,6 +387,7 @@
       <button class="icon-btn" id="btnPauseClass" title="Tạm dừng cả lớp — che màn hình tất cả máy HS" hidden>⏸️</button>
       <button class="icon-btn" id="btnSound" title="Bật/tắt âm thanh">🔊</button>
       <button class="icon-btn" id="btnTimer" title="Đồng hồ đếm giờ">⏱️</button>
+      <button class="icon-btn" id="btnJackpot" title="Chọn học sinh ngẫu nhiên — máy quay Jackpot">🎰</button>
       <button class="icon-btn" id="btnPen" title="Bút vẽ (P) — bấm lại để thoát">✏️</button>
       <button class="icon-btn" id="btnHighlight" title="Bút dạ quang (H) — bấm lại để thoát">🖍️</button>
       <button class="icon-btn" id="btnEraser" title="Cục tẩy — xóa nét đã vẽ">🧽</button>
@@ -403,7 +404,7 @@
       <div class="timer-mode" id="timerMode" hidden></div>
       <div class="timer-big" id="timerBig">1:00</div>
       <div class="timer-row">
-        <button data-d="-30">−30s</button><button data-d="-15">−15s</button>
+        <button data-d="-60">−1p</button><button data-d="-30">−30s</button><button data-d="-15">−15s</button>
         <button data-d="15">+15s</button><button data-d="30">+30s</button><button data-d="60">+1p</button>
       </div>
       <div class="timer-row">
@@ -3676,6 +3677,52 @@
 .ws-side{flex:1 1 240px;display:flex;flex-direction:column;gap:10px}
 .ws-list{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.ws-g{width:100%;font-weight:800;color:#b45309;margin-top:4px}
 .ws-word{background:#fff;border:2px solid #fcd34d;border-radius:10px;padding:4px 12px;font-weight:800;letter-spacing:1px}.ws-word.ok{border-color:transparent}
+.jp-ov{position:fixed;inset:0;z-index:9500;background:rgba(15,10,40,.72);display:flex;align-items:center;justify-content:center;padding:12px;overflow:auto}
+.jp-box{position:relative;width:min(760px,100%);background:linear-gradient(160deg,#7c2d12,#b91c1c 45%,#7c2d12);border:6px solid #fbbf24;border-radius:28px;padding:16px 18px 14px;box-shadow:0 20px 60px rgba(0,0,0,.5),inset 0 0 0 3px #fde68a;color:#fff;font-family:inherit}
+.jp-x{position:absolute;top:8px;right:10px;border:none;background:rgba(0,0,0,.25);color:#fff;border-radius:50%;width:36px;height:36px;font-size:1.1rem;cursor:pointer}
+.jp-title{text-align:center;font-weight:900;font-size:clamp(1.3rem,4vw,2rem);letter-spacing:2px;color:#fde047;text-shadow:0 3px 0 #92400e,0 0 18px #fbbf24;margin:0 30px 8px}
+.jp-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;margin-bottom:10px;font-size:.95rem}
+.jp-tabs{display:flex;gap:6px}.jp-tabs button,.jp-edit{border:2px solid #fde68a;background:rgba(0,0,0,.2);color:#fff;border-radius:999px;padding:4px 12px;font-weight:800;cursor:pointer}
+.jp-tabs button.on{background:#fde047;color:#7c2d12}.jp-src{opacity:.95}
+.jp-machine{position:relative;background:#1f1147;border:5px solid #fbbf24;border-radius:22px;padding:34px 70px 22px 18px;box-shadow:inset 0 0 30px rgba(0,0,0,.6)}
+.jp-lights{position:absolute;left:10px;right:10px;top:8px;display:flex;justify-content:space-between}
+.jp-lights i{width:12px;height:12px;border-radius:50%;background:#fde047;box-shadow:0 0 8px #fde047;animation:jpBlink 1s infinite}
+.jp-lights i:nth-child(even){animation-delay:.5s;background:#f472b6;box-shadow:0 0 8px #f472b6}
+.jp-spin .jp-lights i{animation-duration:.25s}
+@keyframes jpBlink{50%{opacity:.25}}
+.jp-mini{display:flex;justify-content:center;gap:10px;margin-bottom:10px}
+.jp-mini span{width:54px;height:54px;display:flex;align-items:center;justify-content:center;font-size:2rem;background:#fff;border-radius:12px;box-shadow:inset 0 -6px 0 #e5e7eb,0 3px 0 #92400e}
+.jp-window{position:relative;box-sizing:content-box;height:96px;overflow:hidden;background:linear-gradient(#e5e7eb,#fff 30%,#fff 70%,#e5e7eb);border-radius:14px;border:4px solid #f59e0b;box-shadow:inset 0 10px 14px rgba(0,0,0,.25),inset 0 -10px 14px rgba(0,0,0,.25)}
+.jp-strip{will-change:transform}
+.jp-name{height:96px;display:flex;align-items:center;justify-content:center;text-align:center;padding:0 12px;font-weight:900;font-size:clamp(1.3rem,4.4vw,2.3rem);color:#1f1147;line-height:1.1;overflow:hidden}
+.jp-empty{font-size:1.1rem;color:#6b7280}
+.jp-fx{position:fixed;inset:0;pointer-events:none;z-index:9600;overflow:hidden}
+.jp-fx i{position:absolute;width:11px;height:15px;border-radius:2px;opacity:0;animation:jpBurst 2.6s cubic-bezier(.2,.6,.35,1) forwards}
+.jp-fx i.jp-emo{width:auto;height:auto;font-size:2.2rem;font-style:normal;background:none}
+@keyframes jpBurst{0%{opacity:1;transform:translate(0,0) rotate(0)}35%{opacity:1;transform:translate(var(--x1),var(--y1)) rotate(calc(var(--r) * .4))}100%{opacity:0;transform:translate(var(--x2),var(--y2)) rotate(var(--r))}}
+.jp-lever{position:absolute;right:16px;top:30px;bottom:26px;width:40px;cursor:pointer}
+.jp-lever i{position:absolute;left:16px;top:26px;bottom:0;width:8px;background:linear-gradient(90deg,#9ca3af,#f3f4f6,#9ca3af);border-radius:4px;transform-origin:bottom center}
+.jp-lever b{position:absolute;left:4px;top:0;width:32px;height:32px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fecaca,#dc2626 60%,#7f1d1d);box-shadow:0 3px 6px rgba(0,0,0,.4);z-index:1}
+.jp-lever.pull b{animation:jpPull .7s ease}.jp-lever.pull i{animation:jpPullStick .7s ease}
+@keyframes jpPull{40%{transform:translateY(120%)}}@keyframes jpPullStick{40%{transform:scaleY(-.2)}}
+.jp-win{min-height:64px;display:flex;align-items:center;justify-content:center;margin:10px 0 4px}
+.jp-winner{font-size:clamp(1.6rem,5vw,2.8rem);font-weight:900;color:#fde047;text-shadow:0 3px 0 #92400e,0 0 24px #fbbf24;text-align:center;animation:jpPop .6s cubic-bezier(.2,1.6,.4,1)}
+.jp-winner b{color:#fff}
+@keyframes jpPop{0%{transform:scale(.3);opacity:0}100%{transform:scale(1);opacity:1}}
+.jp-won .jp-window{animation:jpGlow .4s 5 alternate}@keyframes jpGlow{to{box-shadow:0 0 0 6px #fde047,0 0 30px #fde047}}
+.jp-note{font-weight:800;color:#fef3c7}
+.jp-ctrl{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center}
+.jp-go{font-size:1.4rem;padding:12px 34px;background:linear-gradient(#fde047,#f59e0b);color:#7c2d12;border:none;box-shadow:0 5px 0 #92400e;font-weight:900}
+.jp-go:active{transform:translateY(3px);box-shadow:0 2px 0 #92400e}.jp-go:disabled{opacity:.6}
+.jp-ctrl .ghost{background:rgba(0,0,0,.25);color:#fff;border-color:#fde68a}
+.jp-rep{display:flex;align-items:center;gap:6px;font-weight:700;cursor:pointer}.jp-rep input{width:20px;height:20px}
+.jp-left{font-weight:800;color:#fef3c7}
+.jp-hist{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;font-weight:700;font-size:.95rem}
+.jp-hist span{background:rgba(255,255,255,.18);border-radius:999px;padding:2px 10px}
+.jp-editbox{margin-top:12px;background:#fff;color:#1f2937;border-radius:14px;padding:12px}
+.jp-editbox p{margin:0 0 6px;font-weight:700}.jp-editbox textarea{width:100%;font:inherit;font-size:1rem;border:2px solid #fcd34d;border-radius:10px;padding:8px;box-sizing:border-box}
+.jp-editbox .ghost{background:#fff;color:#374151;border-color:#d1d5db}
+@media (max-width:560px){.jp-machine{padding:30px 54px 18px 10px}.jp-lever{right:8px}.jp-mini span{width:42px;height:42px;font-size:1.5rem}}
 .chart-fig{margin:6px auto;max-width:640px}.ladder-card .chart-fig{max-width:500px}.chart-svg{display:block;width:100%;height:auto;border-radius:10px}
 .chart-row{display:flex;flex-wrap:wrap;gap:12px;justify-content:center}.chart-row>.chart-fig{flex:1 1 460px;max-width:600px;margin:0}
 .poll-tabs{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}.poll-tab.on{background:var(--primary,#2563eb);color:#fff;border-color:var(--primary,#2563eb)}
@@ -5458,6 +5505,141 @@
   $("#timerEnd").onclick = () => tAct("end");
   $("#timerReopen").onclick = () => tAct("reopen", curTime());
   [...document.querySelectorAll("#timerPanel [data-d]")].forEach(b => b.onclick = () => (sharedT() ? tAct("add", +b.dataset.d) : addTime(+b.dataset.d)));
+
+  // ---- 🎰 MÁY JACKPOT CHỌN HỌC SINH NGẪU NHIÊN (nút 🎰 trên thanh công cụ; ẩn trên máy HS) ------------------
+  //  Nối tiết học: HOOK.roster() → { key, title, students: [cả danh sách lớp], groups: [tên nhóm/máy] } — quay HS hoặc nhóm.
+  //  Mở bài riêng: GV dán danh sách tên một lần (mỗi dòng một tên, dán thẳng từ Excel được), lưu trên máy này (localStorage).
+  //  Không lặp lại đến khi hết lượt (có công tắc cho trúng lại, nút làm mới lượt). Space / Enter = quay, Esc = đóng.
+  const JP_LS = "thcs_jackpot_names", JP_POOL = "thcs_jackpot_pool:";
+  const jpGet = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
+  const jpSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+  const jpClean = (txt) => String(txt || "").split(/\r?\n/).map((l) => l.split("\t").map((c) => c.trim()).filter((c) => c && !/^\d+[.)]?$/.test(c)).join(" ").replace(/^\s*\d+\s*[.)\-–]\s*/, "").trim()).filter((l) => l && !/^(stt|số tt|họ (và )?tên|tên)\b/i.test(l)); // bỏ dòng tiêu đề cột khi dán từ Excel
+  let jpEl = null, jpMode = "students", jpLastIcon = null;
+  function jpSource() {
+    const r = ask("roster");
+    if (r && ((r.students || []).length || (r.groups || []).length)) return { key: "s:" + r.key, title: r.title || "Danh sách lớp", students: r.students || [], groups: r.groups || [], live: true };
+    return { key: "local", title: "Danh sách trên máy này", students: jpGet(JP_LS, []), groups: [], live: false };
+  }
+  function openJackpot() {
+    if (jpEl) { jpEl.remove(); jpEl = null; return; }
+    ensureEngineCSS();
+    const ov = el("div", "jp-ov"); jpEl = ov;
+    ov.innerHTML = `<div class="jp-box">
+      <button class="jp-x" title="Đóng (Esc)">✕</button>
+      <div class="jp-title">🎰 MÁY QUAY MAY MẮN 🎰</div>
+      <div class="jp-bar"><div class="jp-tabs"></div><span class="jp-src"></span><button class="jp-edit" title="Dán / sửa danh sách tên">✏️ Danh sách</button></div>
+      <div class="jp-machine">
+        <div class="jp-lights">${"<i></i>".repeat(18)}</div>
+        <div class="jp-mini"><span>🍒</span><span>⭐</span><span>🔔</span></div>
+        <div class="jp-window"><div class="jp-strip"></div></div>
+        <div class="jp-lever" title="Kéo cần để quay"><b></b><i></i></div>
+      </div>
+      <div class="jp-win" aria-live="polite"></div>
+      <div class="jp-ctrl"><button class="btn jp-go">🎰 QUAY!</button><button class="btn ghost jp-reset" title="Cho tất cả quay lại từ đầu">↺ Làm mới lượt</button>
+        <label class="jp-rep"><input type="checkbox"> Cho trúng lại</label><span class="jp-left"></span></div>
+      <div class="jp-hist"></div>
+      <div class="jp-editbox" hidden><p>Dán danh sách học sinh — mỗi dòng một tên (có thể dán cả cột STT và Họ tên từ Excel):</p><textarea rows="9" placeholder="Nguyễn Văn An&#10;Trần Thị Bình&#10;…"></textarea>
+        <div class="jp-ctrl"><button class="btn jp-save">💾 Lưu danh sách</button><button class="btn ghost jp-cancel">Huỷ</button></div></div>
+    </div>`;
+    document.body.appendChild(ov);
+    const $j = (s) => ov.querySelector(s), strip = $j(".jp-strip"), win = $j(".jp-win"), go = $j(".jp-go"), rep = $j(".jp-rep input");
+    let src = jpSource(), spinning = false, hist = [];
+    if (!src.live && jpMode === "groups") jpMode = "students";
+    const list = () => (jpMode === "groups" ? src.groups : src.students);
+    const poolKey = () => JP_POOL + src.key + ":" + jpMode;
+    const picked = () => jpGet(poolKey(), []).filter((n) => list().includes(n));
+    const remaining = () => { const p = picked(); return list().filter((n) => !p.includes(n)); };
+    const paint = () => {
+      $j(".jp-tabs").innerHTML = src.live ? `<button data-m="students" class="${jpMode === "students" ? "on" : ""}">🧑‍🎓 Học sinh</button><button data-m="groups" class="${jpMode === "groups" ? "on" : ""}">👥 Nhóm / máy</button>` : "";
+      $j(".jp-tabs").querySelectorAll("button").forEach((b) => { b.onclick = () => { if (spinning) return; jpMode = b.dataset.m; win.innerHTML = ""; paint(); }; });
+      $j(".jp-src").textContent = `${src.live ? "🔗 " : "💾 "}${src.title} · ${list().length} ${jpMode === "groups" ? "nhóm" : "HS"}`;
+      $j(".jp-edit").hidden = src.live;
+      const n = list().length, left = rep.checked ? n : remaining().length;
+      $j(".jp-left").textContent = n ? (rep.checked ? "Trúng lại được" : `Còn ${left}/${n} lượt`) : "";
+      go.disabled = spinning || !n;
+      if (!n) strip.innerHTML = `<div class="jp-name jp-empty">${src.live ? "Lớp chưa có danh sách" : "Bấm ✏️ Danh sách để dán tên HS"}</div>`;
+      else if (!spinning && !strip.dataset.done) strip.innerHTML = `<div class="jp-name">❓ ❓ ❓</div>`;
+      $j(".jp-hist").innerHTML = hist.length ? "🏅 Đã gọi: " + hist.map((h) => `<span>${esc(h)}</span>`).join("") : "";
+    };
+    // âm thanh: tiếng “tách” khi tên lướt qua + kèn chiến thắng (theo nút 🔊)
+    let actx = null;
+    const tick = (f) => { if (!S.sound) return; try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); const o = actx.createOscillator(), g = actx.createGain(); o.type = "square"; o.frequency.value = f; g.gain.setValueAtTime(0.04, actx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + 0.05); o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime + 0.06); } catch (e) {} };
+    // pháo giấy NGAY TRÊN máy quay (lớp #confetti của bài nằm dưới lớp phủ nên không thấy): bung từ tên trúng + mưa giấy từ trên xuống
+    const jpConfetti = () => {
+      const fx = el("div", "jp-fx"); ov.appendChild(fx);
+      const r = ($j(".jp-winner") || $j(".jp-window")).getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      const cols = ["#ef4444", "#f59e0b", "#fde047", "#10b981", "#3b82f6", "#ec4899", "#a855f7", "#ffffff"], W = window.innerWidth, H = window.innerHeight;
+      const piece = (x, y, x1, y1, x2, y2, delay, emoji) => {
+        const p = el("i", emoji ? "jp-emo" : null, emoji || ""); p.style.left = x + "px"; p.style.top = y + "px";
+        if (!emoji) { p.style.background = cols[Math.floor(Math.random() * cols.length)]; if (Math.random() < 0.35) p.style.borderRadius = "50%"; }
+        p.style.setProperty("--x1", x1 + "px"); p.style.setProperty("--y1", y1 + "px"); p.style.setProperty("--x2", x2 + "px"); p.style.setProperty("--y2", y2 + "px");
+        p.style.setProperty("--r", Math.round(Math.random() * 1080 - 540) + "deg"); p.style.animationDelay = delay + "s"; fx.appendChild(p);
+      };
+      for (let i = 0; i < 90; i++) { const a = Math.random() * Math.PI * 2, d = 120 + Math.random() * 260, x1 = Math.cos(a) * d, y1 = Math.sin(a) * d - 80; piece(cx, cy, x1, y1, x1 * 1.25, y1 + 260 + Math.random() * 200, Math.random() * 0.15); }
+      for (let i = 0; i < 60; i++) { const x = Math.random() * W; piece(x, -20, (Math.random() - 0.5) * 60, H * 0.45, (Math.random() - 0.5) * 140, H + 40, 0.2 + Math.random() * 1.2); }
+      ["🎉", "⭐", "🎊", "✨", "🎉", "⭐"].forEach((e, i) => { const a = -Math.PI / 2 + (i - 2.5) * 0.45; piece(cx, cy, Math.cos(a) * 230, Math.sin(a) * 170, Math.cos(a) * 300, Math.sin(a) * 120 + 260, 0.05 * i, e); });
+      setTimeout(() => fx.remove(), 3600);
+    };
+    const MINI = ["🍒", "⭐", "🔔", "🍀", "💎", "🍋", "🎁", "🏆", "🌟", "🍉", "👑", "🎈"];
+    function spin() {
+      if (spinning) return;
+      const all = list(); if (!all.length) return;
+      let pool = rep.checked ? all.slice() : remaining();
+      if (!pool.length) { jpSet(poolKey(), []); pool = all.slice(); win.innerHTML = `<div class="jp-note">🔄 Cả lớp đã được gọi hết một lượt — bắt đầu lượt mới!</div>`; }
+      const winner = pool[Math.floor(Math.random() * pool.length)];
+      spinning = true; delete strip.dataset.done; go.disabled = true; win.innerHTML = "";
+      ov.classList.add("jp-spin"); const lever = $j(".jp-lever"); lever.classList.remove("pull"); void lever.offsetWidth; lever.classList.add("pull");
+      // dải tên: ĐỦ MỘT VÒNG tất cả các tên (xáo trộn) — lớp ít HS thì lặp thêm vòng cho đủ dài — rồi vài tên ngẫu nhiên, tên trúng ở cuối
+      const shuffled = () => { const a = all.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+      const names = []; do { names.push(...shuffled()); } while (names.length < 18);
+      for (let i = 0; i < 4; i++) names.push(all[Math.floor(Math.random() * all.length)]);
+      names.push(winner);
+      const N = names.length - 1, dur = Math.min(10, Math.max(6, 6 + (all.length - 10) * 0.1)); // 6 giây (≤ 10 HS) … 10 giây (≥ 50 HS)
+      strip.innerHTML = names.map((n) => `<div class="jp-name">${esc(n)}</div>`).join("");
+      strip.style.transition = "none"; strip.style.transform = "translateY(0)";
+      const h = strip.firstChild.offsetHeight || 80;
+      const minis = [...ov.querySelectorAll(".jp-mini span")], mt = setInterval(() => minis.forEach((m) => { m.textContent = MINI[Math.floor(Math.random() * MINI.length)]; }), 110);
+      void strip.offsetHeight; // ép trình duyệt vẽ vị trí đầu rồi mới chạy hiệu ứng
+      strip.style.transition = `transform ${dur}s cubic-bezier(.33,.12,.22,1)`; strip.style.transform = `translateY(${-h * N}px)`;
+      let last = -1; const t0 = performance.now();
+      const watch = () => { const m = new DOMMatrix(getComputedStyle(strip).transform), k = Math.floor(-m.m42 / h + 0.5); if (k !== last) { last = k; tick(520 + (k % 5) * 60); } if (spinning && performance.now() - t0 < dur * 1000 + 100) requestAnimationFrame(watch); };
+      requestAnimationFrame(watch);
+      setTimeout(() => {
+        // bộ 3 icon trúng thưởng giống nhau, mỗi lần một bộ khác lần trước
+        const icon = MINI.filter((x) => x !== jpLastIcon)[Math.floor(Math.random() * (MINI.length - (MINI.includes(jpLastIcon) ? 1 : 0)))]; jpLastIcon = icon;
+        clearInterval(mt); minis.forEach((m) => { m.textContent = icon; });
+        strip.style.transition = "none"; strip.style.transform = `translateY(${-h * N}px)`; // chắc chắn dừng đúng tên trúng
+        spinning = false; strip.dataset.done = "1"; ov.classList.remove("jp-spin"); ov.classList.add("jp-won"); setTimeout(() => ov.classList.remove("jp-won"), 2600);
+        if (!rep.checked) jpSet(poolKey(), picked().concat([winner]));
+        hist = [winner].concat(hist.filter((x) => x !== winner)).slice(0, 12);
+        win.innerHTML = `<div class="jp-winner">🎉 <b>${esc(winner)}</b> 🎉</div>`;
+        jpConfetti(); if (S.sound) fanfare();
+        paint();
+      }, dur * 1000 + 150);
+      paint();
+    }
+    go.onclick = spin; $j(".jp-lever").onclick = spin;
+    $j(".jp-reset").onclick = () => { if (spinning) return; jpSet(poolKey(), []); win.innerHTML = `<div class="jp-note">↺ Đã làm mới — tất cả đều có thể được gọi.</div>`; paint(); };
+    rep.onchange = paint;
+    const close = () => { if (actx) try { actx.close(); } catch (e) {} ov.remove(); jpEl = null; document.removeEventListener("keydown", key, true); };
+    $j(".jp-x").onclick = close;
+    ov.onclick = (e) => { if (e.target === ov) close(); };
+    const edit = $j(".jp-editbox"), ta = edit.querySelector("textarea");
+    $j(".jp-edit").onclick = () => { edit.hidden = false; ta.value = jpGet(JP_LS, []).join("\n"); ta.focus(); };
+    $j(".jp-cancel").onclick = () => { edit.hidden = true; };
+    $j(".jp-save").onclick = () => { const names = [...new Set(jpClean(ta.value))]; jpSet(JP_LS, names); edit.hidden = true; src = jpSource(); win.innerHTML = `<div class="jp-note">💾 Đã lưu ${names.length} tên trên máy này.</div>`; paint(); };
+    const key = (e) => {
+      if (!jpEl) return;
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); if (!edit.hidden) edit.hidden = true; else close(); return; }
+      if (e.target && /TEXTAREA|INPUT/.test(e.target.tagName)) { e.stopPropagation(); return; }
+      if (e.key === " " || e.key === "Enter") { e.preventDefault(); e.stopPropagation(); spin(); return; }
+      e.stopPropagation();
+    };
+    document.addEventListener("keydown", key, true);
+    paint();
+  }
+  if (STUDENT) $("#btnJackpot").hidden = true;
+  $("#btnJackpot").onclick = openJackpot;
 
   // ---- BÚT VẼ / BÚT DẠ QUANG / TẨY --------------------------------------
   // pen.mode: null | "pen" | "highlight" | "eraser". Điều khiển bằng icon trên

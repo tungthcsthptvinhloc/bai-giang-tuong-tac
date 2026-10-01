@@ -177,7 +177,7 @@
       : `📍 Đang chiếu: <b>${cur ? esc(cur.name) : "Trang đầu"}</b>`;
     const tctl = !k ? "" : `<span class="actctl"><span class="clock ${kst}" id="actClock">${clockText(k, cur)}</span>
       ${k.st === "revealed" ? `<button class="btn small ghost" data-act="reopen">↺ Mở lại</button>` : `${k.running ? `<button class="btn small ghost" data-act="pause">⏸ Dừng giờ</button>` : kst !== "locked" ? `<button class="btn small" data-act="start">▶ Bấm giờ</button>` : ""}
-      ${kst !== "locked" ? `<button class="btn small ghost" data-act="add" data-sec="-30">−30s</button><button class="btn small ghost" data-act="add" data-sec="30">+30s</button>` : ""}
+      ${kst !== "locked" ? `<button class="btn small ghost" data-act="add" data-sec="-60" title="Bớt 1 phút">−1p</button><button class="btn small ghost" data-act="add" data-sec="-30">−30s</button><button class="btn small ghost" data-act="add" data-sec="30">+30s</button><button class="btn small ghost" data-act="add" data-sec="60" title="Thêm 1 phút">+1p</button>` : ""}
       <button class="btn small ghost" data-act="reset" title="Đặt lại đồng hồ về thời gian mặc định">↺</button>
       ${live.follow && hasItems ? `<button class="btn small ok" data-act="end">🏁 Kết thúc & công bố</button>` : ""}`}
       ${hasItems ? `<button class="btn small ghost" id="btnRedoAll" title="Xóa kết quả hoạt động này của tất cả nhóm để cả lớp làm lại">🔄 Cả lớp làm lại</button>` : ""}</span>`;
@@ -221,7 +221,7 @@
       sel.onchange = () => go(+sel.value); $("#idxPrev").onclick = () => go(ti - 1); $("#idxNext").onclick = () => go(ti + 1);
     }
     const ti = typeof live.teacherIdx === "number" ? live.teacherIdx : -1, curA = L && L.activities[ti], curAid = curA && (curA.id || "a" + ti);
-    document.querySelectorAll("#headBox [data-act]").forEach((b) => { b.onclick = () => { if (curA) act(C.actControl(DB, activeId, live, curAid, b.dataset.act, b.dataset.act === "add" ? +b.dataset.sec : curA.time || 60)); }; });
+    document.querySelectorAll("#headBox [data-act]").forEach((b) => { b.onclick = () => { if (curA) act(C.actControl(DB, activeId, live, curAid, b.dataset.act, b.dataset.act === "add" ? +b.dataset.sec : curA.time || 60, curA.time || 60)); }; });
     const redo = $("#btnRedoAll");
     if (redo) redo.onclick = () => {
       if (!curA || !confirm(`Cho CẢ LỚP làm lại “${curA.name}”?

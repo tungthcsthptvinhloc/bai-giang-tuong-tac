@@ -145,6 +145,9 @@ Hệ thống đã có sẵn (không cần làm gì trong bài, chỉ cần biế
   Đồng hồ hiện trên **thanh tiêu đề cố định** (`.topbar`) của máy HS và màn trình chiếu. HS tự
   làm: đồng hồ gắn cờ `free` — hiện trên máy HS, hết giờ chỉ báo; theo nhịp: hết giờ khóa, 🏁 công
   bố. Bảng ⏱️ có nút ✕ ẩn (Esc cũng ẩn). Mở file trực tiếp thì ⏱️ là đồng hồ riêng như cũ.
+  Nút chỉnh giờ: −1p · −30s · +30s · +1p (bảng 📊, bảng GV; ⏱️ có thêm ±15s). `C.actControl(DB, sid, live, aid, action, sec, def)`:
+  với `add`, `sec` là LƯỢNG cộng thêm, `def` = `a.time` là thời lượng gốc khi đồng hồ chưa bấm (5:00 bấm −30s → 4:30).
+  Mọi lời gọi `actControl` phải truyền `def` (trước đây thiếu nên −30s thành 5 giây, +30s thành 1 phút).
 - **Chế độ giáo viên** (phím T) nằm **góc trái**; "Làm lại hoạt động" khi nối tiết học xóa kết
   quả hoạt động đó của **cả lớp** (hook `classMode()/resetActivity(aid)`); bảng GV có nút
   "🔄 Cả lớp làm lại".
@@ -538,6 +541,16 @@ trường dữ liệu để kích hoạt — đây là yêu cầu chuẩn, khôn
   viên bấm ▶ để đếm ngược. Hết giờ **báo hiệu** (âm thanh + nhấp nháy), KHÔNG tự
   chuyển — giáo viên chủ động. `−/+` chỉnh nhanh tại lớp. Nút ✕ ẩn bảng đồng hồ. Ở chế độ
   lớp học, ⏱️ chính là đồng hồ chung của lớp (xem mục engine v5).
+- **Máy Jackpot chọn học sinh ngẫu nhiên (🎰 trên thanh công cụ, ẩn trên máy HS):** máy quay xèng có đèn
+  nhấp nháy, cần gạt, 3 ô hình quay ra bộ 3 icon GIỐNG NHAU (🍒🍒🍒, 👑👑👑… — mỗi lần trúng một bộ KHÁC lần trước),
+  dải tên lướt kèm tiếng “tách” — luôn chạy ĐỦ MỘT VÒNG tất cả các tên (xáo trộn) rồi mới chậm dần dừng ở tên trúng,
+  thời gian theo sĩ số 6 giây (≤ 10 HS) … 10 giây (≥ 50 HS); không có vạch kẻ giữa ô tên. Trúng thì pháo giấy bung
+  từ tên trúng + mưa giấy (lớp `.jp-fx` nằm TRÊN lớp phủ — `celebrate()` của bài bị lớp phủ che) + kèn (theo 🔊).
+  Nối tiết học: lấy **cả danh sách lớp** qua hook `roster()` (student.js) → `{ key, title, students, groups }`,
+  có thẻ chuyển 🧑‍🎓 Học sinh / 👥 Nhóm – máy. Mở bài riêng: GV bấm ✏️ Danh sách dán tên (mỗi dòng một tên, dán
+  thẳng cột STT + Họ tên từ Excel, tự bỏ dòng tiêu đề), lưu `localStorage` trên máy đó. **Không lặp đến khi hết
+  lượt** (hết thì tự làm mới), có “Cho trúng lại”, “↺ Làm mới lượt”, danh sách đã gọi. Space/Enter quay, Esc đóng.
+  Không cần khai báo gì trong `data/lesson.js` — mọi bài tự có sau `tools/update-lessons.js`.
 - **Bút vẽ (✏️ / phím P):** vẽ tay khoanh tròn/gạch chân trực tiếp trên màn hình,
   nhiều màu + tẩy + xóa hết. Tự xóa khi chuyển màn.
 - **Đèn pin — spotlight (🔦):** bấm để phủ tối màn hình, chừa một vòng sáng đi

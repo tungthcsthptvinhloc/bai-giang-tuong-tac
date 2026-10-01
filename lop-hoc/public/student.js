@@ -231,9 +231,15 @@
       // ⏱️ trên bài giảng = ĐỒNG HỒ CHUNG của lớp (cùng bảng 📊 và bảng GV) khi đang nối tiết học của bài này
       timer: {
         state() { const c = ctx(); if (!c) return null; return Object.assign(C.actClock(c.live, c.aid, DB.now()), { follow: !!c.live.follow, hasItems: c.hasItems }); },
-        act(action, sec) { const c = ctx(); if (!c) return Promise.resolve(); return C.actControl(DB, sid, c.live, c.aid, action, sec != null ? sec : c.a.time || 60); },
+        act(action, sec) { const c = ctx(); if (!c) return Promise.resolve(); return C.actControl(DB, sid, c.live, c.aid, action, sec != null ? sec : c.a.time || 60, c.a.time || 60); },
       },
       classMode: () => !!(sess && mine()),
+      // 🎰 Máy Jackpot: cả danh sách lớp + tên các nhóm/máy của tiết đang nối
+      roster() {
+        if (!sess || !mine()) return null;
+        const groups = Object.entries(sess.groups || {}).map(([id, g]) => ({ nm: C.groupName(sess, id), ord: ((sess.machines || {})[g.machine] || {}).order || 0 })).sort((x, y) => x.ord - y.ord).map((x) => x.nm);
+        return { key: sid, title: sess.meta.className ? (/^lớp/i.test(sess.meta.className) ? "" : "Lớp ") + sess.meta.className : "Danh sách lớp", students: C.sortedEntries(sess.roster).map(([, s]) => s.name).filter(Boolean), groups: [...new Set(groups)] };
+      },
       // Nút ⏸️ trên thanh công cụ bài giảng = nút "Tạm dừng cả lớp" của bảng GV (cùng live/paused)
       classPause: { toggle() { if (!sess || !mine() || !window.DB) return Promise.resolve(); return DB.set(`sessions/${sid}/live/paused`, !(sess.live || {}).paused); } },
       // Bài dạng chữ các nhóm đã gửi (sơ đồ tư duy, phiếu tự đánh giá) -> [{ name, text, at }]; null nếu chưa nối tiết học
@@ -283,7 +289,7 @@
       // cùng một đồng hồ với ⏱️ trên bài giảng và bảng GV
       html += `<div class="lh-pp-timer"><span class="lh-pp-clock ${k.over ? "locked" : st}${k.running && k.left <= 10 ? " hurry" : ""}">${clockTxt(k, a)}</span>`;
       if (st === "revealed") html += `<button data-act="reopen" title="Cho làm lại hoạt động này">↺ Mở lại</button>`;
-      else html += (k.running ? `<button data-act="pause">⏸</button>` : st !== "locked" && !k.over ? `<button data-act="start" class="prim">▶ Bấm giờ</button>` : "") + (st !== "locked" && !k.over ? `<button data-act="add" data-sec="-30">−30s</button><button data-act="add" data-sec="30">+30s</button>` : `<button data-act="reset" title="Đặt lại đồng hồ">↺</button>`) + (follow ? `<button data-act="end" class="end">🏁 Kết thúc</button>` : "");
+      else html += (k.running ? `<button data-act="pause">⏸</button>` : st !== "locked" && !k.over ? `<button data-act="start" class="prim">▶ Bấm giờ</button>` : "") + (st !== "locked" && !k.over ? `<button data-act="add" data-sec="-60" title="Bớt 1 phút">−1p</button><button data-act="add" data-sec="-30">−30s</button><button data-act="add" data-sec="30">+30s</button><button data-act="add" data-sec="60" title="Thêm 1 phút">+1p</button>` : `<button data-act="reset" title="Đặt lại đồng hồ">↺</button>`) + (follow ? `<button data-act="end" class="end">🏁 Kết thúc</button>` : "");
       html += `</div>`;
       if (!follow) html += `<p class="lh-pp-hint">HS tự làm: đồng hồ hiện trên máy HS, hết giờ chỉ báo. Bật <b>👣 theo nhịp GV</b> để khóa khi hết giờ và công bố kết quả cùng lúc.</p>`;
       const show = st === "revealed";
@@ -305,7 +311,7 @@
         html += `<div class="lh-pp-lists"><div class="ok"><h4>✅ Đúng (${good.length})</h4>${list(good)}</div><div class="no"><h4>❌ ${it.q ? "Sai" : "Có mục sai"} (${bad.length})</h4>${list(bad, it.q ? null : (x) => ` ${Math.round(C.judge(it, x.r).fraction * 100)}%`)}</div><div class="none"><h4>⏳ Chưa làm (${none.length})</h4>${list(none)}</div></div>`;
       }
       body.innerHTML = html;
-      body.querySelectorAll("[data-act]").forEach((b) => { b.onclick = () => C.actControl(DB, sid, live, aid, b.dataset.act, b.dataset.act === "add" ? +b.dataset.sec : (a.time || 60)).catch((e) => alert(e.message)); });
+      body.querySelectorAll("[data-act]").forEach((b) => { b.onclick = () => C.actControl(DB, sid, live, aid, b.dataset.act, b.dataset.act === "add" ? +b.dataset.sec : (a.time || 60), a.time || 60).catch((e) => alert(e.message)); });
     }
     onReady(() => {
       document.body.classList.add("lh-projector");

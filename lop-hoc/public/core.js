@@ -371,13 +371,15 @@
     return "open";
   }
   // ĐỒNG HỒ CHUNG của 1 hoạt động — một đồng hồ duy nhất cho ⏱️ trên bài giảng, bảng 📊 và bảng GV.
-  //   action: start | pause | add (sec có thể âm) | reset (về sec giây, dừng) | end (công bố) | reopen
+  //   action: start | pause | add (sec = số giây cộng thêm, có thể âm) | reset (về sec giây, dừng) | end (công bố) | reopen
+  //   def: thời lượng mặc định của hoạt động (a.time) — dùng khi đồng hồ chưa từng bấm (VD bấm −30s ngay khi mới mở: 5:00 → 4:30)
   //   HS tự làm (chưa theo nhịp): đồng hồ gắn cờ free — hiện trên máy HS, hết giờ chỉ báo, KHÔNG khóa.
-  function actControl(DB, sessId, live, aid, action, sec) {
+  function actControl(DB, sessId, live, aid, action, sec, def) {
     const p = `sessions/${sessId}/live/acts/${aid}`, cur = ((live || {}).acts || {})[aid] || {}, now = DB.now();
     const tag = (o) => (live && live.follow ? o : Object.assign(o, { free: true }));
     const running = !!cur.endsAt && cur.endsAt > now;
-    const left = running ? Math.ceil((cur.endsAt - now) / 1000) : Math.max(5, +cur.remaining || +sec || 60);
+    const base = action === "add" ? +def : +sec; // với "add", sec là lượng cộng thêm chứ không phải thời lượng
+    const left = running ? Math.ceil((cur.endsAt - now) / 1000) : Math.max(5, +cur.remaining || base || 60);
     if (action === "start") return DB.set(p, tag({ state: "open", endsAt: now + left * 1000, remaining: left }));
     if (action === "pause") return DB.set(p, tag({ state: "open", remaining: left }));
     if (action === "add") return running ? DB.set(p + "/endsAt", Math.max(now + 5000, cur.endsAt + sec * 1000)) : DB.set(p, tag({ state: "open", remaining: Math.max(5, left + sec) }));
