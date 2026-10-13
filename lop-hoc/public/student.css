@@ -161,3 +161,34 @@
 .lh-honor-near { font-size: 1.15rem; color: #1e3a8a; margin: 16px 0 0; }
 .lh-honor-hint { font-size: .9rem; color: #9ca3af; margin: 14px 0 0; }
 @media (max-width: 640px) { .lh-cheer h2 { font-size: 1.9rem; } .lh-cheer-emoji { font-size: 4.4rem; } .lh-cheer p { font-size: 1.05rem; } }
+
+/* ---- KẾT QUẢ HỌC TẬP (HS tự học) ---- */
+.lh-res { position: relative; border: 3px solid var(--primary, #6d28d9); border-radius: 22px; background: #fff; padding: 18px 20px; margin: 16px auto; max-width: 980px; color: #1f2937; }
+.lh-res h2 { margin: 0 0 4px; color: var(--primary-dark, #4c1d95); font-size: 1.7rem; }
+.lh-res h3 { margin: 18px 0 8px; color: var(--primary-dark, #4c1d95); }
+.lh-res-who { margin: 0 0 10px; color: #4b5563; }
+.lh-res-score { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; font-size: 1.15rem; }
+.lh-res-big { font-size: 3.2rem; font-weight: 900; color: var(--primary, #6d28d9); line-height: 1; }
+.lh-res-sub { color: #374151; }
+.lh-res-bar { position: relative; height: 26px; background: #ede9fe; border-radius: 999px; overflow: hidden; margin: 10px 0 8px; }
+.lh-res-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #22c55e, #16a34a); border-radius: 999px; transition: width .6s; }
+.lh-res-bar span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #14532d; }
+.lh-res-rank { font-size: 1.25rem; font-weight: 700; }
+.lh-res-warn { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 12px; padding: 8px 12px; color: #9a3412; }
+.lh-res-kw { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+.lh-res-kw span { background: #fef3c7; border: 1px solid #fcd34d; border-radius: 999px; padding: 4px 12px; font-weight: 800; color: #92400e; }
+.lh-res-core { margin: 0; padding-left: 22px; line-height: 1.5; }
+.lh-res-acts { display: flex; flex-direction: column; gap: 6px; }
+.lh-res-act { display: flex; align-items: center; gap: 10px; text-align: left; font: inherit; border: 2px solid #e5e7eb; background: #fff; border-radius: 12px; padding: 8px 12px; cursor: pointer; color: inherit; }
+.lh-res-act:hover { border-color: var(--primary, #6d28d9); }
+.lh-res-act .n { min-width: 28px; height: 28px; border-radius: 50%; background: #ede9fe; display: grid; place-items: center; font-weight: 800; color: #4c1d95; font-size: .9rem; }
+.lh-res-act .t { flex: 1; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.lh-res-act .s { font-weight: 700; white-space: nowrap; }
+.lh-res-act .go { color: var(--primary, #6d28d9); font-weight: 800; white-space: nowrap; }
+.lh-res-act.ok { border-color: #86efac; background: #f0fdf4; } .lh-res-act.ok .s { color: #15803d; }
+.lh-res-act.part .s { color: #b45309; } .lh-res-act.none { background: #f9fafb; } .lh-res-act.none .s { color: #9ca3af; }
+.lh-res-ov { position: fixed; inset: 0; z-index: 9000; background: rgba(20, 10, 50, .55); overflow: auto; padding: 20px 12px; }
+.lh-res-x { position: absolute; top: 10px; right: 12px; border: none; background: #f3f4f6; border-radius: 50%; width: 38px; height: 38px; font-size: 1.1rem; cursor: pointer; }
+.lh-res-done { text-align: center; font-size: 1.6rem; font-weight: 900; color: #15803d; margin: 0 40px 6px; }
+.lh-resbtn { font: inherit; cursor: pointer; }
+@media (max-width: 560px) { .lh-res { padding: 14px 12px; } .lh-res-big { font-size: 2.5rem; } .lh-res-act { flex-wrap: wrap; } .lh-res-act .go { display: none; } }

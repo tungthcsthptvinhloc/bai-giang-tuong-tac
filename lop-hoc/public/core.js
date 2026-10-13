@@ -7,9 +7,10 @@
  *   teacher/config                 { machines, phones }
  *   teacher/classes/{cid}          { name, students: { sid: { name, order } } }
  *   teacher/sessions/{sess}        bản sao meta (để liệt kê lịch sử)
- *   public/active                  id tiết đang mở (chỉ GV/màn trình chiếu đọc)
+ *   (nhiều tiết mở cùng lúc: tiết đang mở = teacher/sessions/{id}.status === "open"; mỗi tiết một mã)
  *   codes/{mã 4 số}                { s: id tiết, at }  (HS nhập mã -> tìm tiết; không liệt kê được)
- *   sessions/{sess}/meta           { lessonId, lessonTitle, classId, className, createdAt, status, code }
+ *   sessions/{sess}/meta           { lessonId, lessonTitle, classId, className, createdAt, status, code, mode: room|self }
+ *   sessions/{sess}/scores/{gid}   { score, done, total, correct, name, at }  điểm tự báo (HS tự học) -> thứ hạng
  *   sessions/{sess}/roster         { sid: { name, order } }
  *   sessions/{sess}/machines       { mid: { name, order } }
  *   sessions/{sess}/live           { follow, paused, showModel, showScore, teacherIdx, excluded:{aid:true},

@@ -50,7 +50,7 @@
     }
     const { sid, gid } = auth, base = "sessions/" + sid;
     const CK = `lh_cache_${sid}_${gid}`, OK = `lh_outbox_${sid}_${gid}`;
-    const cache = Object.assign({ answers: {}, texts: {}, live: {}, group: null, grading: {}, roster: {}, machines: {} }, LS.get(CK, {}));
+    const cache = Object.assign({ answers: {}, texts: {}, live: {}, group: null, grading: {}, roster: {}, machines: {}, meta: {}, scores: {} }, LS.get(CK, {}));
     let outbox = LS.get(OK, []), stopped = false, nav = { idx: -1, qi: 0 }, info = null;
     const unsubs = [];
     const persist = () => LS.set(CK, cache);
@@ -68,7 +68,9 @@
       actState: (aid) => C.actState(cache.live, aid, now()),
       showModel: () => !!cache.live.showModel,
       canNavigate: () => !cache.live.follow,
-      scoreText: () => { if (cache.live.showScore === false) return null; const s = myScore(); return `🏅 Điểm nhóm em: ${fmt1(s.score)}/10 · Đã làm ${s.done}/${s.total} bài`; },
+      scoreText: () => { if (cache.live.showScore === false) return null; const s = myScore(); return `🏅 Điểm ${isSelf() ? "của em" : "nhóm em"}: ${fmt1(s.score)}/10 · Đã làm ${s.done}/${s.total} bài`; },
+      // Màn KẾT QUẢ HỌC TẬP (chỉ khi HS tự học — tắt "theo nhịp GV"): engine chèn vào trang Tổng kết
+      resultsBox: () => (cache.live.follow ? null : resultsBox()),
       onAttempt(rec) {
         const [a] = C.splitKey(rec.key), st = C.actState(cache.live, a, now());
         if (st === "locked" || st === "revealed") return;
@@ -140,9 +142,11 @@
     setInterval(beat, 20000);
 
     // ---- giao diện: dải thông tin, đồng hồ, tạm dừng, kết thúc ---------------------
-    let strip, netDot, clockEl, pauseEl;
+    let strip, netDot, clockEl, pauseEl, resBtn, addLink;
     function buildStrip() {
-      strip = el("div", "lh-strip", `<span class="lh-net" title="Kết nối máy chủ"></span><span class="lh-group"></span><span class="lh-score"></span><span class="lh-sp"></span><a class="lh-link" href="/?add=1">➕ Thêm bạn</a>`);
+      strip = el("div", "lh-strip", `<span class="lh-net" title="Kết nối máy chủ"></span><span class="lh-group"></span><span class="lh-score"></span><span class="lh-sp"></span><button class="lh-link lh-resbtn" type="button" hidden>📊 Kết quả</button><a class="lh-link" href="/?add=1">➕ Thêm bạn</a>`);
+      resBtn = strip.querySelector(".lh-resbtn"); addLink = strip.querySelector("a.lh-link");
+      resBtn.onclick = () => showResults(false);
       const top = document.querySelector(".topbar");
       if (top) top.insertAdjacentElement("afterend", strip); else document.body.prepend(strip);
       netDot = strip.querySelector(".lh-net"); clockEl = topClock();
@@ -152,8 +156,11 @@
       if (!strip) return;
       const g = cache.group, mname = g ? g.name || ((cache.machines[g.machine] || {}).name) || "Nhóm" : "…";
       const names = g ? C.sortedEntries(cache.roster).filter(([s]) => g.members && g.members[s]).map(([, s]) => s.name) : [];
-      strip.querySelector(".lh-group").innerHTML = `💻 <b>${esc(mname)}</b>${names.length ? ": " + esc(names.join(", ")) : ""}`;
-      const sc = myScore(), pend = outbox.length;
+      strip.querySelector(".lh-group").innerHTML = isSelf() ? `🏠 <b>${esc(names[0] || mname)}</b> · tự học` : `💻 <b>${esc(mname)}</b>${names.length ? ": " + esc(names.join(", ")) : ""}`;
+      const sc = myScore(), pend = outbox.length; publishScore(sc); paintResults();
+      if (resBtn) resBtn.hidden = !!cache.live.follow;
+      if (addLink) addLink.hidden = isSelf();
+      checkDone(sc);
       strip.querySelector(".lh-score").innerHTML = `✔ ${sc.done}/${sc.total} bài` + (cache.live.showScore !== false ? ` · 🏅 <b>${fmt1(sc.score)}</b>/10` : "") + (pend ? ` · ⏳ đang gửi ${pend}` : "");
     }
     function updateClock() {
@@ -194,6 +201,55 @@
       ov.onclick = () => ov.remove(); document.body.appendChild(ov);
       setTimeout(() => ov.remove(), kind === "win" ? 4500 : 3200);
     }
+    // ---- KẾT QUẢ HỌC TẬP khi HS tự học: điểm/10 + số bài đúng + thanh %, thứ hạng trong tiết, nội dung cần nhớ, xem lại ----
+    const isSelf = () => (cache.meta || {}).mode === "self";
+    let lastPub = "";
+    function publishScore(sc) { // điểm tự báo của nhóm -> các máy khác tính thứ hạng (chỉ khi tự học)
+      if (!window.DB || stopped || cache.live.follow) return;
+      const g = cache.group, v = { score: C.round1(sc.score), done: sc.done, total: sc.total, correct: sc.correct, name: (g && (g.name || ((cache.machines[g.machine] || {}).name))) || "Nhóm" };
+      const k = JSON.stringify(v); if (k === lastPub || !sc.done) return; lastPub = k;
+      DB.set(`${base}/scores/${gid}`, Object.assign(v, { at: now() })).catch(() => { lastPub = ""; });
+    }
+    function rankOf(sc) {
+      const me = { score: C.round1(sc.score), correct: sc.correct }, all = Object.entries(cache.scores || {}).filter(([g, o]) => g !== gid && o && o.done);
+      const better = all.filter(([, o]) => o.score > me.score || (o.score === me.score && (o.correct || 0) > me.correct)).length;
+      return { rank: better + 1, of: all.length + 1 };
+    }
+    const mounted = new Set();
+    function resultsHTML() {
+      const L = window.LESSON || {}, sc = myScore(), show = cache.live.showScore !== false, its = items().items;
+      const g = cache.group, who = isSelf() ? ((C.sortedEntries(cache.roster).find(([s]) => g && g.members && g.members[s]) || [])[1] || {}).name || "Em" : (g && (g.name || ((cache.machines[g.machine] || {}).name))) || "Nhóm em";
+      const pct = Math.max(0, Math.min(100, Math.round(sc.score * 10))), r = rankOf(sc);
+      let h = `<h2>📊 Kết quả học tập</h2><p class="lh-res-who">${isSelf() ? "🏠" : "💻"} <b>${esc(who)}</b> · ${esc(L.meta && L.meta.title || "")}</p>`;
+      if (show) {
+        h += `<div class="lh-res-score"><span class="lh-res-big">${fmt1(sc.score)}</span><span>/10 điểm</span><span class="lh-res-sub">✔ Đúng <b>${sc.correct}/${sc.total}</b> bài · đã làm ${sc.done}/${sc.total}${sc.bonus ? ` · thưởng ${sc.bonus > 0 ? "+" : ""}${fmt1(sc.bonus)}` : ""}</span></div>
+          <div class="lh-res-bar"><i style="width:${pct}%"></i><span>${pct}%</span></div>
+          <div class="lh-res-rank">${r.rank <= 3 ? ["🥇", "🥈", "🥉"][r.rank - 1] : "🏆"} Thứ hạng: <b>${r.rank}/${r.of}</b> ${isSelf() ? "bạn" : "nhóm"} trong tiết${r.of === 1 ? " (chưa có bạn nào khác hoàn thành)" : ""}</div>`;
+      } else h += `<div class="lh-res-score"><span class="lh-res-sub">✔ Đã làm <b>${sc.done}/${sc.total}</b> bài</span></div>`;
+      if (sc.done < sc.total) h += `<p class="lh-res-warn">⏳ Còn <b>${sc.total - sc.done}</b> bài chưa làm — xem danh sách bên dưới.</p>`;
+      const core = L.coreKnowledge || [], kws = L.keywords || [];
+      if (core.length || kws.length) h += `<h3>📌 Nội dung cần nhớ</h3>${kws.length ? `<div class="lh-res-kw">${kws.map((k) => `<span>${esc(k)}</span>`).join("")}</div>` : ""}<ul class="lh-res-core">${core.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`;
+      const acts = (L.activities || []).map((a, i) => { const aid = aidOf(a, i), mine = its.filter((it) => it.aid === aid); if (!mine.length) return null; let done = 0, good = 0; mine.forEach((it) => { const rr = rec2(cache.answers, it.key); if (rr) { done++; good += C.judge(it, rr).fraction; } }); return { i, name: a.name, n: mine.length, done, good }; }).filter(Boolean);
+      h += `<h3>🔁 Xem lại bài đã học</h3><div class="lh-res-acts">${acts.map((x) => { const ok = x.done && x.good >= x.n - 1e-9, st = !x.done ? "none" : !show ? "done" : ok ? "ok" : "part";
+        return `<button type="button" class="lh-res-act ${st}" data-go="${x.i}"><span class="n">${x.i + 1}</span><span class="t">${esc(x.name)}</span><span class="s">${!x.done ? "Chưa làm" : !show ? `Đã làm ${x.done}/${x.n}` : ok ? "✅ Đúng hết" : `${Math.round(x.good / x.n * 100)}% đúng`}</span><span class="go">Xem lại →</span></button>`; }).join("")}</div>`;
+      return h;
+    }
+    function bindRes(box) { box.querySelectorAll("[data-go]").forEach((b) => { b.onclick = () => { const ov = box.closest(".lh-res-ov"); if (ov) ov.remove(); if (window.LessonApp) window.LessonApp.go(+b.dataset.go); }; }); }
+    function resultsBox() { const box = el("div", "card lh-res"); box.innerHTML = resultsHTML(); bindRes(box); mounted.add(box); return box; }
+    function paintResults() { mounted.forEach((b) => { if (!b.isConnected) { mounted.delete(b); return; } b.innerHTML = resultsHTML(); bindRes(b); }); }
+    function showResults(auto) {
+      const old = document.querySelector(".lh-res-ov"); if (old) old.remove();
+      const ov = el("div", "lh-res-ov"), box = resultsBox();
+      box.insertAdjacentHTML("afterbegin", `${auto ? '<div class="lh-res-done">🎉 Em đã học hết bài!</div>' : ""}<button class="lh-res-x" type="button" title="Đóng">✕</button>`);
+      box.querySelector(".lh-res-x").onclick = () => ov.remove(); ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+      ov.appendChild(box); document.body.appendChild(ov);
+      if (auto && window.LessonApp && window.LessonApp.celebrate) [0, 600].forEach((t) => setTimeout(window.LessonApp.celebrate, t));
+    }
+    function checkDone(sc) { // làm hết các bài chấm điểm lần đầu -> tự hiện màn kết quả (mỗi tiết một lần)
+      if (cache.live.follow || !sc.total || sc.done < sc.total) return;
+      const k = `lh_resdone_${sid}_${gid}`; if (LS.get(k, false)) return; LS.set(k, true);
+      setTimeout(() => showResults(true), 1600);
+    }
     function goneAway(msg) { if (stopped) return; stop(); LS.del("lh_auth"); overlay(`<div class="lh-big">🔁</div><h2>${esc(msg)}</h2><p><a class="lh-btn" href="/">Chọn lại để vào lớp →</a></p>`); }
 
     onReady(() => {
@@ -203,7 +259,8 @@
       if (!window.DB) return setNet(false);
       DB.onConn((on) => { setNet(on); if (on) { flush(); beat(); } });
       DB.ready.then(() => DB.student()).then(() => {
-        unsubs.push(DB.on(base + "/meta", (m) => { if (m && m.status !== "open") ended(); }));
+        unsubs.push(DB.on(base + "/meta", (m) => { if (m) { cache.meta = { mode: m.mode || "room", className: m.className }; persist(); updateStrip(); } if (m && m.status !== "open") ended(); }));
+        unsubs.push(DB.on(base + "/scores", (v, err) => { if (!err) { cache.scores = v || {}; persist(); paintResults(); } }));
         unsubs.push(DB.on(base + "/live", (l, err) => { if (!err) applyLive(l || {}); }));
         unsubs.push(DB.on(`${base}/groups/${gid}`, (g, err) => { if (err || !g) return goneAway("Nhóm của em không còn trong tiết học (thầy/cô đã xóa nhóm hoặc máy đã đổi phiên đăng nhập)."); cache.group = g; persist(); updateStrip(); }));
         unsubs.push(DB.on(`${base}/answers/${gid}`, (v, err) => { if (!err) mergeAnswers(v); }));
@@ -322,8 +379,10 @@
       if (!window.DB) return;
       DB.ready.then(() => DB.teacher.status()).then((s) => {
         if (!s.ok) { panel.querySelector(".lh-pp-head span").textContent = "🔒 Chưa đăng nhập giáo viên"; panel.querySelector(".lh-pp-body").innerHTML = `<p class="lh-pp-hint">Mở trang <a href="/giao-vien" target="_blank">/giao-vien</a> trên máy này để đăng nhập, rồi tải lại trang.</p>`; return; }
-        DB.on("public/active", (id) => {
-          if (id === sid) return; sid = id; sess = null; if (unsub) unsub(); unsub = null;
+        // tiết của trang chiếu: ?s=<id> (nút 📺 trên bảng GV) hoặc tiết đang mở mới nhất của bài này
+        const want = params.get("s");
+        const attach = (id) => {
+          if (id === sid) return; sid = id || null; sess = null; if (unsub) unsub(); unsub = null;
           if (!sid) return draw();
           let lastTI;
           unsub = DB.on("sessions/" + sid, (v) => {
@@ -334,6 +393,10 @@
             else if (ti !== lastTI && ti !== nav.idx && window.LessonApp) window.LessonApp.go(ti); // GV đổi hoạt động trên bảng điều khiển
             lastTI = ti;
           });
+        };
+        DB.on("teacher/sessions", (all) => {
+          const open = Object.entries(all || {}).filter(([, m]) => m && m.status === "open" && m.lessonId === lessonId).sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0));
+          attach(want && open.some(([id]) => id === want) ? want : open.length ? open[0][0] : null);
         });
       });
       // mỗi 0,5s: chỉ cập nhật chữ đồng hồ; đổi trạng thái (hết giờ) mới vẽ lại cả bảng

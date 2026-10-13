@@ -224,3 +224,14 @@ table.t tr.sel td { background: #fff7ed; }
 @keyframes dlgFade { from { opacity: 0; } }
 @keyframes dlgPop { from { transform: translateY(10px) scale(.97); opacity: 0; } }
 @media (max-width: 700px) { .top { gap: 10px; padding: 10px 12px; } .brand small { display: none; } .sess { min-width: 0; } }
+
+/* ---- nhiều tiết đang mở cùng lúc ---- */
+.sess-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.sess-chip { font: inherit; border: 2px solid #ddd6fe; background: #fff; color: #3b0764; border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.sess-chip.on { background: #6d28d9; border-color: #6d28d9; color: #fff; box-shadow: 0 3px 10px rgba(109, 40, 217, .3); }
+.sess-chip .sc-code { background: rgba(0, 0, 0, .08); border-radius: 999px; padding: 0 8px; margin-left: 4px; font-weight: 800; }
+.sess-chip.on .sc-code { background: rgba(255, 255, 255, .22); }
+.sess-chip.add { border-style: dashed; font-weight: 800; }
+.modes { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 14px; }
+.mode-opt { display: flex; gap: 8px; align-items: baseline; cursor: pointer; }
+.mode-opt input { transform: scale(1.2); }

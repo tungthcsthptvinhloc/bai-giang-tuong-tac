@@ -5330,6 +5330,7 @@
     if (kws.length) c.insertAdjacentHTML("beforeend", `<h2>🔑 Từ khóa cần nhớ</h2><div class="keywords">${kws.map(k => `<span>${esc(k)}</span>`).join("")}</div>`);
     c.appendChild(el("p", "badge", ask("scoreText") || `⭐ Điểm của lớp: ${state.score} · 🔥 Streak cao nhất: ${state.maxStreak}`));
     view.appendChild(c);
+    const rb = ask("resultsBox"); if (rb) view.appendChild(rb); // máy HS tự học: điểm, thứ hạng, nội dung cần nhớ, xem lại (lop-hoc/student.js)
     if (ct.challenge && ct.challenge.length) { a._chal = a._chal || { questions: ct.challenge, _keyBase: aid(a) + ":c", _parent: a }; const cc = el("div", "card"); cc.innerHTML = "<h2>🏆 Thử thách cuối</h2>"; view.appendChild(cc); renderQuizInto(cc, a._chal); }
   }
 

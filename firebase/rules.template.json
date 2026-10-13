@@ -11,6 +11,13 @@
         "roster": { ".read": "auth != null" },
         "machines": { ".read": "auth != null" },
         "live": { ".read": "auth != null" },
+        "scores": {
+          ".read": "auth != null",
+          "$g": {
+            ".write": "auth != null && root.child('sessions/' + $s + '/meta/status').val() === 'open' && root.child('sessions/' + $s + '/groups/' + $g + '/uid').val() === auth.uid",
+            ".validate": "!newData.exists() || newData.child('score').isNumber()"
+          }
+        },
         "claims": {
           ".read": "auth != null",
           "$kind": {

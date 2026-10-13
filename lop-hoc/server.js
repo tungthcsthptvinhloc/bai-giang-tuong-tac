@@ -12,7 +12,7 @@
  *   POST /db/write {op,path,value}   op = set | update | claim (ghi nếu chưa có)
  *   GET  /db/events            SSE: báo đường dẫn vừa đổi -> trình duyệt tự đọc lại
  *   POST /db/anon              cấp uid cho máy HS · GET /db/whoami · GET /db/time
- * Dữ liệu: data/db/teacher.json, public.json, codes.json (mã vào lớp), sessions/<id>.json
+ * Dữ liệu: data/db/teacher.json, public.json, codes.json (mã vào lớp), sessions/<id>.json — mở được NHIỀU tiết cùng lúc (mỗi tiết một mã)
  * ==========================================================================*/
 "use strict";
 const http = require("http"), fs = require("fs"), path = require("path"), os = require("os"), crypto = require("crypto");
@@ -124,7 +124,7 @@ function canRead(sg, a) {
   if (sg[0] === "codes") return sg.length === 2; // HS đọc được đúng 1 mã đã biết, không liệt kê được
   if (sg[0] !== "sessions" || sg.length < 3) return false;
   const s = sg[1], c = sg[2];
-  if (["meta", "roster", "machines", "live", "claims"].includes(c)) return true;
+  if (["meta", "roster", "machines", "live", "claims", "scores"].includes(c)) return true; // scores: điểm tự báo của từng nhóm -> xếp hạng khi tự học
   if (sg.length >= 4 && ["groups", "answers", "texts", "grading"].includes(c)) return getAt(["sessions", s, "groups", sg[3], "uid"]) === a.uid;
   return false;
 }
@@ -153,6 +153,7 @@ function canWrite(sg, newVal, a) {
     const act = (live.acts || {})[sg[4]] || {};  // theo nhịp: đổi được tới khi kết thúc / hết giờ
     return (!act.state || act.state === "open") && (!act.endsAt || act.free === true || Date.now() < act.endsAt + 3000);
   }
+  if (c === "scores") return sg.length === 4 && owner(sg[3]) && (newVal == null || (typeof newVal === "object" && typeof newVal.score === "number"));
   if (c === "texts") return sg.length === 6 && owner(sg[3]) && (newVal == null || String(newVal.text || "").length <= 3000);
   return false;
 }
@@ -251,7 +252,7 @@ server.on("error", (e) => {
   process.exit(1);
 });
 server.listen(PORT, "0.0.0.0", () => {
-  const urls = lanAddresses(), { manifest, problems } = lib.buildManifest(), act = tree.public && tree.public.active && tree.sessions[tree.public.active];
+  const urls = lanAddresses(), { manifest, problems } = lib.buildManifest(), open = Object.values(tree.sessions || {}).filter((x) => x && x.meta && x.meta.status === "open");
   console.log("\n==============================================================");
   console.log("  🏫  LỚP HỌC TƯƠNG TÁC — CHẾ ĐỘ OFFLINE (mạng LAN)");
   console.log("==============================================================");
@@ -259,7 +260,7 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log("  Học sinh vào : " + (urls.length ? urls.map((u) => u.url).join("   hoặc   ") : "(máy chưa kết nối mạng LAN)"));
   console.log(`  Mã giáo viên : ${config.teacherKey}  (khi mở bảng điều khiển từ máy/điện thoại khác)`);
   console.log(`  Bài giảng    : ${manifest.lessons.length} bài` + (problems.length ? `  ⚠️ ${problems.length} bài lỗi: ${problems.map((x) => x.id).join(", ")}` : ""));
-  if (act) console.log(`  Đang tiếp tục tiết: ${act.meta.className} — ${act.meta.lessonTitle}` + (act.meta.code ? `  ·  Mã vào lớp: ${act.meta.code}` : ""));
+  open.forEach((x) => console.log(`  Đang mở tiết : ${x.meta.className} — ${x.meta.lessonTitle}` + (x.meta.code ? `  ·  Mã vào lớp: ${x.meta.code}` : "") + (x.meta.mode === "self" ? "  ·  🏠 Tự học" : "")));
   console.log("  (Giữ cửa sổ này mở trong suốt tiết học. Đóng cửa sổ = tắt máy chủ.)\n");
   if (argv.includes("--open") && process.platform === "win32") require("child_process").exec(`start "" "http://localhost:${PORT}/giao-vien"`);
 });

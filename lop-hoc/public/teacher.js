@@ -47,18 +47,28 @@
     $("#btnLogout").hidden = DB.mode !== "firebase" && !(LS.get("lh_teacher_key", null));
     $("#btnLogout").onclick = () => DB.teacher.logout().then(() => location.reload());
     C.loadManifest().then((m) => { manifest = m; schedule(); }).catch(() => toast("Không tải được danh mục bài giảng (lessons/index.json)"));
-    DB.on("teacher", (v, err) => { if (err) return toast("Không đọc được dữ liệu giáo viên: " + err.message); T = v || {}; schedule(); });
-    DB.on("public/active", (id) => {
-      if (id === activeId) return;
-      activeId = id || null; sess = null; if (unsubSess) unsubSess(); unsubSess = null;
-      if (activeId) unsubSess = DB.on("sessions/" + activeId, (v) => { sess = v; ensureLesson(); ensureCode(); schedule(); });
-      schedule();
-    });
+    DB.on("teacher", (v, err) => { if (err) return toast("Không đọc được dữ liệu giáo viên: " + err.message); T = v || {}; syncOpen(); schedule(); });
+  }
+  // ---- NHIỀU TIẾT MỞ CÙNG LÚC: mỗi tiết một mã vào lớp; bảng GV chọn tiết đang xem (nhớ trên máy này) ----
+  const openList = () => Object.entries(T.sessions || {}).filter(([, m]) => m && m.status === "open").map(([id, m]) => ({ id, ...m })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  let addingNew = false; // đang ở màn "＋ Mở thêm bài"
+  function selectSession(id) {
+    if (id === activeId) return;
+    activeId = id || null; sess = null; if (unsubSess) unsubSess(); unsubSess = null;
+    LS.set("lh_cur_sess", activeId);
+    if (activeId) { addingNew = false; unsubSess = DB.on("sessions/" + activeId, (v) => { sess = v; ensureLesson(); ensureCode(); schedule(); }); }
+    $("#tabBody") && ($("#tabBody").innerHTML = ""); schedule();
+  }
+  function syncOpen() { // tiết đang xem đã kết thúc / chưa chọn -> chuyển sang tiết mở gần nhất
+    const open = openList();
+    if (activeId && open.some((x) => x.id === activeId)) return;
+    const saved = LS.get("lh_cur_sess", null), pick = open.find((x) => x.id === saved) || open[0];
+    selectSession(pick && !addingNew ? pick.id : null);
   }
   // ---- MÃ VÀO LỚP (4 chữ số): tự sinh khi bắt đầu tiết; HS mở web và nhập mã để vào ----
   async function newCode(except) {
     for (let i = 0; i < 40; i++) {
-      const c = String(1000 + Math.floor(Math.random() * 9000)); if (c === except) continue;
+      const c = String(1000 + Math.floor(Math.random() * 9000)); if ([].concat(except || []).includes(c)) continue;
       const v = await DB.get("codes/" + c).catch(() => null);
       if (!v || !v.s) return c;
       const st = await DB.get(`sessions/${v.s}/meta/status`).catch(() => null);
@@ -73,11 +83,11 @@
     newCode().then((c) => DB.update("", { [`sessions/${id}/meta/code`]: c, [`teacher/sessions/${id}/code`]: c, [`codes/${c}`]: { s: id, at: DB.now() } })).catch((e) => toast(e.message)).finally(() => { assigning = false; });
   }
   const curCode = () => (hasSess() ? sess.meta.code || null : null);
-  // Các thay đổi để đóng tiết đang mở (kèm xóa mã vào lớp của tiết đó)
-  function closeActive(up) {
-    if (!activeId) return up;
-    up[`sessions/${activeId}/meta/status`] = "ended"; up[`teacher/sessions/${activeId}/status`] = "ended";
-    const oc = sess && sess.meta && sess.meta.code; if (oc) up[`codes/${oc}`] = null;
+  // Các thay đổi để đóng MỘT tiết (kèm xóa mã vào lớp của tiết đó) — các tiết khác vẫn mở
+  function closeSession(up, id) {
+    if (!id) return up;
+    up[`sessions/${id}/meta/status`] = "ended"; up[`teacher/sessions/${id}/status`] = "ended";
+    const oc = id === activeId && sess && sess.meta ? sess.meta.code : ((T.sessions || {})[id] || {}).code; if (oc) up[`codes/${oc}`] = null;
     return up;
   }
   function ensureLesson() {
@@ -118,7 +128,7 @@
     if (!s && TABS.find((t) => t.id === tab && t.need)) tab = "classes";
     const groups = s ? Object.keys(sess.groups || {}).length : 0;
     const counts = s ? { groups, texts: Object.values(sess.texts || {}).reduce((t, g) => t + Object.values(g || {}).reduce((u, a) => u + Object.keys(a || {}).length, 0), 0), students: Object.keys(sess.roster || {}).filter((x) => !((sess.claims || {}).students || {})[x]).length || "" } : {};
-    const head = s ? sessionCard() : startCard();
+    const head = sessBar() + (s ? sessionCard() : startCard());
     const tabs = `<nav class="tabs">${TABS.filter((t) => !t.need || s).map((t) => `<button data-tab="${t.id}" class="${t.id === tab ? "on" : ""}">${t.label}${counts[t.id] ? `<span class="cnt">${counts[t.id]}</span>` : ""}</button>`).join("")}</nav>`;
     if (!$("#headBox")) main.innerHTML = `<div id="headBox"></div><div id="tabsBox"></div><div id="tabBody"></div>`;
     const ae = document.activeElement, typingHead = ae && $("#headBox").contains(ae) && /INPUT|SELECT|TEXTAREA/.test(ae.tagName);
@@ -131,13 +141,25 @@
     if (overlayKind === "board") showBoard();
   }
 
+  // ---- thanh các tiết đang mở (bấm để chuyển; ＋ để mở thêm bài khác cho lớp khác / tự học) ----
+  const modeIcon = (m) => (m && m.mode === "self" ? "🏠" : "🖥️");
+  function sessBar() {
+    const open = openList(); if (!open.length) return "";
+    return `<div class="sess-bar"><b>📚 Đang mở ${open.length} tiết:</b>${open.map((x) => `<button class="sess-chip ${x.id === activeId ? "on" : ""}" data-sess="${esc(x.id)}" title="${x.mode === "self" ? "Tự học cá nhân" : "Phòng máy"} · mở lúc ${new Date(x.createdAt).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" })}">${modeIcon(x)} <b>${esc(x.className)}</b> · ${esc(String(x.lessonTitle || "").split(":")[0])}${x.code ? ` <span class="sc-code">🔑 ${esc(x.code)}</span>` : ""}</button>`).join("")}
+      <button class="sess-chip add ${!activeId ? "on" : ""}" id="btnAddSess" title="Mở thêm một bài cho lớp khác (các tiết đang mở vẫn chạy)">＋ Mở thêm bài</button></div>`;
+  }
   // ---- bắt đầu tiết ----
   function startCard() {
     const groups = {}, last = LS.get("lh_last", {}), c = cfg();
     manifest.forEach((l) => { const g = /^tin\d+/.test(l.id) ? "Tin học " + l.id.match(/^tin(\d+)/)[1] : l.grade ? "Lớp " + l.grade : "Khác"; (groups[g] = groups[g] || []).push(l); });
     const classes = Object.entries(T.classes || {}).sort((a, b) => String(a[1].name).localeCompare(String(b[1].name), "vi", { numeric: true }));
-    return `<div class="card"><h2>▶️ Bắt đầu tiết học</h2>
+    const nOpen = openList().length;
+    return `<div class="card"><h2>▶️ ${nOpen ? "Mở thêm bài học" : "Bắt đầu tiết học"}</h2>
+      ${nOpen ? `<p class="hint">Đang mở ${nOpen} tiết — các tiết đó <b>vẫn chạy</b> (mỗi tiết một mã vào lớp riêng). Bấm tên tiết ở thanh trên để quay lại theo dõi.</p>` : ""}
       ${classes.length ? "" : `<p class="hint">⚠️ Chưa có danh sách lớp — mở tab <b>📋 Danh sách lớp</b> để nhập từ Excel.</p>`}
+      <div class="modes"><b>Kiểu tiết:</b>
+        <label class="mode-opt"><input type="radio" name="sessMode" value="room" ${last.mode !== "self" ? "checked" : ""}> 🖥️ <b>Phòng máy</b> <span class="hint">— HS chọn máy và tên các bạn ngồi cùng máy (làm theo nhóm)</span></label>
+        <label class="mode-opt"><input type="radio" name="sessMode" value="self" ${last.mode === "self" ? "checked" : ""}> 🏠 <b>Tự học cá nhân</b> <span class="hint">— ở nhà hoặc ở lớp: HS chỉ chọn tên mình, mỗi HS tính điểm riêng; học xong xem được kết quả và thứ hạng</span></label></div>
       <div class="form">
         <label class="f">Lớp<select id="selClass">${classes.map(([id, x]) => `<option value="${esc(id)}" ${id === last.classId ? "selected" : ""}>${esc(x.name)} (${Object.keys(x.students || {}).length} HS)</option>`).join("")}</select></label>
         <label class="f">Bài giảng<select id="selLesson">${Object.entries(groups).map(([g, ls]) => `<optgroup label="${esc(g)}">${ls.map((l) => `<option value="${esc(l.id)}" ${l.id === last.lessonId ? "selected" : ""}>${esc(l.title)} — ${l.items} bài chấm${l.open ? ", " + l.open + " tự luận" : ""}</option>`).join("")}</optgroup>`).join("")}</select></label>
@@ -149,16 +171,17 @@
         <span class="hint">HS chọn đúng 1 máy khi vào lớp (Máy 01…${C.pad2(c.machines)}${c.phones ? `, Điện thoại 01…${C.pad2(c.phones)}` : ""}); mỗi máy chỉ 1 nhóm.</span></div>
       <p class="hint">Bấm ▶ Bắt đầu → hệ thống tự sinh <b>mã vào lớp 4 chữ số</b>; HS mở trang web và nhập mã. Khi HS tự làm, mỗi câu chỉ tính <b>lần nộp đầu tiên</b>; khi bật <b>👣 theo nhịp GV</b>, HS được sửa bài đến khi thầy/cô bấm <b>🏁 Kết thúc</b>.</p></div>`;
   }
-  async function startSession(classId, lessonId) {
+  // Bắt đầu tiết MỚI — KHÔNG đóng các tiết đang mở (nhiều lớp tự học nhiều bài cùng lúc). mode: "room" | "self"
+  async function startSession(classId, lessonId, mode) {
     const cls = (T.classes || {})[classId]; if (!cls) throw new Error("Chưa chọn lớp");
     const Ls = await C.loadLesson(lessonId), c = cfg(), now = DB.now(), d = new Date(now);
     const id = `${d.getFullYear()}${C.pad2(d.getMonth() + 1)}${C.pad2(d.getDate())}-${C.pad2(d.getHours())}${C.pad2(d.getMinutes())}-${C.rid(4)}`;
-    const code = await newCode(curCode());
-    const meta = { lessonId, lessonTitle: (Ls.meta && Ls.meta.title) || lessonId, classId, className: cls.name, createdAt: now, status: "open", code };
+    const code = await newCode(openList().map((x) => x.code));
+    const meta = { lessonId, lessonTitle: (Ls.meta && Ls.meta.title) || lessonId, classId, className: cls.name, createdAt: now, status: "open", code, mode: mode === "self" ? "self" : "room" };
     const roster = {}; C.sortedEntries(cls.students).forEach(([sid, x], i) => { roster[sid] = { name: x.name, order: i + 1 }; });
-    const up = closeActive({});
-    Object.assign(up, { [`sessions/${id}`]: { meta, roster, machines: C.machineList(c.machines, c.phones), live: { follow: false, paused: false, showModel: false, showScore: true, teacherIdx: -1 } }, [`teacher/sessions/${id}`]: meta, "public/active": id, [`codes/${code}`]: { s: id, at: now } });
+    const up = { [`sessions/${id}`]: { meta, roster, machines: meta.mode === "self" ? null : C.machineList(c.machines, c.phones), live: { follow: false, paused: false, showModel: false, showScore: true, teacherIdx: -1 } }, [`teacher/sessions/${id}`]: meta, [`codes/${code}`]: { s: id, at: now } };
     await DB.update("", up);
+    addingNew = false; selectSession(id);
     return code;
   }
 
@@ -184,7 +207,8 @@
     const actRow = `<div class="follow-row">${navHtml}${tctl}${!live.follow && k ? `<span class="hint">HS tự làm: đồng hồ hiện trên máy HS, hết giờ chỉ báo (không khóa).</span>` : ""}</div>`;
     return `<div class="card">
       <div class="ctrl">
-        <a class="btn" href="/lessons/${encodeURIComponent(sess.meta.lessonId)}/?gv=1" target="_blank">📺 Mở bài giảng để trình chiếu</a>
+        <a class="btn" href="/lessons/${encodeURIComponent(sess.meta.lessonId)}/?gv=1&s=${encodeURIComponent(activeId)}" target="_blank">📺 Mở bài giảng để trình chiếu</a>
+        <span class="pill ${sess.meta.mode === "self" ? "good" : ""}" title="Kiểu tiết">${sess.meta.mode === "self" ? "🏠 Tự học cá nhân" : "🖥️ Phòng máy"}</span>
         <button class="tg ${live.follow ? "on" : ""}" data-set="follow" title="HS làm theo hoạt động GV đang chiếu; đúng/sai công bố khi GV bấm Kết thúc">👣 HS theo nhịp GV</button>
         <button class="tg warn ${live.paused ? "on" : ""}" data-set="paused" title="Che màn hình tất cả HS">⏸ Tạm dừng cả lớp</button>
         <button class="tg ${live.showModel ? "on" : ""}" data-set="showModel" title="HS bấm xem được hướng trả lời câu vận dụng/tình huống">💡 HS xem hướng trả lời</button>
@@ -199,8 +223,10 @@
   }
   const clockText = (k, a) => (k.st === "revealed" ? "🏁 Đã công bố" : k.st === "locked" || k.over ? "⏰ Hết giờ" : k.running ? "⏱ " + C.fmtClock(k.left) : "⏱ " + C.fmtClock(k.left || (a && a.time) || 60) + " (chưa bấm)");
   function bindHead() {
+    document.querySelectorAll("#headBox [data-sess]").forEach((b) => { b.onclick = () => { addingNew = false; selectSession(b.dataset.sess); }; });
+    const addB = $("#btnAddSess"); if (addB) addB.onclick = () => { addingNew = true; selectSession(null); };
     if (!hasSess()) {
-      const b = $("#btnStart"); if (b) b.onclick = () => { const classId = $("#selClass").value, lessonId = $("#selLesson").value; LS.set("lh_last", { classId, lessonId }); startSession(classId, lessonId).then((code) => { toast("Đã bắt đầu tiết học — mã vào lớp: " + code); tab = "groups"; LS.set("lh_tab", tab); showQR(code); }).catch((e) => alert("⚠️ " + (e.message || e))); };
+      const b = $("#btnStart"); if (b) b.onclick = () => { const classId = $("#selClass").value, lessonId = $("#selLesson").value, mode = (document.querySelector("input[name=sessMode]:checked") || {}).value || "room"; LS.set("lh_last", { classId, lessonId, mode }); b.disabled = true; startSession(classId, lessonId, mode).then((code) => { toast("Đã bắt đầu tiết học — mã vào lớp: " + code); tab = "groups"; LS.set("lh_tab", tab); showQR(code); }).catch((e) => { b.disabled = false; alert("⚠️ " + (e.message || e)); }); };
       const saveCfg = () => act(DB.set("teacher/config", { machines: Math.max(0, Math.min(99, +$("#cfgM").value || 0)), phones: Math.max(0, Math.min(99, +$("#cfgP").value || 0)) }), "Đã lưu số máy của phòng.");
       ["#cfgM", "#cfgP"].forEach((s) => { const x = $(s); if (x) x.onchange = saveCfg; });
       return;
@@ -211,7 +237,7 @@
       if (k === "follow" && v) return act(DB.update(S("live"), Object.assign({ follow: true }, C.followFixups(live, DB.now())))); // đồng hồ đang chạy lúc tự làm -> thành đồng hồ theo nhịp
       act(DB.set(S("live/" + k), v));
     }; });
-    $("#btnEnd").onclick = () => { if (confirm("Kết thúc tiết học?\nMáy HS sẽ báo kết thúc. Kết quả vẫn lưu trong 🕘 Lịch sử để xuất Excel.")) act(DB.update("", closeActive({ "public/active": null })), "Đã kết thúc tiết học."); };
+    $("#btnEnd").onclick = () => { const m = sess.meta; if (confirm(`Kết thúc tiết ${m.className} · ${m.lessonTitle}?\nMáy HS của tiết này sẽ báo kết thúc (các tiết khác vẫn mở). Kết quả vẫn lưu trong 🕘 Lịch sử để xuất Excel.`)) act(DB.update("", closeSession({}, activeId)), "Đã kết thúc tiết học."); };
     $("#btnBoard").onclick = showBoard;
     $("#btnExport").onclick = () => exportSession(sess);
     const sel = $("#selIdx");
@@ -416,9 +442,10 @@ Kết quả hoạt động này của tất cả các nhóm sẽ bị xóa; máy
   // ======================== TAB: LỊCH SỬ ========================
   // Phân trang (tải nhanh khi lịch sử dài) + chọn nhiều để xóa. Tiết đang diễn ra không xóa được.
   let histPage = 0, histSize = LS.get("lh_hsize", 20); const histSel = new Set();
+  const isOpenS = (id) => (((T.sessions || {})[id] || {}).status === "open");
   const histList = () => Object.entries(T.sessions || {}).map(([id, m]) => ({ id, ...m })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   async function deleteSessions(ids) {
-    ids = ids.filter((id) => id && id !== activeId && (T.sessions || {})[id]); if (!ids.length) return 0;
+    ids = ids.filter((id) => id && !isOpenS(id) && (T.sessions || {})[id]); if (!ids.length) return 0;
     for (let i = 0; i < ids.length; i += 40) { // ghi theo từng đợt cho nhẹ
       const up = {};
       await Promise.all(ids.slice(i, i + 40).map(async (id) => {
@@ -433,10 +460,10 @@ Kết quả hoạt động này của tất cả các nhóm sẽ bị xóa; máy
   }
   function tabHistory(body) {
     const h = histList();
-    [...histSel].forEach((id) => { if (!(T.sessions || {})[id] || id === activeId) histSel.delete(id); });
+    [...histSel].forEach((id) => { if (!(T.sessions || {})[id] || isOpenS(id)) histSel.delete(id); });
     if (!h.length) { body.innerHTML = `<div class="card empty">Chưa có tiết học nào.</div>`; return; }
     const pages = Math.max(1, Math.ceil(h.length / histSize)); histPage = Math.max(0, Math.min(pages - 1, histPage));
-    const view = h.slice(histPage * histSize, (histPage + 1) * histSize), deletable = view.filter((x) => x.id !== activeId);
+    const view = h.slice(histPage * histSize, (histPage + 1) * histSize), deletable = view.filter((x) => !isOpenS(x.id));
     const allOn = deletable.length > 0 && deletable.every((x) => histSel.has(x.id));
     const pager = pages > 1 ? `<div class="pager"><button class="btn small ghost" data-pg="0" ${histPage ? "" : "disabled"}>⏮</button><button class="btn small ghost" data-pg="${histPage - 1}" ${histPage ? "" : "disabled"}>◀</button>
       <span>Trang <b>${histPage + 1}</b>/${pages}</span><button class="btn small ghost" data-pg="${histPage + 1}" ${histPage < pages - 1 ? "" : "disabled"}>▶</button><button class="btn small ghost" data-pg="${pages - 1}" ${histPage < pages - 1 ? "" : "disabled"}>⏭</button></div>` : "";
@@ -444,9 +471,9 @@ Kết quả hoạt động này của tất cả các nhóm sẽ bị xóa; máy
         <button class="btn small ghost" id="hDelAll">🗑 Xóa tất cả</button>${histSel.size ? `<button class="btn small ghost" id="hClear">Bỏ chọn</button>` : ""}
         <span class="sp"></span><span class="muted">${h.length} tiết học</span>
         <select id="hSize" title="Số tiết mỗi trang">${[10, 20, 50, 100].map((n) => `<option value="${n}" ${n === histSize ? "selected" : ""}>${n} / trang</option>`).join("")}</select></div>
-      <table class="t"><thead><tr><th class="ck"><input type="checkbox" id="hAll" title="Chọn cả trang này" ${allOn ? "checked" : ""} ${deletable.length ? "" : "disabled"}></th><th>Thời gian</th><th>Lớp</th><th>Bài</th><th></th></tr></thead><tbody>${view.map((x) => `<tr class="${histSel.has(x.id) ? "sel" : ""}"><td class="ck">${x.id === activeId ? "" : `<input type="checkbox" data-hs="${esc(x.id)}" ${histSel.has(x.id) ? "checked" : ""}>`}</td><td>${new Date(x.createdAt).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" })}</td><td><b>${esc(x.className)}</b></td><td>${esc(x.lessonTitle)}</td>
-      <td class="nowrap"><button class="btn small ghost" data-xl="${esc(x.id)}">⬇️ Excel</button> ${x.id === activeId ? `<span class="pill good">đang diễn ra</span>` : `<button class="btn small ghost" data-resume="${esc(x.id)}">▶ Mở lại</button> <button class="btn small ghost" data-hdel="${esc(x.id)}" title="Xóa tiết học này">🗑</button>`}</td></tr>`).join("")}</tbody></table>${pager}
-      <p class="hint">Xóa là xóa hẳn kết quả của tiết học (không khôi phục được) — nên ⬇️ xuất Excel hoặc 📑 Xuất báo cáo trước khi xóa. Tiết đang diễn ra không xóa được.</p>`;
+      <table class="t"><thead><tr><th class="ck"><input type="checkbox" id="hAll" title="Chọn cả trang này" ${allOn ? "checked" : ""} ${deletable.length ? "" : "disabled"}></th><th>Thời gian</th><th>Lớp</th><th>Bài</th><th></th></tr></thead><tbody>${view.map((x) => `<tr class="${histSel.has(x.id) ? "sel" : ""}"><td class="ck">${isOpenS(x.id) ? "" : `<input type="checkbox" data-hs="${esc(x.id)}" ${histSel.has(x.id) ? "checked" : ""}>`}</td><td>${new Date(x.createdAt).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" })}</td><td><b>${esc(x.className)}</b></td><td>${esc(x.lessonTitle)}</td>
+      <td class="nowrap"><button class="btn small ghost" data-xl="${esc(x.id)}">⬇️ Excel</button> ${isOpenS(x.id) ? `<span class="pill good">đang mở</span> <button class="btn small ghost" data-goto="${esc(x.id)}">👁 Xem</button>` : `<button class="btn small ghost" data-resume="${esc(x.id)}">▶ Mở lại</button> <button class="btn small ghost" data-hdel="${esc(x.id)}" title="Xóa tiết học này">🗑</button>`}</td></tr>`).join("")}</tbody></table>${pager}
+      <p class="hint">Xóa là xóa hẳn kết quả của tiết học (không khôi phục được) — nên ⬇️ xuất Excel hoặc 📑 Xuất báo cáo trước khi xóa. Tiết đang mở không xóa được.</p>`;
     const redraw = () => { $("#tabBody").innerHTML = ""; renderAll(); };
     body.querySelectorAll("[data-pg]").forEach((b) => { b.onclick = () => { histPage = +b.dataset.pg; redraw(); }; });
     $("#hSize").onchange = (e) => { histSize = +e.target.value || 20; LS.set("lh_hsize", histSize); histPage = 0; redraw(); };
@@ -457,16 +484,17 @@ Kết quả hoạt động này của tất cả các nhóm sẽ bị xóa; máy
     body.querySelectorAll("[data-hdel]").forEach((b) => { b.onclick = () => { const id = b.dataset.hdel; if (confirm(`Xóa tiết học này?\n${label(id)}\n\nKết quả của tiết sẽ bị xóa hẳn, không khôi phục được.`)) act(deleteSessions([id]), "Đã xóa tiết học."); }; });
     $("#hDelSel").onclick = () => { const ids = [...histSel]; if (ids.length && confirm(`Xóa ${ids.length} tiết học đã chọn?\n\nKết quả các tiết này sẽ bị xóa hẳn, không khôi phục được.`)) act(deleteSessions(ids).then((n) => toast(`Đã xóa ${n} tiết học.`))); };
     $("#hDelAll").onclick = () => {
-      const ids = h.map((x) => x.id).filter((id) => id !== activeId); if (!ids.length) return toast("Không có tiết nào xóa được (tiết đang diễn ra không xóa).");
-      if (!confirm(`XÓA TẤT CẢ ${ids.length} tiết học trong lịch sử?${activeId ? "\n(Tiết đang diễn ra được giữ lại.)" : ""}\n\nToàn bộ kết quả sẽ bị xóa hẳn, không khôi phục được. Nên xuất báo cáo Excel trước.`)) return;
+      const ids = h.map((x) => x.id).filter((id) => !isOpenS(id)); if (!ids.length) return toast("Không có tiết nào xóa được (tiết đang mở không xóa).");
+      if (!confirm(`XÓA TẤT CẢ ${ids.length} tiết học trong lịch sử?${openList().length ? "\n(Các tiết đang mở được giữ lại.)" : ""}\n\nToàn bộ kết quả sẽ bị xóa hẳn, không khôi phục được. Nên xuất báo cáo Excel trước.`)) return;
       if (prompt(`Gõ chữ XOA để xác nhận xóa ${ids.length} tiết học:`) !== "XOA") return toast("Đã hủy — chưa xóa gì.");
       act(deleteSessions(ids).then((n) => { histPage = 0; toast(`Đã xóa ${n} tiết học.`); }));
     };
     body.querySelectorAll("[data-xl]").forEach((b) => { b.onclick = () => act(DB.get("sessions/" + b.dataset.xl).then((s) => { if (!s) throw new Error("Không còn dữ liệu tiết này"); return exportSession(s); })); });
+    body.querySelectorAll("[data-goto]").forEach((b) => { b.onclick = () => { addingNew = false; selectSession(b.dataset.goto); tab = "groups"; LS.set("lh_tab", tab); }; });
     body.querySelectorAll("[data-resume]").forEach((b) => { b.onclick = () => {
-      if (!confirm("Mở lại tiết này? (Tiết đang diễn ra — nếu có — sẽ kết thúc; HS nhập MÃ MỚI rồi vào lại bằng máy/tên cũ.)")) return;
+      if (!confirm("Mở lại tiết này? (Các tiết đang mở vẫn chạy; HS nhập MÃ MỚI rồi vào lại bằng máy/tên cũ.)")) return;
       const id = b.dataset.resume;
-      act(newCode(curCode()).then((code) => DB.update("", Object.assign(closeActive({}), { [`sessions/${id}/meta/status`]: "open", [`sessions/${id}/meta/code`]: code, [`teacher/sessions/${id}/status`]: "open", [`teacher/sessions/${id}/code`]: code, [`codes/${code}`]: { s: id, at: DB.now() }, "public/active": id }))), "Đã mở lại tiết học — có mã vào lớp mới.").then(() => { tab = "groups"; });
+      act(newCode(openList().map((x) => x.code)).then((code) => DB.update("", { [`sessions/${id}/meta/status`]: "open", [`sessions/${id}/meta/code`]: code, [`teacher/sessions/${id}/status`]: "open", [`teacher/sessions/${id}/code`]: code, [`codes/${code}`]: { s: id, at: DB.now() } })), "Đã mở lại tiết học — có mã vào lớp mới.").then(() => { addingNew = false; selectSession(id); tab = "groups"; LS.set("lh_tab", tab); });
     }; });
   }
   // ======================== TAB: XUẤT BÁO CÁO ========================

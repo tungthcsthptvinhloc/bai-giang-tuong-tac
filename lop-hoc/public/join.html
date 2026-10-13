@@ -125,19 +125,21 @@
     $("#chgCode").onclick = () => showCode("");
     const cm = claims.machines || {}, cs = claims.students || {};
     const mNames = Object.fromEntries(Object.entries(cm).map(([m, g]) => [g, (machines[m] || {}).name || m]));
-    const mine = myGid && Object.values(cm).includes(myGid);
+    const self = meta.mode === "self";
+    const mine = myGid && (self ? Object.values(cs).includes(myGid) : Object.values(cm).includes(myGid));
     if (!mine && mode === "add") mode = "new";
     $("#mineBox").hidden = !mine || mode === "add";
     if (mine) {
       const myM = Object.keys(cm).find((m) => cm[m] === myGid);
-      $("#mineName").textContent = (machines[myM] || {}).name || "Nhóm";
+      $("#mineName").textContent = self ? "lớp tự học" : (machines[myM] || {}).name || "Nhóm";
       $("#mineMembers").textContent = C.sortedEntries(roster).filter(([s]) => cs[s] === myGid).map(([, s]) => s.name).join(", ") || "(chưa có bạn nào)";
       $("#btnContinue").href = "/lessons/" + encodeURIComponent(meta.lessonId) + "/";
     }
     const picking = !mine || mode === "add";
     $("#pickBox").hidden = $("#bar").hidden = !picking;
-    $("#machineCard").hidden = mode === "add";
-    $("#stepText").textContent = mode === "add" ? "Chọn thêm bạn vào " + $("#mineName").textContent : "② Chọn tên TẤT CẢ các bạn ngồi cùng máy";
+    $("#machineCard").hidden = mode === "add" || self;
+    $("#btnAdd").hidden = self;
+    $("#stepText").textContent = self ? "🏠 Tự học cá nhân — chọn đúng TÊN CỦA EM" : mode === "add" ? "Chọn thêm bạn vào " + $("#mineName").textContent : "② Chọn tên TẤT CẢ các bạn ngồi cùng máy";
     $("#btnJoin").textContent = mode === "add" ? "➕ Thêm vào nhóm" : "🚀 Vào học";
     // máy
     const mg = $("#mgrid"); mg.innerHTML = "";
@@ -157,13 +159,13 @@
       const b = document.createElement("button");
       b.className = "st" + (selected.has(s) ? " sel" : ""); b.disabled = !!g;
       b.innerHTML = `<span class="no">${i + 1}</span><span class="nm">${esc(st.name)}${g ? `<small>đã vào ${esc(mNames[g] || "nhóm khác")}</small>` : ""}</span>`;
-      b.onclick = () => { selected.has(s) ? selected.delete(s) : selected.add(s); draw(); };
+      b.onclick = () => { if (self) { const on = selected.has(s); selected.clear(); if (!on) selected.add(s); } else selected.has(s) ? selected.delete(s) : selected.add(s); draw(); };
       grid.appendChild(b);
     });
     const names = C.sortedEntries(roster).filter(([s]) => selected.has(s)).map(([, s]) => s.name);
-    const mtxt = mode === "add" ? "" : machine ? `<b>${esc(machines[machine].name)}</b> · ` : "Chưa chọn máy · ";
-    $("#chosen").innerHTML = mtxt + (names.length ? `<b>${names.length}</b> bạn: ${esc(names.join(", "))}` : "chưa chọn bạn nào");
-    $("#btnJoin").disabled = !names.length || (mode !== "add" && !machine);
+    const mtxt = mode === "add" || self ? "" : machine ? `<b>${esc(machines[machine].name)}</b> · ` : "Chưa chọn máy · ";
+    $("#chosen").innerHTML = self ? (names.length ? `Em là: <b>${esc(names[0])}</b>` : "Chưa chọn tên") : mtxt + (names.length ? `<b>${names.length}</b> bạn: ${esc(names.join(", "))}` : "chưa chọn bạn nào");
+    $("#btnJoin").disabled = !names.length || (mode !== "add" && !self && !machine);
   }
 
   async function join() {
@@ -171,6 +173,14 @@
     const base = "sessions/" + sid;
     try {
       let gid = myGid;
+      if (meta.mode === "self") { // mỗi HS một nhóm riêng, đặt tên = tên HS, không giành máy
+        const s0 = [...selected][0]; gid = DB.newId();
+        await DB.set(`${base}/groups/${gid}`, { uid, name: roster[s0].name, self: true, createdAt: DB.now(), members: {} });
+        if (!(await DB.claim(`${base}/claims/students/${s0}`, gid).catch(() => false))) { await DB.remove(`${base}/groups/${gid}`).catch(() => {}); selected.clear(); throw new Error("Tên " + roster[s0].name + " đã vào học trên máy khác. Nếu đó là em, hãy tiếp tục trên máy cũ hoặc nhờ thầy/cô gỡ tên."); }
+        await DB.update(`${base}/groups/${gid}/members`, { [s0]: true });
+        LS.set("lh_auth", { sid, gid, lessonId: meta.lessonId });
+        location.href = "/lessons/" + encodeURIComponent(meta.lessonId) + "/"; return;
+      }
       if (mode !== "add") {
         gid = DB.newId();
         await DB.set(`${base}/groups/${gid}`, { uid, machine, createdAt: DB.now(), members: {} });

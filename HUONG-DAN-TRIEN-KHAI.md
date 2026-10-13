@@ -131,6 +131,10 @@ Luật này đảm bảo:
 > này, hãy làm lại mục 2.5 (chạy `node tools/make-rules.js` → dán → **Publish**) **trước khi push** bản mới
 > lên GitHub. Chưa dán luật mới thì HS nhập mã sẽ báo "Mã không đúng…".
 
+> ⚠️ **Bản cập nhật "mở nhiều bài cùng lúc + kết quả tự học" (tháng 10/2026) có thay đổi luật** (thêm mục `scores` để HS
+> tự học xem được thứ hạng). Làm lại mục 2.5 (chạy `node tools/make-rules.js` → dán → **Publish**). Chưa dán luật mới thì
+> mọi thứ vẫn chạy, chỉ riêng **thứ hạng** trên màn kết quả của HS luôn hiện 1/1.
+
 ---
 
 ## Phần 3 — Đưa mã nguồn lên GITHUB (1 lần)

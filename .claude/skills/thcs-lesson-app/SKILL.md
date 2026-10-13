@@ -140,6 +140,19 @@ Hệ thống đã có sẵn (không cần làm gì trong bài, chỉ cần biế
 - **Mã vào lớp 4 chữ số**: GV bấm Bắt đầu → tự sinh mã (dữ liệu `codes/{mã}` → id tiết);
   HS mở web → nhập mã (quét QR `/?c=mã` là tự điền) → chọn máy + tên. Mỗi tiết / mỗi lần
   Mở lại là mã mới; kết thúc tiết thì mã bị xóa. Có ở cả offline lẫn online.
+- **Mở NHIỀU tiết cùng lúc** (nhiều lớp tự học nhiều bài): bắt đầu tiết mới KHÔNG đóng tiết cũ; mỗi tiết một mã.
+  Tiết đang mở = `teacher/sessions/{id}.status === "open"` (không còn `public/active`). Bảng GV có thanh
+  "📚 Đang mở N tiết" (bấm để chuyển, nhớ trên máy GV) + "＋ Mở thêm bài"; ⏹ Kết thúc tiết chỉ đóng tiết đang xem;
+  Lịch sử: tiết đang mở có 👁 Xem, ▶ Mở lại không đóng tiết khác. Nút 📺 mở `/lessons/<bài>/?gv=1&s=<id tiết>`;
+  không có `s` thì màn chiếu theo tiết mở mới nhất của bài đó.
+- **Kiểu tiết** (`meta.mode`): 🖥️ `room` Phòng máy (chọn máy + tên các bạn cùng máy) hoặc 🏠 `self` **Tự học cá nhân**
+  (ở nhà/ở lớp: HS chỉ chọn tên mình, không chọn máy, mỗi HS là một nhóm `name` = tên HS, không có "Thêm bạn").
+- **Kết quả học tập khi HS tự học** (tắt 👣 theo nhịp): làm hết các bài chấm → tự hiện màn 📊 (mỗi tiết một lần); nút
+  "📊 Kết quả" trên dải thông tin; trang **Tổng kết** của bài tự chèn khung kết quả (hook `resultsBox()` — engine
+  `renderSummary`). Gồm: điểm X/10 + "đúng N/M bài" + thanh %, **thứ hạng trong tiết** (mỗi máy tự báo điểm vào
+  `sessions/{s}/scores/{gid}` — luật Firebase có mục `scores`), từ khoá + `coreKnowledge` (Nội dung cần nhớ), danh sách
+  hoạt động có bài chấm (✅ Đúng hết / % đúng / Chưa làm) với nút "Xem lại →". GV tắt 🏅 HS thấy điểm → ẩn điểm và thứ hạng.
+  ⇒ Bài nào cũng nên có `coreKnowledge` và `keywords` ngắn gọn vì HS đọc lại ở màn này.
 - **Một đồng hồ duy nhất**: ⏱️ trên bài giảng (trang trình chiếu nối tiết học — hook
   `timer.state()/act()`), bảng 📊 và bảng GV cùng điều khiển đồng hồ chung `live/acts/{aid}`.
   Đồng hồ hiện trên **thanh tiêu đề cố định** (`.topbar`) của máy HS và màn trình chiếu. HS tự
