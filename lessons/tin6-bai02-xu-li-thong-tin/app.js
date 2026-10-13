@@ -388,6 +388,7 @@
       <button class="icon-btn" id="btnSound" title="Bật/tắt âm thanh">🔊</button>
       <button class="icon-btn" id="btnTimer" title="Đồng hồ đếm giờ">⏱️</button>
       <button class="icon-btn" id="btnJackpot" title="Chọn học sinh ngẫu nhiên — máy quay Jackpot">🎰</button>
+      <button class="icon-btn" id="btnRank" title="Bảng xếp hạng của lớp (khi đang nối tiết học)" hidden>🏆</button>
       <button class="icon-btn" id="btnPen" title="Bút vẽ (P) — bấm lại để thoát">✏️</button>
       <button class="icon-btn" id="btnHighlight" title="Bút dạ quang (H) — bấm lại để thoát">🖍️</button>
       <button class="icon-btn" id="btnEraser" title="Cục tẩy — xóa nét đã vẽ">🧽</button>
@@ -420,6 +421,7 @@
     </div>
 
     <!-- Lớp vẽ (bút / bút dạ quang / tẩy) — điều khiển bằng các icon trên thanh dưới -->
+    <canvas class="hl-canvas" id="hlCanvas" hidden></canvas>
     <canvas class="pen-canvas" id="penCanvas" hidden></canvas>
 
     <!-- Đèn pin (spotlight): phủ tối, chừa 1 vòng sáng theo con trỏ -->
@@ -3723,6 +3725,7 @@
 .jp-editbox p{margin:0 0 6px;font-weight:700}.jp-editbox textarea{width:100%;font:inherit;font-size:1rem;border:2px solid #fcd34d;border-radius:10px;padding:8px;box-sizing:border-box}
 .jp-editbox .ghost{background:#fff;color:#374151;border-color:#d1d5db}
 @media (max-width:560px){.jp-machine{padding:30px 54px 18px 10px}.jp-lever{right:8px}.jp-mini span{width:42px;height:42px;font-size:1.5rem}}
+.hl-canvas{position:fixed;inset:0;z-index:39;pointer-events:none;mix-blend-mode:multiply}
 .chart-fig{margin:6px auto;max-width:640px}.ladder-card .chart-fig{max-width:500px}.chart-svg{display:block;width:100%;height:auto;border-radius:10px}
 .chart-row{display:flex;flex-wrap:wrap;gap:12px;justify-content:center}.chart-row>.chart-fig{flex:1 1 460px;max-width:600px;margin:0}
 .poll-tabs{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}.poll-tab.on{background:var(--primary,#2563eb);color:#fff;border-color:var(--primary,#2563eb)}
@@ -5411,7 +5414,7 @@
     const overlay = el("div", "magnify-overlay");
     const wrap = el("div", "magnify-wrap");
     const app = document.getElementById("app"), ar = app.getBoundingClientRect(), clone = app.cloneNode(true);
-    ["#penCanvas", "#confetti", ".controls", ".topbar", "#teacherBar", "#timerPanel", "#lightbox", "#spotlight", "#zoomLayer"].forEach((sel) => { const n = clone.querySelector(sel); if (n) n.style.visibility = "hidden"; });
+    ["#penCanvas", "#hlCanvas", "#confetti", ".controls", ".topbar", "#teacherBar", "#timerPanel", "#lightbox", "#spotlight", "#zoomLayer"].forEach((sel) => { const n = clone.querySelector(sel); if (n) n.style.visibility = "hidden"; });
     // Đặt bản sao đúng chỗ trang đang hiển thị (ar.top âm khi đã cuộn xuống) — trước đây luôn đặt ở đầu trang nên phóng sai vùng
     Object.assign(clone.style, { position: "absolute", top: ar.top + "px", left: ar.left + "px", width: ar.width + "px", minHeight: ar.height + "px", margin: "0" });
     const scrolled = []; [app, ...app.querySelectorAll("*")].forEach((n, i) => { if (n.scrollTop || n.scrollLeft) scrolled.push([i, n.scrollTop, n.scrollLeft]); }); // khung cuộn bên trong (bảng dài, danh sách…)
@@ -5640,23 +5643,32 @@
     paint();
   }
   if (STUDENT) $("#btnJackpot").hidden = true;
+  // 🏆 Bảng xếp hạng: chỉ hiện trên màn trình chiếu đang nối tiết học (hook classBoard của lop-hoc/student.js)
+  const syncRankBtn = () => { const b = $("#btnRank"); if (b) b.hidden = STUDENT || typeof HOOK.classBoard !== "function" || !ask("classMode"); };
+  $("#btnRank").onclick = () => { try { HOOK.classBoard(); } catch (e) { console.warn(e); } };
+  syncRankBtn(); if (!STUDENT && HOOK.classBoard) setInterval(syncRankBtn, 1500);
   $("#btnJackpot").onclick = openJackpot;
 
   // ---- BÚT VẼ / BÚT DẠ QUANG / TẨY --------------------------------------
   // pen.mode: null | "pen" | "highlight" | "eraser". Điều khiển bằng icon trên
   // thanh dưới (luôn bấm được vì thanh nằm TRÊN lớp canvas). Chọn lại cùng công
   // cụ = thoát chế độ vẽ. Canvas chỉ phủ vùng nội dung nên vẫn bấm được nút.
-  const canvas = $("#penCanvas");
+  // Bút dạ quang vẽ trên lớp RIÊNG (#hlCanvas, mix-blend-mode: multiply) bằng màu vàng ĐẶC: giống tô Highlight của Word —
+  // chữ bên dưới vẫn rõ, tô đè nhiều lần màu không đậm lên và không che mất nội dung. Bút đỏ vẽ trên #penCanvas (nằm trên).
+  const canvas = $("#penCanvas"), hlCanvas = $("#hlCanvas");
   const TOOL = {
     pen: { color: "#ef4444", width: 4, comp: "source-over", btn: "btnPen" },
-    highlight: { color: "rgba(250,204,21,0.22)", width: 24, comp: "source-over", btn: "btnHighlight" },
+    highlight: { color: "#fde047", width: 26, comp: "source-over", btn: "btnHighlight", layer: "hl" },
     eraser: { color: "#000", width: 34, comp: "destination-out", btn: "btnEraser" },
   };
-  function sizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; pen.ctx = canvas.getContext("2d"); }
-  function clearPenCanvas() { if (pen.ctx) pen.ctx.clearRect(0, 0, canvas.width, canvas.height); }
+  function sizeCanvas() {
+    [canvas, hlCanvas].forEach((c) => { c.width = window.innerWidth; c.height = window.innerHeight; });
+    pen.ctx = canvas.getContext("2d"); pen.hl = hlCanvas.getContext("2d");
+  }
+  function clearPenCanvas() { if (pen.ctx) pen.ctx.clearRect(0, 0, canvas.width, canvas.height); if (pen.hl) pen.hl.clearRect(0, 0, hlCanvas.width, hlCanvas.height); }
   function setPenMode(mode, fromFocus) {
     pen.mode = (pen.mode === mode) ? null : mode; // bấm lại công cụ đang chọn -> thoát
-    canvas.hidden = !pen.mode;
+    canvas.hidden = hlCanvas.hidden = !pen.mode;
     ["btnPen", "btnHighlight", "btnEraser"].forEach(id => $("#" + id).classList.toggle("on", pen.mode && TOOL[pen.mode].btn === id));
     if (pen.mode && !fromFocus && typeof focus !== "undefined" && focus.tool) setFocusTool(focus.tool); // bật bút -> tắt công cụ tập trung
     if (pen.mode && (canvas.width !== window.innerWidth || canvas.height !== window.innerHeight)) sizeCanvas();
@@ -5665,10 +5677,15 @@
   function penDown(e) { if (!pen.mode) return; pen.drawing = true; pen.last = penPos(e); e.preventDefault(); }
   function penMove(e) {
     if (!pen.mode || !pen.drawing) return; e.preventDefault();
-    const p = penPos(e), ctx = pen.ctx, t = TOOL[pen.mode];
-    ctx.lineJoin = ctx.lineCap = "round";
-    ctx.globalCompositeOperation = t.comp; ctx.strokeStyle = t.color; ctx.lineWidth = t.width;
-    ctx.beginPath(); ctx.moveTo(pen.last.x, pen.last.y); ctx.lineTo(p.x, p.y); ctx.stroke(); pen.last = p;
+    const p = penPos(e), t = TOOL[pen.mode];
+    const ctxs = pen.mode === "eraser" ? [pen.ctx, pen.hl] : [t.layer === "hl" ? pen.hl : pen.ctx]; // tẩy xoá cả hai lớp
+    ctxs.forEach((ctx) => {
+      if (!ctx) return;
+      ctx.lineJoin = ctx.lineCap = "round";
+      ctx.globalCompositeOperation = t.comp; ctx.strokeStyle = t.color; ctx.lineWidth = t.width;
+      ctx.beginPath(); ctx.moveTo(pen.last.x, pen.last.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+    });
+    pen.last = p;
   }
   function penUp() { pen.drawing = false; }
   canvas.addEventListener("mousedown", penDown); canvas.addEventListener("mousemove", penMove); window.addEventListener("mouseup", penUp);
@@ -5729,8 +5746,11 @@ Kết quả hoạt động này của tất cả các nhóm sẽ bị xóa; máy
   function toggleFull() { if (!document.fullscreenElement) document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); else document.exitFullscreen && document.exitFullscreen(); }
 
   document.addEventListener("keydown", (e) => {
-    const typing = /input|textarea|select/i.test(e.target.tagName);
+    const tg = e.target || {}, typing = /input|textarea|select/i.test(tg.tagName || "") || tg.isContentEditable || e.isComposing || e.key === "Process" || e.keyCode === 229;
     if (typing && e.key !== "Escape") return;
+    if (e.defaultPrevented && e.key !== "Escape") return; // thành phần khác (bảng tính, trò chơi…) đã dùng phím này
+    if ((e.ctrlKey || e.metaKey || e.altKey) && e.key.length === 1) return;
+    if (STUDENT && /^[pPhHfF]$/.test(e.key)) return; // máy HS: không bật bút / toàn màn hình bằng phím tắt
     switch (e.key) {
       case "ArrowRight": case " ": e.preventDefault(); next(); break;
       case "ArrowLeft": prev(); break;

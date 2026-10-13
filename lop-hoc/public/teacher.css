@@ -235,3 +235,10 @@ table.t tr.sel td { background: #fff7ed; }
 .modes { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 14px; }
 .mode-opt { display: flex; gap: 8px; align-items: baseline; cursor: pointer; }
 .mode-opt input { transform: scale(1.2); }
+
+/* bảng xếp hạng: nhiều nhóm thì chia cột, tự co giãn (zoom) cho vừa màn hình */
+.board.many { width: 96vw; }
+.board.many .rank-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 8px 12px; }
+.board.many .rank { margin-bottom: 0; font-size: 1.1rem; padding: 7px 12px; grid-template-columns: 46px 1fr 80px; }
+.board.many .rank .sc { font-size: 1.6rem; }
+.board .rank .mb { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -570,11 +570,20 @@ Kết quả hoạt động này của tất cả các nhóm sẽ bị xóa; máy
     if (code) return openOverlay("qr", `<div class="bigqr"><div class="bigcode-box"><small>Mã vào lớp</small><b>${esc(code)}</b></div>${QR.svg(joinUrl() + "?c=" + code)}<div class="url">${esc(u.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</div><div>${m ? `Lớp <b>${esc(m.className)}</b> · ${esc(m.lessonTitle)}<br>` : ""}Mở địa chỉ trên → nhập <b>mã vào lớp</b> (quét QR là tự điền mã) → chọn máy và tên các bạn ngồi cùng máy</div></div>`);
     openOverlay("qr", `<div class="bigqr">${QR.svg(u)}<div class="url">${esc(u.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</div><div>${m ? `Lớp <b>${esc(m.className)}</b> · ${esc(m.lessonTitle)}<br>` : ""}Quét mã hoặc gõ địa chỉ trên, chọn máy và tên các bạn ngồi cùng máy</div></div>`);
   }
+  // Co giãn khung xếp hạng cho vừa màn hình (danh sách dài vẫn thấy hết)
+  function fitBoard() {
+    const b = document.querySelector("#overlay .board"); if (!b) return;
+    const go = () => { if (!b.isConnected) return; b.style.zoom = ""; const s = Math.min(1, (window.innerHeight * 0.92) / b.offsetHeight, (window.innerWidth * 0.96) / b.offsetWidth); b.style.zoom = s < 1 ? String(Math.max(0.3, s)) : ""; };
+    go(); requestAnimationFrame(go);
+  }
+  window.addEventListener("resize", () => { if (overlayKind === "board") fitBoard(); });
   function showBoard() {
     if (!hasSess()) return closeOverlay();
-    const gs = Object.keys(sess.groups || {}).map((id) => ({ id, nm: C.groupName(sess, id), sc: C.scoreGroup(sess, id, info), mem: C.memberNames(sess, sess.groups[id]) })).sort((a, b) => b.sc.score - a.sc.score || b.sc.done - a.sc.done).slice(0, 10);
-    const medal = ["🥇", "🥈", "🥉"];
-    openOverlay("board", `<div class="board"><h1>🏆 Bảng xếp hạng</h1>${gs.map((g, i) => `<div class="rank"><div class="pos">${medal[i] || i + 1}</div><div>${esc(g.nm)} <div class="mb">${esc(g.mem.join(", "))}</div><div class="bar"><i style="width:${g.sc.score * 10}%"></i></div></div><div class="sc">${fmt1(g.sc.score)}</div></div>`).join("") || `<p style="text-align:center">Chưa có nhóm nào.</p>`}</div>`);
+    const gs = Object.keys(sess.groups || {}).map((id) => ({ id, nm: C.groupName(sess, id), sc: C.scoreGroup(sess, id, info), mem: sess.groups[id].self ? [] : C.memberNames(sess, sess.groups[id]) })).sort((a, b) => b.sc.score - a.sc.score || b.sc.correct - a.sc.correct || b.sc.done - a.sc.done);
+    const medal = ["🥇", "🥈", "🥉"], many = gs.length > 8;
+    let pos = 0; const rows = gs.map((g, i) => { if (!i || g.sc.score !== gs[i - 1].sc.score || g.sc.correct !== gs[i - 1].sc.correct) pos = i + 1; return { g, pos }; });
+    openOverlay("board", `<div class="board ${many ? "many" : ""}"><h1>🏆 Bảng xếp hạng</h1><div class="rank-list">${rows.map(({ g, pos: p }) => `<div class="rank"><div class="pos">${medal[p - 1] || p}</div><div>${esc(g.nm)} <div class="mb">${esc(g.mem.join(", "))}</div><div class="bar"><i style="width:${g.sc.score * 10}%"></i></div></div><div class="sc">${fmt1(g.sc.score)}</div></div>`).join("") || `<p style="text-align:center">Chưa có nhóm nào.</p>`}</div></div>`);
+    fitBoard();
   }
   setInterval(() => { if (!document.hidden && hasSess() && tab === "groups") schedule(); }, 15000); // cập nhật chấm online
 })();

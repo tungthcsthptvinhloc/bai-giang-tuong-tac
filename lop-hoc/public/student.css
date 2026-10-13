@@ -192,3 +192,26 @@
 .lh-res-done { text-align: center; font-size: 1.6rem; font-weight: 900; color: #15803d; margin: 0 40px 6px; }
 .lh-resbtn { font: inherit; cursor: pointer; }
 @media (max-width: 560px) { .lh-res { padding: 14px 12px; } .lh-res-big { font-size: 2.5rem; } .lh-res-act { flex-wrap: wrap; } .lh-res-act .go { display: none; } }
+
+/* ---- 🏆 BẢNG XẾP HẠNG trên màn chiếu (tự co giãn vừa màn hình) ---- */
+.lh-board { position: fixed; inset: 0; z-index: 9985; display: flex; align-items: center; justify-content: center; padding: 12px; overflow: hidden; cursor: pointer; background: radial-gradient(circle at 50% 30%, #3b2a7a, #120c2e 75%); animation: lhFade .3s ease; }
+.lh-board-card { width: min(980px, 96vw); color: #fff; text-align: center; }
+.lh-board-card.many { width: 96vw; }
+.lh-board-card h2 { font-size: 3rem; margin: 0; color: #fde68a; text-shadow: 0 4px 0 rgba(0, 0, 0, .3); }
+.lh-board-sub { font-size: 1.15rem; opacity: .8; margin: 4px 0 16px; }
+.lh-board-list { display: grid; grid-template-columns: 1fr; gap: 10px; text-align: left; }
+.many .lh-board-list { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 8px 12px; }
+.lh-rk { display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; align-items: center; background: rgba(255, 255, 255, .09); border-radius: 14px; padding: 10px 16px; font-size: 1.35rem; }
+.many .lh-rk { font-size: 1.1rem; padding: 7px 12px; grid-template-columns: 48px 1fr auto; }
+.lh-rk.top1 { background: linear-gradient(90deg, rgba(250, 204, 21, .35), rgba(255, 255, 255, .08)); }
+.lh-rk.top2 { background: linear-gradient(90deg, rgba(203, 213, 225, .3), rgba(255, 255, 255, .08)); }
+.lh-rk.top3 { background: linear-gradient(90deg, rgba(217, 119, 6, .3), rgba(255, 255, 255, .08)); }
+.lh-rk .pos { font-size: 1.9em; font-weight: 900; text-align: center; }
+.lh-rk .who { min-width: 0; }
+.lh-rk .who small { display: block; font-size: .7em; opacity: .75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lh-rk .bar { display: block; height: 7px; border-radius: 999px; background: rgba(255, 255, 255, .14); margin-top: 6px; overflow: hidden; }
+.lh-rk .bar i { display: block; height: 100%; background: linear-gradient(90deg, #a78bfa, #f59e0b); }
+.lh-rk .sc { font-size: 1.6em; font-weight: 900; color: #fde68a; text-align: right; line-height: 1.05; }
+.lh-rk .sc small { display: block; font-size: .45em; color: #e9d5ff; font-weight: 700; }
+.lh-honor { overflow: hidden; }
+.lh-hb.sm { font-size: 1.2rem; padding: 7px 14px; }

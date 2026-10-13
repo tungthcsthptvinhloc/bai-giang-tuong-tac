@@ -291,6 +291,8 @@
         act(action, sec) { const c = ctx(); if (!c) return Promise.resolve(); return C.actControl(DB, sid, c.live, c.aid, action, sec != null ? sec : c.a.time || 60, c.a.time || 60); },
       },
       classMode: () => !!(sess && mine()),
+      // 🏆 Bảng xếp hạng của lớp — nút trên thanh công cụ bài giảng (chỉ hiện khi đang nối tiết học)
+      classBoard: () => showBoard(),
       // 🎰 Máy Jackpot: cả danh sách lớp + tên các nhóm/máy của tiết đang nối
       roster() {
         if (!sess || !mine()) return null;
@@ -372,10 +374,11 @@
     }
     onReady(() => {
       document.body.classList.add("lh-projector");
-      panel = el("div", "lh-proj-panel", `<div class="lh-pp-head"><span>📡 Đang kết nối…</span><b class="lh-pp-code" title="Mã vào lớp — HS mở web và nhập mã này"></b><button class="lh-pp-qr" title="Hiện mã vào lớp + QR">QR</button><button class="lh-pp-tg" title="Thu gọn / mở rộng">▾</button></div><div class="lh-pp-body"></div>`);
+      panel = el("div", "lh-proj-panel", `<div class="lh-pp-head"><span>📡 Đang kết nối…</span><b class="lh-pp-code" title="Mã vào lớp — HS mở web và nhập mã này"></b><button class="lh-pp-qr lh-pp-rank" title="Bảng xếp hạng của lớp">🏆</button><button class="lh-pp-qr" title="Hiện mã vào lớp + QR">QR</button><button class="lh-pp-tg" title="Thu gọn / mở rộng">▾</button></div><div class="lh-pp-body"></div>`);
       document.body.appendChild(panel);
       panel.querySelector(".lh-pp-tg").onclick = () => { open = !open; LS.set("lh_panel_open", open); draw(); };
-      panel.querySelector(".lh-pp-qr").onclick = showQR;
+      panel.querySelector(".lh-pp-qr:not(.lh-pp-rank)").onclick = showQR;
+      panel.querySelector(".lh-pp-rank").onclick = () => showBoard();
       if (!window.DB) return;
       DB.ready.then(() => DB.teacher.status()).then((s) => {
         if (!s.ok) { panel.querySelector(".lh-pp-head span").textContent = "🔒 Chưa đăng nhập giáo viên"; panel.querySelector(".lh-pp-body").innerHTML = `<p class="lh-pp-hint">Mở trang <a href="/giao-vien" target="_blank">/giao-vien</a> trên máy này để đăng nhập, rồi tải lại trang.</p>`; return; }
@@ -386,7 +389,7 @@
           if (!sid) return draw();
           let lastTI;
           unsub = DB.on("sessions/" + sid, (v) => {
-            sess = v; draw();
+            sess = v; draw(); if (document.querySelector(".lh-board")) showBoard(true);
             if (!mine()) return;
             const ti = (sess.live || {}).teacherIdx;
             if (lastTI === undefined && typeof ti !== "number") DB.set(`sessions/${sid}/live/teacherIdx`, nav.idx).catch(() => {});
@@ -412,18 +415,43 @@
       }, 500);
       const s = el("script"); s.src = "/static/qr.js"; document.head.appendChild(s);
     });
+    // Co giãn khung cho VỪA MÀN HÌNH (danh sách dài vẫn thấy trọn vẹn): đo kích thước thật rồi thu nhỏ bằng zoom
+    function fitCard(card) {
+      const go = () => { if (!card.isConnected) return; card.style.zoom = ""; const s = Math.min(1, (window.innerHeight * 0.94) / card.offsetHeight, (window.innerWidth * 0.96) / card.offsetWidth); card.style.zoom = s < 1 ? String(Math.max(0.3, s)) : ""; };
+      go(); requestAnimationFrame(go); setTimeout(go, 700);
+      const onR = () => { if (!card.isConnected) return window.removeEventListener("resize", onR); go(); }; window.addEventListener("resize", onR);
+    }
+    // 🏆 BẢNG XẾP HẠNG trên màn chiếu (mọi nhóm/HS, điểm cao → thấp; nhiều nhóm thì chia nhiều cột và tự thu nhỏ cho vừa)
+    function showBoard(refresh) {
+      const old = document.querySelector(".lh-board");
+      if (!refresh && old) { old.remove(); return; }
+      if (!sess || !mine()) { if (old) old.remove(); return; }
+      const gs = Object.entries(sess.groups || {}).map(([id, g]) => ({ id, nm: C.groupName(sess, id), sc: C.scoreGroup(sess, id, items()), mem: g.self ? [] : C.memberNames(sess, g) }))
+        .sort((a, b) => b.sc.score - a.sc.score || b.sc.correct - a.sc.correct || b.sc.done - a.sc.done);
+      const medal = ["🥇", "🥈", "🥉"], many = gs.length > 8;
+      let pos = 0; const rows = gs.map((g, i) => { if (!i || g.sc.score !== gs[i - 1].sc.score || g.sc.correct !== gs[i - 1].sc.correct) pos = i + 1; return { g, pos }; });
+      const html = `<div class="lh-board-card ${many ? "many" : ""}"><h2>🏆 Bảng xếp hạng</h2><p class="lh-board-sub">Lớp ${esc(sess.meta.className)} · ${esc(sess.meta.lessonTitle)} · ${gs.length} ${sess.meta.mode === "self" ? "học sinh" : "nhóm"}</p>
+        <div class="lh-board-list">${rows.map(({ g, pos: p }) => `<div class="lh-rk ${p <= 3 ? "top" + p : ""}"><span class="pos">${medal[p - 1] || p}</span><span class="who"><b>${esc(g.nm)}</b>${g.mem.length ? `<small>${esc(g.mem.join(", "))}</small>` : ""}<i class="bar"><i style="width:${g.sc.score * 10}%"></i></i></span><span class="sc">${fmt1(g.sc.score)}<small>${g.sc.done}/${g.sc.total} bài</small></span></div>`).join("") || '<p class="lh-board-sub">Chưa có nhóm nào vào lớp.</p>'}</div>
+        <p class="lh-honor-hint">Bấm để đóng · Esc</p></div>`;
+      if (refresh && old) { old.innerHTML = html; fitCard(old.firstElementChild); return; }
+      const ov = el("div", "lh-board", html);
+      ov.onclick = () => ov.remove(); document.body.appendChild(ov); fitCard(ov.firstElementChild);
+      const esc2 = (e) => { if (e.key === "Escape" && ov.isConnected) { e.stopPropagation(); ov.remove(); document.removeEventListener("keydown", esc2, true); } };
+      document.addEventListener("keydown", esc2, true);
+    }
     // BẢNG VINH DANH khi GV bấm Kết thúc: các nhóm đúng hoàn toàn (pháo giấy + kèn chiến thắng theo nút 🔊)
     function honor(a, aid, groups) {
       const its = items().items.filter((x) => x.aid === aid);
       const res = groups.map((g) => { let good = 0, done = 0; its.forEach((it) => { const r = C.answerOf(sess, g.id, it); if (r) { done++; good += C.judge(it, r).fraction; } }); return { g, done, pct: its.length ? good / its.length : 0 }; });
       const win = res.filter((x) => x.done && x.pct >= 0.999), near = res.filter((x) => x.done && x.pct >= 0.5 && x.pct < 0.999).sort((x, y) => y.pct - x.pct).slice(0, 8);
       const old = document.querySelector(".lh-honor"); if (old) old.remove();
-      const badges = win.map((x, i) => `<span class="lh-hb" style="animation-delay:${(0.25 + i * 0.12).toFixed(2)}s">🏅 ${esc(x.g.nm)}</span>`).join("");
+      const step = Math.min(0.12, 1.8 / Math.max(1, win.length)); // nhiều nhóm: các huy hiệu hiện nhanh hơn (tối đa ~2 giây)
+      const badges = win.map((x, i) => `<span class="lh-hb${win.length > 12 ? " sm" : ""}" style="animation-delay:${(0.25 + i * step).toFixed(2)}s">🏅 ${esc(x.g.nm)}</span>`).join("");
       const ov = el("div", "lh-honor", `<div class="lh-honor-card"><div class="lh-honor-trophy">${win.length ? "🏆" : "💪"}</div><h2>${win.length ? "BẢNG VINH DANH" : "Cùng cố gắng nhé!"}</h2><p class="lh-honor-act">${esc(a.name)}</p>`
         + (win.length ? `<p class="lh-honor-sub">${win.length} nhóm làm đúng hoàn toàn — xin chúc mừng! 👏</p><div class="lh-hbs">${badges}</div>` : `<p class="lh-honor-sub">Chưa nhóm nào đúng hoàn toàn — cùng xem đáp án và giải thích nhé!</p>`)
         + (near.length ? `<p class="lh-honor-near">👍 Đáng khen: ${near.map((x) => `${esc(x.g.nm)} (${Math.round(x.pct * 100)}%)`).join(" · ")}</p>` : "") + `<p class="lh-honor-hint">Bấm để đóng</p></div>`);
-      ov.onclick = () => ov.remove(); document.body.appendChild(ov);
-      setTimeout(() => ov.remove(), 8000);
+      ov.onclick = () => ov.remove(); document.body.appendChild(ov); fitCard(ov.firstElementChild);
+      setTimeout(() => ov.remove(), Math.max(8000, 4000 + win.length * 400)); // danh sách dài -> hiện lâu hơn
       const app = window.LessonApp;
       if (win.length && app) { if (app.fanfare) app.fanfare(); if (app.celebrate) [0, 500, 1100].forEach((t) => setTimeout(app.celebrate, t)); }
     }

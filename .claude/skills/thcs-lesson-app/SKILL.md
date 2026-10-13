@@ -566,6 +566,15 @@ trường dữ liệu để kích hoạt — đây là yêu cầu chuẩn, khôn
   Không cần khai báo gì trong `data/lesson.js` — mọi bài tự có sau `tools/update-lessons.js`.
 - **Bút vẽ (✏️ / phím P):** vẽ tay khoanh tròn/gạch chân trực tiếp trên màn hình,
   nhiều màu + tẩy + xóa hết. Tự xóa khi chuyển màn.
+  **Bút dạ quang (🖍️ / phím H)** vẽ trên lớp riêng `#hlCanvas` (`mix-blend-mode: multiply`, màu vàng đặc) — giống
+  Highlight của Word: chữ bên dưới vẫn rõ, tô chồng nhiều lần không đậm lên/không che nội dung; tẩy xoá cả hai lớp.
+  Phím tắt P/H/F KHÔNG chạy trên máy HS, khi đang gõ (ô nhập, contenteditable, bộ gõ tiếng Việt `isComposing`/229),
+  khi phím đã được thành phần khác dùng (`defaultPrevented`) hoặc bấm kèm Ctrl/Alt — tránh lỗi HS gõ chữ “h” thì
+  con trỏ thành dấu + và kéo chuột ra vệt mực.
+- **🏆 Bảng xếp hạng** (nút trên thanh công cụ bài giảng + nút 🏆 ở bảng 📊, chỉ hiện khi màn chiếu đang nối tiết học —
+  hook `classBoard()` của lop-hoc/student.js; bảng GV có sẵn nút 🏆 Xếp hạng): xếp MỌI nhóm/HS theo điểm (cùng điểm
+  cùng hạng). Bảng xếp hạng và **Bảng vinh danh** tự co giãn vừa màn hình (`zoom` theo kích thước thật; > 8 nhóm chia
+  nhiều cột; > 12 nhóm vinh danh thì huy hiệu nhỏ lại và hiện nhanh hơn).
 - **Đèn pin — spotlight (🔦):** bấm để phủ tối màn hình, chừa một vòng sáng đi
   theo con trỏ; lăn chuột để đổi cỡ vòng; bấm lại để tắt. Giúp tập trung sự chú ý
   vào một nội dung. Loại trừ lẫn nhau với bút vẽ và khung phóng to.
