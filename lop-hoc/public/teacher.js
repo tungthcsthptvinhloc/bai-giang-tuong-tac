@@ -119,7 +119,7 @@
   const TABS = [
     { id: "groups", label: "💻 Nhóm", need: true }, { id: "questions", label: "📊 Theo câu hỏi", need: true },
     { id: "texts", label: "✍️ Tự luận", need: true }, { id: "students", label: "🧑‍🎓 Học sinh", need: true },
-    { id: "grading", label: "⚙️ Tính điểm", need: true }, { id: "classes", label: "📋 Danh sách lớp" }, { id: "history", label: "🕘 Lịch sử" }, { id: "report", label: "📑 Xuất báo cáo" },
+    { id: "grading", label: "⚙️ Tính điểm", need: true }, { id: "classes", label: "📋 Danh sách lớp" }, { id: "history", label: "🕘 Lịch sử" }, { id: "report", label: "📑 Xuất báo cáo" }, { id: "impact", label: "📈 Tác động" }, { id: "eval", label: "🎯 Đánh giá HS" },
   ];
   const hasSess = () => !!(sess && sess.meta && sess.meta.status === "open");
   function renderAll() {
@@ -137,7 +137,7 @@
     document.querySelectorAll("[data-tab]").forEach((b) => { b.onclick = () => { tab = b.dataset.tab; LS.set("lh_tab", tab); $("#tabBody").innerHTML = ""; renderAll(); }; });
     const body = $("#tabBody");
     if (ae && body.contains(ae) && /INPUT|TEXTAREA|SELECT/.test(ae.tagName) && ae.type !== "checkbox") return; // đang gõ -> không vẽ lại
-    ({ groups: tabGroups, questions: tabQuestions, texts: tabTexts, students: tabStudents, grading: tabGrading, classes: tabClasses, history: tabHistory, report: tabReport }[tab] || tabClasses)(body);
+    ({ groups: tabGroups, questions: tabQuestions, texts: tabTexts, students: tabStudents, grading: tabGrading, classes: tabClasses, history: tabHistory, report: tabReport, impact: tabImpact, eval: tabEval }[tab] || tabClasses)(body);
     if (overlayKind === "board") showBoard();
   }
 
@@ -239,7 +239,7 @@
     }; });
     $("#btnEnd").onclick = () => { const m = sess.meta; if (confirm(`Kết thúc tiết ${m.className} · ${m.lessonTitle}?\nMáy HS của tiết này sẽ báo kết thúc (các tiết khác vẫn mở). Kết quả vẫn lưu trong 🕘 Lịch sử để xuất Excel.`)) act(DB.update("", closeSession({}, activeId)), "Đã kết thúc tiết học."); };
     $("#btnBoard").onclick = showBoard;
-    $("#btnExport").onclick = () => exportSession(sess);
+    $("#btnExport").onclick = () => exportSession(sess, activeId);
     const sel = $("#selIdx");
     if (sel) {
       const n = L ? L.activities.length : 0, ti = typeof live.teacherIdx === "number" ? live.teacherIdx : -1;
@@ -302,7 +302,7 @@ Kết quả hoạt động này của tất cả các nhóm sẽ bị xóa; máy
     const its = info.items.filter((it) => sel === "all" || it.aid === sel);
     const gs = Object.keys(sess.groups || {}).map((id) => ({ id, nm: C.groupName(sess, id) }));
     body.innerHTML = `<div class="toolbar"><span class="muted">Hoạt động:</span><select id="actSel"><option value="current">📍 Hoạt động GV đang chiếu</option><option value="all">Tất cả (${info.items.length} bài)</option>${acts.map((a) => `<option value="${esc(a.id)}">${a.i + 1}. ${esc(a.name)}</option>`).join("")}</select>
-      <span class="hint">Cột xanh = đáp án đúng.</span></div>` + (its.length ? its.map((it, n) => {
+      <span class="hint">Cột xanh = đáp án đúng.</span><span class="sp"></span>${Object.keys(sess.answers || {}).length ? `<button class="btn small" id="btnAI" title="Soạn câu lệnh ẩn danh để AI phân tích tiết học và gợi ý dạy lại">🤖 Trợ lý AI phân tích${((T.ai || {})[activeId] || {}).note ? " ✓" : ""}</button>` : `<button class="btn small" disabled title="Chưa có dữ liệu để phân tích">🤖 Chưa có dữ liệu để phân tích</button>`}</div>` + (its.length ? its.map((it, n) => {
       const recs = gs.map((g) => ({ g, r: C.answerOf(sess, g.id, it) })), done = recs.filter((x) => x.r);
       const avg = done.length ? done.reduce((t, x) => t + C.judge(it, x.r).fraction, 0) / done.length : 0, cls = !done.length ? "" : avg >= 0.8 ? "good" : avg >= 0.5 ? "mid" : "low";
       let det = "";
@@ -316,6 +316,7 @@ Kết quả hoạt động này của tất cả các nhóm sẽ bị xóa; máy
         <span class="pill">${done.length}/${gs.length} nhóm</span>${done.length ? `<span class="pill ${cls}">đạt ${pct(avg)}</span>` : ""}</div>${det}${wait.length ? `<div class="pending">⏳ Chưa làm: ${wait.join(", ")}</div>` : ""}</div>`;
     }).join("") : `<div class="card empty">Hoạt động này không có bài chấm điểm.</div>`);
     $("#actSel").value = actSel; $("#actSel").onchange = (e) => { actSel = e.target.value; renderAll(); };
+    const ba = $("#btnAI"); if (ba) ba.onclick = () => { if (L) openAI(activeId, sess, L); else toast("Đang tải bài giảng…"); };
   }
   const optRow = (k, text, n, total, right, cls) => `<div class="opt ${right ? "right" : ""} ${cls || ""}"><span class="k">${esc(k)}</span><span>${esc(text)}</span><span class="bar"><i style="width:${total ? (n / total) * 100 : 0}%"></i></span><span class="n">${n}</span></div>`;
 
@@ -340,9 +341,10 @@ Kết quả hoạt động này của tất cả các nhóm sẽ bị xóa; máy
     const roster = C.sortedEntries(sess.roster), miss = roster.filter(([s]) => !cs[s]).length;
     body.innerHTML = `<div class="toolbar"><span>${miss ? `⚠️ <b>${miss}</b> HS chưa vào nhóm (Excel ghi "Không tham gia").` : "✅ Tất cả HS đã vào nhóm."}</span><span class="sp"></span><span class="hint">Chọn nhóm ở cột "Máy / Nhóm" để xếp/chuyển HS.</span></div>
       <table class="t"><thead><tr><th>STT</th><th>Họ và tên</th><th>Máy / Nhóm</th><th>Bài đã làm</th><th>Điểm</th></tr></thead><tbody>
-      ${roster.map(([s, st], i) => { const g = cs[s], sc = g && sess.groups[g] ? C.scoreGroup(sess, g, info) : null; return `<tr class="${g ? "" : "none"}"><td>${i + 1}</td><td>${esc(st.name)}</td>
+      ${roster.map(([s, st], i) => { const g = cs[s], sc = g && sess.groups[g] ? C.scoreGroup(sess, g, info) : null; return `<tr class="${g ? "" : "none"}"><td>${i + 1}</td><td>${esc(st.name)}${sess.meta.classId ? ` <button class="btn small ghost" data-evst="${s}" title="Xem hồ sơ đánh giá của em">🎯</button>` : ""}</td>
         <td><select data-move="${s}"><option value="">— chưa vào —</option>${gs.map((x) => `<option value="${x.id}" ${x.id === g ? "selected" : ""}>${esc(x.nm)}</option>`).join("")}</select></td>
         <td class="num">${sc ? `${sc.done}/${sc.total}` : ""}</td><td class="num">${sc ? fmt1(sc.score) : ""}</td></tr>`; }).join("")}</tbody></table>`;
+    body.querySelectorAll("[data-evst]").forEach((b) => { b.onclick = () => { Object.assign(evS, { classId: sess.meta.classId, scope: "student", sid: b.dataset.evst }); LS.set("lh_eval", evS); evDetail = b.dataset.evst; tab = "eval"; LS.set("lh_tab", tab); $("#tabBody").innerHTML = ""; renderAll(); }; });
     body.querySelectorAll("[data-move]").forEach((el) => { el.onchange = () => {
       const s = el.dataset.move, old = cs[s], g = el.value, up = { [`claims/students/${s}`]: g || null };
       if (old && sess.groups[old]) up[`groups/${old}/members/${s}`] = null;
@@ -449,7 +451,7 @@ Kết quả hoạt động này của tất cả các nhóm sẽ bị xóa; máy
     for (let i = 0; i < ids.length; i += 40) { // ghi theo từng đợt cho nhẹ
       const up = {};
       await Promise.all(ids.slice(i, i + 40).map(async (id) => {
-        up[`sessions/${id}`] = null; up[`teacher/sessions/${id}`] = null;
+        up[`sessions/${id}`] = null; up[`teacher/sessions/${id}`] = null; up[`teacher/ai/${id}`] = null;
         const code = ((T.sessions || {})[id] || {}).code;
         if (code) { const c = await DB.get("codes/" + code).catch(() => null); if (c && c.s === id) up[`codes/${code}`] = null; }
       }));
@@ -472,7 +474,7 @@ Kết quả hoạt động này của tất cả các nhóm sẽ bị xóa; máy
         <span class="sp"></span><span class="muted">${h.length} tiết học</span>
         <select id="hSize" title="Số tiết mỗi trang">${[10, 20, 50, 100].map((n) => `<option value="${n}" ${n === histSize ? "selected" : ""}>${n} / trang</option>`).join("")}</select></div>
       <table class="t"><thead><tr><th class="ck"><input type="checkbox" id="hAll" title="Chọn cả trang này" ${allOn ? "checked" : ""} ${deletable.length ? "" : "disabled"}></th><th>Thời gian</th><th>Lớp</th><th>Bài</th><th></th></tr></thead><tbody>${view.map((x) => `<tr class="${histSel.has(x.id) ? "sel" : ""}"><td class="ck">${isOpenS(x.id) ? "" : `<input type="checkbox" data-hs="${esc(x.id)}" ${histSel.has(x.id) ? "checked" : ""}>`}</td><td>${new Date(x.createdAt).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" })}</td><td><b>${esc(x.className)}</b></td><td>${esc(x.lessonTitle)}</td>
-      <td class="nowrap"><button class="btn small ghost" data-xl="${esc(x.id)}">⬇️ Excel</button> ${isOpenS(x.id) ? `<span class="pill good">đang mở</span> <button class="btn small ghost" data-goto="${esc(x.id)}">👁 Xem</button>` : `<button class="btn small ghost" data-resume="${esc(x.id)}">▶ Mở lại</button> <button class="btn small ghost" data-hdel="${esc(x.id)}" title="Xóa tiết học này">🗑</button>`}</td></tr>`).join("")}</tbody></table>${pager}
+      <td class="nowrap"><button class="btn small ghost" data-xl="${esc(x.id)}">⬇️ Excel</button> <button class="btn small ghost" data-ai="${esc(x.id)}" title="Trợ lý AI phân tích tiết học">🤖 AI${((T.ai || {})[x.id] || {}).note ? " ✓" : ""}</button> ${isOpenS(x.id) ? `<span class="pill good">đang mở</span> <button class="btn small ghost" data-goto="${esc(x.id)}">👁 Xem</button>` : `<button class="btn small ghost" data-resume="${esc(x.id)}">▶ Mở lại</button> <button class="btn small ghost" data-hdel="${esc(x.id)}" title="Xóa tiết học này">🗑</button>`}</td></tr>`).join("")}</tbody></table>${pager}
       <p class="hint">Xóa là xóa hẳn kết quả của tiết học (không khôi phục được) — nên ⬇️ xuất Excel hoặc 📑 Xuất báo cáo trước khi xóa. Tiết đang mở không xóa được.</p>`;
     const redraw = () => { $("#tabBody").innerHTML = ""; renderAll(); };
     body.querySelectorAll("[data-pg]").forEach((b) => { b.onclick = () => { histPage = +b.dataset.pg; redraw(); }; });
@@ -489,7 +491,12 @@ Kết quả hoạt động này của tất cả các nhóm sẽ bị xóa; máy
       if (prompt(`Gõ chữ XOA để xác nhận xóa ${ids.length} tiết học:`) !== "XOA") return toast("Đã hủy — chưa xóa gì.");
       act(deleteSessions(ids).then((n) => { histPage = 0; toast(`Đã xóa ${n} tiết học.`); }));
     };
-    body.querySelectorAll("[data-xl]").forEach((b) => { b.onclick = () => act(DB.get("sessions/" + b.dataset.xl).then((s) => { if (!s) throw new Error("Không còn dữ liệu tiết này"); return exportSession(s); })); });
+    body.querySelectorAll("[data-xl]").forEach((b) => { b.onclick = () => act(DB.get("sessions/" + b.dataset.xl).then((s) => { if (!s) throw new Error("Không còn dữ liệu tiết này"); return exportSession(s, b.dataset.xl); })); });
+    body.querySelectorAll("[data-ai]").forEach((b) => { b.onclick = () => act(DB.get("sessions/" + b.dataset.ai).then(async (s) => {
+      if (!s) throw new Error("Không còn dữ liệu tiết này");
+      if (!Object.keys(s.answers || {}).length && !Object.keys(s.texts || {}).length) return toast("Tiết này chưa có dữ liệu để phân tích.");
+      openAI(b.dataset.ai, s, await C.loadLesson(s.meta.lessonId));
+    })); });
     body.querySelectorAll("[data-goto]").forEach((b) => { b.onclick = () => { addingNew = false; selectSession(b.dataset.goto); tab = "groups"; LS.set("lh_tab", tab); }; });
     body.querySelectorAll("[data-resume]").forEach((b) => { b.onclick = () => {
       if (!confirm("Mở lại tiết này? (Các tiết đang mở vẫn chạy; HS nhập MÃ MỚI rồi vào lại bằng máy/tên cũ.)")) return;
@@ -555,10 +562,344 @@ Kết quả hoạt động này của tất cả các nhóm sẽ bị xóa; máy
     finally { repBusy = false; if (tab === "report") { $("#tabBody").innerHTML = ""; renderAll(); } }
   }
 
-  async function exportSession(s) {
+  async function exportSession(s, id) {
     const Lx = await C.loadLesson(s.meta.lessonId);
-    const wb = C.sessionWorkbook(s, Lx);
+    const wb = C.sessionWorkbook(s, Lx, ((T.ai || {})[id] || {}).note);
     XLSX.download(wb.sheets, wb.filename); toast("Đã xuất " + wb.filename);
+  }
+
+  // ======================== 🤖 TRỢ LÝ AI PHÂN TÍCH TIẾT HỌC (B1) ========================
+  // Soạn câu lệnh ẩn danh (C.aiPrompt) -> GV sao chép, dán vào Claude/ChatGPT/Gemini; dán lại câu trả lời để lưu cùng tiết.
+  // Lưu ở teacher/ai/{id} (nhánh của GV -> không phải sửa luật Firebase). Không gọi API, không cần khoá.
+  async function copyText(text, ta) {
+    try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; } } catch (e) {}
+    try { // bản LAN mở bằng http://192.168… không phải “secure context” -> chép kiểu cũ
+      const t = ta || Object.assign(document.createElement("textarea"), { value: text }); if (!ta) { t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); }
+      t.focus(); t.select(); const ok = document.execCommand("copy"); if (!ta) t.remove(); return ok;
+    } catch (e) { return false; }
+  }
+  function downloadText(text, name, type) { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type: (type || "text/plain") + ";charset=utf-8" })); a.download = name.replace(/[\\/:*?"<>|]/g, "-"); document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
+  const AI_LINKS = `<a class="btn ghost" href="https://claude.ai/new" target="_blank" rel="noopener">Mở Claude</a><a class="btn ghost" href="https://chatgpt.com/" target="_blank" rel="noopener">Mở ChatGPT</a><a class="btn ghost" href="https://gemini.google.com/app" target="_blank" rel="noopener">Mở Gemini</a>`;
+  function openAI(id, s, Lx) {
+    const m = s.meta || {}, saved = (T.ai || {})[id] || {};
+    openOverlay("ai", `<div class="card dlg ai-dlg"><h2>🤖 Trợ lý AI phân tích tiết học — ${esc(m.className)} · ${esc(m.lessonTitle)} (${C.fmtDate(m.createdAt || DB.now())})</h2>
+      <p class="ai-safe">🔒 Nội dung dưới đây KHÔNG chứa họ tên học sinh (đã thay bằng [HS]). Thầy/cô đọc lại trước khi dán.</p>
+      <div class="row"><label class="chk"><input type="checkbox" id="aiTexts" checked> Kèm câu trả lời tự luận</label><label class="chk"><input type="checkbox" id="aiInc" checked> Chỉ các hoạt động được tính điểm</label></div>
+      <div id="aiWarn"></div>
+      <textarea id="aiPrompt" class="ai-ta" spellcheck="false"></textarea>
+      <p class="muted" id="aiStats"></p>
+      <div class="row ai-btns"><button class="btn" id="aiCopy">📋 Sao chép</button>${AI_LINKS}</div>
+      <h3>Lưu nhận xét của AI <span class="muted">(không bắt buộc)</span></h3>
+      <textarea id="aiNote" class="ai-ta small" placeholder="Dán câu trả lời của AI vào đây…">${esc(saved.note || "")}</textarea>
+      <div class="row"><button class="btn" id="aiSave">💾 Lưu cùng tiết học</button><button class="btn ghost" id="aiTxt">⬇️ Tải về .txt</button><span class="muted" id="aiSavedAt">${saved.at ? "Đã lưu lúc " + C.fmtTime(saved.at) + " " + C.fmtDate(saved.at) : ""}</span></div>
+      <p class="hint">AI chỉ gợi ý cách dạy lại. Điểm số vẫn do hệ thống chấm theo đáp án; giáo viên quyết định nội dung dạy.</p></div>`);
+    const build = () => {
+      const r = C.aiPrompt(s, Lx, { withTexts: $("#aiTexts").checked, onlyIncluded: $("#aiInc").checked });
+      $("#aiPrompt").value = r.text;
+      $("#aiStats").textContent = `${r.stats.groups} nhóm · ${r.stats.items} câu · ${r.stats.texts} câu tự luận · ${r.stats.chars.toLocaleString("vi-VN")} ký tự`;
+      $("#aiWarn").innerHTML = r.warnings.map((w) => `<p class="ai-warn">⚠️ ${esc(w)}</p>`).join("");
+    };
+    build(); $("#aiTexts").onchange = build; $("#aiInc").onchange = build;
+    $("#aiCopy").onclick = async () => {
+      const ok = await copyText($("#aiPrompt").value, $("#aiPrompt"));
+      toast(ok ? "Đã sao chép câu lệnh — dán vào Claude / ChatGPT / Gemini." : "Không tự sao chép được — bấm vào ô, Ctrl+A rồi Ctrl+C.");
+      if (ok) DB.set(`teacher/ai/${id}/copiedAt`, DB.now()).catch(() => {});
+    };
+    $("#aiSave").onclick = () => {
+      const note = $("#aiNote").value.trim().slice(0, 20000), at = DB.now();
+      act(DB.update(`teacher/ai/${id}`, { at: note ? at : null, note: note || null, chars: note ? note.length : null }), note ? "Đã lưu nhận xét của AI cùng tiết học." : "Đã xoá nhận xét đã lưu.")
+        .then(() => { $("#aiSavedAt").textContent = note ? "Đã lưu lúc " + C.fmtTime(at) + " " + C.fmtDate(at) : ""; });
+    };
+    $("#aiTxt").onclick = () => downloadText(($("#aiNote").value.trim() ? "=== NHẬN XÉT CỦA AI ===\n" + $("#aiNote").value.trim() + "\n\n" : "") + "=== CÂU LỆNH ĐÃ GỬI ===\n" + $("#aiPrompt").value, `AI_${m.className}_${String(m.lessonTitle || "").split(":")[0]}_${C.fmtDate(m.createdAt || DB.now()).replace(/\//g, "-")}.txt`);
+  }
+
+  // ======================== TẢI CHI TIẾT NHIỀU TIẾT (dùng chung B2, B3) ========================
+  // Theo đợt 6 tiết; tiết đã kết thúc giữ trong bộ nhớ (không lưu localStorage vì có họ tên HS); tiết đang mở luôn tải lại.
+  const detailCache = new Map();
+  async function loadSessionsDetail(ids, onProgress) {
+    const fresh = {}, failed = [], need = ids.filter((id) => !detailCache.has(id)); let k = ids.length - need.length;
+    if (onProgress) onProgress(k, ids.length);
+    for (let i = 0; i < need.length; i += 6) {
+      await Promise.all(need.slice(i, i + 6).map((id) => DB.get("sessions/" + id).then((s) => {
+        if (!s) return failed.push(id);
+        s.id = id; s.meta = Object.assign({}, (T.sessions || {})[id] || {}, s.meta || {});
+        if (s.meta.status === "open") fresh[id] = s; else detailCache.set(id, s);
+      }).catch(() => failed.push(id))));
+      k += need.slice(i, i + 6).length; if (onProgress) onProgress(k, ids.length);
+    }
+    const sessions = ids.map((id) => detailCache.get(id) || fresh[id]).filter(Boolean), lessons = {}, missing = [];
+    await Promise.all([...new Set(sessions.map((s) => s.meta.lessonId))].map((id) => C.loadLesson(id).then((Lx) => { lessons[id] = Lx; }).catch(() => missing.push(id))));
+    return { sessions, lessons, failed, missing };
+  }
+  const chipsRow = (label, key, opts, sel) => `<div class="fl"><b>${label}</b><button class="chip2 ${sel.length ? "" : "on"}" data-ck="${key}" data-cv="">Tất cả</button>${opts.map(([v, t]) => `<button class="chip2 ${sel.map(String).includes(String(v)) ? "on" : ""}" data-ck="${key}" data-cv="${esc(v)}">${esc(t)}</button>`).join("")}</div>`;
+  const PERIODS = [["all", "Tất cả"], ["month", "Tháng này"], ["d30", "30 ngày qua"], ["hk1", "Học kì I"], ["hk2", "Học kì II"], ["year", "Cả năm học"], ["custom", "Tùy chọn"]];
+  const pc0 = (x) => (x == null ? "—" : Math.round(x * 100) + "%"), n1 = (x) => (x == null ? "—" : fmt1(x));
+
+  // ======================== TAB: 📈 TỔNG QUAN TÁC ĐỘNG (B2) ========================
+  const impF = Object.assign({ period: "all", from: "", to: "", mode: "all", classes: [], grades: [], hideTest: true }, LS.get("lh_impact", {}));
+  let impData = null, impBusy = false, impShowHidden = false;
+  function impLoad() {
+    impBusy = true; const ids = Object.keys(T.sessions || {});
+    loadSessionsDetail(ids, (k, n) => { const e = $("#impProg"); if (e) e.textContent = `Đang tải ${k}/${n} tiết…`; })
+      .then((d) => { impData = d; }).catch((e) => toast("Không tải được dữ liệu: " + (e.message || e))).finally(() => { impBusy = false; if (tab === "impact") { $("#tabBody").innerHTML = ""; renderAll(); } });
+  }
+  function weekChart(byWeek) {
+    if (!byWeek.length) return "";
+    const W = 760, H = 240, pl = 30, pr = 30, pt = 34, pb = 30, n = byWeek.length, bw = Math.min(46, (W - pl - pr) / n * 0.6), maxS = Math.max(1, ...byWeek.map((w) => w.sessions));
+    const x = (i) => pl + (W - pl - pr) * (i + 0.5) / n, yS = (v) => H - pb - (H - pt - pb) * v / maxS, yA = (v) => H - pb - (H - pt - pb) * v / 10;
+    const bars = byWeek.map((w, i) => `<rect x="${x(i) - bw / 2}" y="${yS(w.sessions)}" width="${bw}" height="${H - pb - yS(w.sessions)}" rx="4" class="imp-bar"><title>${w.sessions} tiết</title></rect><text x="${x(i)}" y="${H - pb - 6}" class="imp-bv">${w.sessions}</text><text x="${x(i)}" y="${H - pb + 16}" class="imp-ax">${C.fmtDate(w.week).slice(0, 5)}</text>`).join("");
+    const pts = byWeek.map((w, i) => (w.avg == null ? null : [x(i), yA(w.avg), w.avg])).filter(Boolean);
+    const line = pts.length ? `<polyline points="${pts.map((p) => p[0] + "," + p[1]).join(" ")}" class="imp-line"/>${pts.map((p) => `<circle cx="${p[0]}" cy="${p[1]}" r="4.5" class="imp-dot"/><text x="${p[0]}" y="${p[1] - 9}" class="imp-lv">${fmt1(p[2])}</text>`).join("")}` : "";
+    const grid = [0, 5, 10].map((v) => `<line x1="${pl}" x2="${W - pr}" y1="${yA(v)}" y2="${yA(v)}" class="imp-grid"/><text x="${W - pr + 6}" y="${yA(v) + 4}" class="imp-ax" text-anchor="start">${v}</text>`).join("");
+    return `<svg viewBox="0 0 ${W} ${H}" class="imp-chart" text-anchor="middle" role="img" aria-label="Số tiết và điểm trung bình theo tuần">${grid}${bars}${line}<text x="${pl}" y="14" class="imp-ax" text-anchor="start">▮ Số tiết (số trong cột)   ● Điểm TB các nhóm (thang 10, trục bên phải)</text></svg>`;
+  }
+  function impFilterText(pr) {
+    const cls = impF.classes.map((k) => { const m = Object.values(T.sessions || {}).find((x) => (x.classId || "n:" + C.norm(x.className)) === k); return m ? m.className : k; });
+    return `Thời gian: ${pr.label} · Hình thức: ${{ all: "tất cả", room: "phòng máy", self: "tự học" }[impF.mode]} · Lớp: ${cls.length ? cls.join(", ") : "tất cả"} · Khối: ${impF.grades.length ? impF.grades.join(", ") : "tất cả"}${impF.hideTest ? " · đã ẩn tiết chạy thử" : ""}`;
+  }
+  function tabImpact(body) {
+    const metas = Object.entries(T.sessions || {});
+    if (!metas.length) { body.innerHTML = `<div class="card empty">📈 Chưa có tiết học nào. Dạy ít nhất 1 tiết rồi quay lại.</div>`; return; }
+    if (!impData && !impBusy) impLoad();
+    const clsOpts = [...new Map(metas.map(([, m]) => [m.classId || "n:" + C.norm(m.className), m.className])).entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1]), "vi", { numeric: true }));
+    const grOpts = [...new Set(metas.map(([, m]) => C.gradeOf(m.className, m.lessonId)))].sort((a, b) => String(a).localeCompare(String(b), "vi", { numeric: true })).map((g) => [g, g === "Khác" ? "Khác" : "Khối " + g]);
+    const filters = `<div class="card imp-filters"><div class="fl"><b>Thời gian</b>${PERIODS.map(([k, t]) => `<button class="chip2 ${impF.period === k ? "on" : ""}" data-ip="${k}">${t}</button>`).join("")}
+        ${impF.period === "custom" ? `<label class="imp-date">từ <input type="date" id="impFrom" value="${esc(impF.from)}"></label><label class="imp-date">đến <input type="date" id="impTo" value="${esc(impF.to)}"></label>` : ""}</div>
+      <div class="fl"><b>Hình thức</b>${[["all", "Tất cả"], ["room", "🖥️ Phòng máy"], ["self", "🏠 Tự học"]].map(([k, t]) => `<button class="chip2 ${impF.mode === k ? "on" : ""}" data-im="${k}">${t}</button>`).join("")}</div>
+      ${chipsRow("Khối", "grades", grOpts, impF.grades)}${chipsRow("Lớp", "classes", clsOpts, impF.classes)}
+      <label class="chk"><input type="checkbox" id="impHide" ${impF.hideTest ? "checked" : ""}> Ẩn tiết chạy thử <span class="muted">(ít hơn 3 nhóm làm bài, hoặc tên lớp có “mẫu / thử / test”)</span></label></div>`;
+    if (impBusy || !impData) { body.innerHTML = filters + `<div class="card empty"><p id="impProg">Đang tải dữ liệu các tiết…</p></div>`; bindImpact(body); return; }
+    const pr = C.periodRange(impF.period, DB.now(), impF);
+    const st = C.impactStats(impData.sessions, impData.lessons, T.classes, { from: pr.from, to: pr.to, mode: impF.mode, classes: impF.classes, grades: impF.grades, hideTest: impF.hideTest, ai: T.ai || {}, aiAvailable: true });
+    const k = st.kpi, hiddenNote = st.hidden.length ? `<p class="hint">Đã ẩn ${st.hidden.length} tiết chạy thử — <button class="linkbtn" id="impShowH">${impShowHidden ? "ẩn danh sách" : "xem"}</button></p>${impShowHidden ? `<ul class="imp-hidden">${st.hidden.map((h) => `<li>${C.fmtDate(h.meta.createdAt || 0)} · ${esc(h.meta.className)} · ${esc(h.meta.lessonTitle)}</li>`).join("")}</ul>` : ""}` : "";
+    const actions = `<div class="row imp-actions"><button class="btn" id="impXls" ${k.sessions ? "" : "disabled"}>⬇️ Xuất Excel minh chứng</button><button class="btn ghost" id="impCopy" ${k.sessions ? "" : "disabled"}>📋 Sao chép đoạn văn cho hồ sơ</button><button class="btn ghost" id="impPrint" ${k.sessions ? "" : "disabled"}>🖨️ Chế độ chụp màn hình</button><span class="sp"></span><button class="btn small ghost" id="impReload">🔄 Tải lại</button></div>`;
+    if (!k.sessions) { body.innerHTML = filters + actions + `<div class="card empty">${st.hidden.length ? `Mọi tiết trong bộ lọc đều bị ẩn vì là tiết chạy thử. Bỏ tick <b>“Ẩn tiết chạy thử”</b> để xem.` : "Không có tiết học nào khớp bộ lọc."}</div>` + hiddenNote; bindImpact(body, st); return; }
+    const card = (big, label, note) => `<div class="imp-kpi"><div class="imp-big">${big}</div><div class="imp-lab">${label}</div><div class="imp-note">${note}</div></div>`;
+    const kpis = [card(k.sessions, "Số tiết đã dạy", "Số tiết sau bộ lọc"), card(`${k.classes} · ${k.lessons}`, "Số lớp · Số bài giảng", "Số lớp, số bài giảng khác nhau"), card(k.students.toLocaleString("vi-VN"), "Lượt HS tham gia", "Tổng HS đã vào nhóm của các tiết"),
+      card(pc0(k.presentRate), "HS có mặt tham gia", "Σ HS vào nhóm ÷ Σ sĩ số (tiết phòng máy)"), card(pc0(k.answerRate), "Nhóm trả lời ≥ 80% câu", "TB mỗi tiết: nhóm làm ≥ 80% số bài ÷ số nhóm"),
+      card(pc0(k.completion), "Tỉ lệ hoàn thành bài", "TB đã làm ÷ số bài được tính của các nhóm"), card(n1(k.avgScore), "Điểm trung bình", "TB điểm các nhóm, thang 10"), card(k.autoGraded.toLocaleString("vi-VN"), "Lượt trả lời chấm tự động", "Σ bài đã làm của mọi nhóm"),
+      card(k.aiSessions, "Tiết có dùng AI phân tích", "Có sao chép câu lệnh hoặc lưu nhận xét 🤖")].join("");
+    const arrow = (a, b) => (a == null || b == null ? "" : b > a ? ` <span class="up">▲</span>` : b < a ? ` <span class="down">▼</span>` : " ▬");
+    body.innerHTML = filters + actions + `<div class="imp-wrap">
+      <div class="card"><h3>📈 Tổng quan tác động <span class="muted">— ${esc(pr.label)}${impF.hideTest ? " · đã ẩn tiết chạy thử" : ""}</span></h3><div class="imp-kpis">${kpis}</div></div>
+      <div class="card"><h3>Số tiết và điểm trung bình theo tuần</h3>${weekChart(st.byWeek)}</div>
+      <div class="card"><h3>Theo lớp</h3><table class="t"><thead><tr><th>Lớp</th><th>Số tiết</th><th>Lượt HS</th><th>Tỉ lệ tham gia</th><th>Điểm TB</th><th>Tiết đầu → Tiết gần nhất</th></tr></thead><tbody>${st.byClass.map((c) => `<tr><td><b>${esc(c.name)}</b></td><td class="num">${c.sessions}</td><td class="num">${c.students}</td><td class="num">${pc0(c.presentRate)}</td><td class="num">${n1(c.avg)}</td><td class="num">${n1(c.first)} → ${n1(c.last)}${arrow(c.first, c.last)}</td></tr>`).join("")}</tbody></table><p class="hint">Các tiết khác bài nên chỉ để tham khảo xu hướng.</p></div>
+      <div class="card"><h3>10 câu khó nhất <span class="muted">(ít nhất 5 nhóm làm)</span></h3>${st.hardest.length ? `<table class="t"><thead><tr><th>Bài</th><th>Câu hỏi / bài tập</th><th>Số nhóm làm</th><th>Tỉ lệ đạt</th></tr></thead><tbody>${st.hardest.map((h) => `<tr><td>${esc(String(h.lessonTitle).split(":")[0])}</td><td>${esc(h.label.length > 120 ? h.label.slice(0, 119) + "…" : h.label)}</td><td class="num">${h.done}</td><td class="num"><b>${pc0(h.rate)}</b></td></tr>`).join("")}</tbody></table>` : `<p class="muted">Chưa có câu nào đủ 5 nhóm làm.</p>`}</div>
+      <div class="card"><h3>Theo bài giảng</h3><table class="t"><thead><tr><th>Bài</th><th>Số tiết</th><th>Điểm TB</th></tr></thead><tbody>${st.byLesson.map((l) => `<tr><td>${esc(l.title)}</td><td class="num">${l.sessions}</td><td class="num">${n1(l.avg)}</td></tr>`).join("")}</tbody></table></div></div>`
+      + hiddenNote + (impData.failed.length || st.skipped.length ? `<p class="hint">Đã bỏ qua ${impData.failed.length + st.skipped.length} tiết (lỗi tải hoặc bài giảng không còn trong danh mục).</p>` : "");
+    bindImpact(body, st, pr);
+  }
+  function bindImpact(body, st, pr) {
+    const save = () => { LS.set("lh_impact", impF); $("#tabBody").innerHTML = ""; renderAll(); };
+    body.querySelectorAll("[data-ip]").forEach((b) => { b.onclick = () => { impF.period = b.dataset.ip; save(); }; });
+    body.querySelectorAll("[data-im]").forEach((b) => { b.onclick = () => { impF.mode = b.dataset.im; save(); }; });
+    body.querySelectorAll("[data-ck]").forEach((b) => { b.onclick = () => { const f = b.dataset.ck, v = b.dataset.cv; if (!v) impF[f] = []; else { const i = impF[f].map(String).indexOf(v); if (i >= 0) impF[f].splice(i, 1); else impF[f].push(v); } save(); }; });
+    ["#impFrom", "#impTo"].forEach((s) => { const e = $(s); if (e) e.onchange = () => { impF[s === "#impFrom" ? "from" : "to"] = e.value; save(); }; });
+    const h = $("#impHide"); if (h) h.onchange = () => { impF.hideTest = h.checked; save(); };
+    const sh = $("#impShowH"); if (sh) sh.onclick = () => { impShowHidden = !impShowHidden; $("#tabBody").innerHTML = ""; renderAll(); };
+    const rl = $("#impReload"); if (rl) rl.onclick = () => { detailCache.clear(); impData = null; $("#tabBody").innerHTML = ""; renderAll(); };
+    if (!st) return;
+    const xl = $("#impXls"); if (xl) xl.onclick = () => { const wb = C.impactWorkbook(st, impFilterText(pr)); XLSX.download(wb.sheets, wb.filename); toast("Đã xuất " + wb.filename); };
+    const cp = $("#impCopy"); if (cp) cp.onclick = async () => { const t = C.impactParagraph(st); const ok = await copyText(t); toast(ok ? "Đã sao chép đoạn văn — dán vào hồ sơ." : "Không sao chép được."); if (!ok) alert(t); };
+    const pp = $("#impPrint"); if (pp) pp.onclick = () => { document.body.classList.add("imp-print"); toast("Chế độ chụp màn hình — bấm Esc để thoát."); };
+  }
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && document.body.classList.contains("imp-print")) document.body.classList.remove("imp-print"); });
+
+  // ======================== TAB: 🎯 ĐÁNH GIÁ HỌC SINH (B3) ========================
+  const evS = Object.assign({ classId: "", period: "hk1", from: "", to: "", scope: "class", sid: "", crit: { minAvg: 5, drop: 1.5, absentRate: 0.3 }, hideTest: true, withTexts: true, withPrev: true, format: "md" }, LS.get("lh_eval", {}));
+  let evData = null, evBusy = false, evCur = null, evImport = null, evDetail = null, evEditing = null, evEditDraft = {}, evReplyDraft = "";
+  const evSave = () => { LS.set("lh_eval", evS); };
+  const evRedraw = () => { $("#tabBody").innerHTML = ""; renderAll(); };
+  const clsStudents = (cid) => C.sortedEntries(((T.classes || {})[cid] || {}).students);
+  const nameOfSid = (cid, sid) => (((T.classes || {})[cid] || {}).students || {})[sid] ? T.classes[cid].students[sid].name : (evData && evData.names && evData.names[sid]) || "(HS đã chuyển lớp)";
+  const evOf = (cid) => (T.studentEvals || {})[cid] || {};
+  const lvlCls = (l) => ({ "Tốt": "good", "Khá": "mid", "Đạt": "", "Chưa đạt": "low" })[l] || "";
+  const trendIc = (t) => ({ "tiến bộ": "▲", "ổn định": "▬", "giảm": "▼" })[t] || "?";
+  function evLoad(cid) {
+    evBusy = true; evData = null; const ids = Object.entries(T.sessions || {}).filter(([, m]) => m.classId === cid).map(([id]) => id);
+    loadSessionsDetail(ids, (k, n) => { const e = $("#evProg"); if (e) e.textContent = `Đang tải ${k}/${n} tiết…`; })
+      .then((d) => { const names = {}; d.sessions.forEach((s) => Object.entries(s.roster || {}).forEach(([sid, x]) => { names[sid] = x.name; })); evData = Object.assign(d, { classId: cid, names }); })
+      .catch((e) => toast("Không tải được dữ liệu: " + (e.message || e))).finally(() => { evBusy = false; if (tab === "eval") evRedraw(); });
+  }
+  function evTimeline() {
+    const pr = C.periodRange(evS.period, DB.now(), evS), names = {};
+    clsStudents(evS.classId).forEach(([sid, x]) => { names[sid] = x.name; });
+    const tl = C.studentTimeline(evData.sessions, evData.lessons, evS.classId, { from: pr.from, to: pr.to, hideTest: evS.hideTest, withTexts: evS.withTexts, names });
+    const used = evData.sessions.filter((s) => s.meta.classId === evS.classId && (!pr.from || s.meta.createdAt >= pr.from) && (!pr.to || s.meta.createdAt <= pr.to) && !(evS.hideTest && C.isTestSession(s, 3)) && evData.lessons[s.meta.lessonId]);
+    return { pr, tl, used };
+  }
+  function tabEval(body) {
+    const cls = classList();
+    if (!cls.length) { body.innerHTML = `<div class="card empty">Chưa có danh sách lớp — mở tab <b>📋 Danh sách lớp</b> trước.</div>`; return; }
+    if (!evS.classId || !(T.classes || {})[evS.classId]) { evS.classId = cls[0][0]; evSave(); }
+    if ((!evData || evData.classId !== evS.classId) && !evBusy) evLoad(evS.classId);
+    const note = `<div class="card ev-note">⚖️ Nhận xét do AI gợi ý từ dữ liệu ẩn danh, chỉ để giáo viên tham khảo. Giáo viên đọc, sửa và bấm ‘Đã duyệt’ trước khi gửi phụ huynh. Ở phòng máy, các em ngồi chung máy dùng chung kết quả nên nhận xét cá nhân có độ tin cậy hạn chế.</div>`;
+    const head = `<div class="card"><h3>① Chọn dữ liệu</h3><div class="row"><label class="f">Lớp <select id="evClass">${cls.map(([id, c]) => `<option value="${esc(id)}" ${id === evS.classId ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></label></div>
+      <div class="fl"><b>Thời gian</b>${PERIODS.filter(([k]) => k !== "all").map(([k, t]) => `<button class="chip2 ${evS.period === k ? "on" : ""}" data-ep="${k}">${t}</button>`).join("")}
+        ${evS.period === "custom" ? `<label class="imp-date">từ <input type="date" id="evFrom" value="${esc(evS.from)}"></label><label class="imp-date">đến <input type="date" id="evTo" value="${esc(evS.to)}"></label>` : ""}</div>`;
+    if (evBusy || !evData) { body.innerHTML = note + head + `<p id="evProg" class="hint">Đang tải dữ liệu các tiết của lớp…</p></div>`; bindEval(body); return; }
+    const { pr, tl, used } = evTimeline(), sids = clsStudents(evS.classId).map(([sid]) => sid).filter((sid) => tl[sid]).concat(Object.keys(tl).filter((sid) => !clsStudents(evS.classId).some(([x]) => x === sid)));
+    const sup = C.needSupport(tl, evS.crit), supMap = Object.fromEntries(sup.map((x) => [x.sid, x.reasons]));
+    const target = evS.scope === "student" ? (tl[evS.sid] ? [evS.sid] : []) : evS.scope === "support" ? sids.filter((s) => supMap[s]) : sids;
+    const nRoom = used.filter((s) => s.meta.mode !== "self").length;
+    const opts = `<div class="fl"><b>Phạm vi</b>${[["class", "Cả lớp"], ["student", "Từng học sinh"], ["support", "Nhóm cần hỗ trợ"]].map(([k, t]) => `<button class="chip2 ${evS.scope === k ? "on" : ""}" data-es="${k}">${t}</button>`).join("")}</div>
+      ${evS.scope === "student" ? `<label class="f">Học sinh <select id="evSid"><option value="">— chọn —</option>${sids.map((sid) => `<option value="${esc(sid)}" ${sid === evS.sid ? "selected" : ""}>${esc(nameOfSid(evS.classId, sid))}</option>`).join("")}</select></label>` : ""}
+      ${evS.scope === "support" ? `<div class="row ev-crit">Tiêu chí: điểm TB &lt; <input type="number" step="0.5" id="evMin" value="${evS.crit.minAvg}"> · hoặc giảm ≥ <input type="number" step="0.5" id="evDrop" value="${evS.crit.drop}"> điểm (nửa đầu → nửa sau) · hoặc vắng ≥ <input type="number" step="5" id="evAbs" value="${Math.round(evS.crit.absentRate * 100)}">% số tiết</div>
+        <div class="ev-sup">${sup.length ? sup.map((x) => `<span class="pill low">${esc(nameOfSid(evS.classId, x.sid))}: ${esc(x.reasons.join("; "))}</span>`).join("") : `<span class="muted">Không có học sinh nào khớp tiêu chí.</span>`}</div>` : ""}
+      <div class="row"><label class="chk"><input type="checkbox" id="evHide" ${evS.hideTest ? "checked" : ""}> Ẩn tiết chạy thử</label><label class="chk"><input type="checkbox" id="evTexts" ${evS.withTexts ? "checked" : ""}> Kèm câu trả lời tự luận</label><label class="chk"><input type="checkbox" id="evPrev" ${evS.withPrev ? "checked" : ""}> Kèm nhận xét lần đánh giá trước</label></div>
+      <p class="ev-sum"><b>${target.length}</b> học sinh · <b>${used.length}</b> tiết (${nRoom} phòng máy, ${used.length - nRoom} tự học) · ${esc(pr.label)}</p></div>`;
+    // ② câu lệnh
+    const cur = evCur && evCur.classId === evS.classId ? evCur : null;
+    const block2 = `<div class="card"><h3>② Tạo câu lệnh cho AI</h3><div class="row"><b>Định dạng:</b><label class="chk"><input type="radio" name="evFmt" value="md" ${evS.format === "md" ? "checked" : ""}> Markdown <span class="muted">(dán thẳng vào khung chat)</span></label><label class="chk"><input type="radio" name="evFmt" value="json" ${evS.format === "json" ? "checked" : ""}> JSON <span class="muted">(dữ liệu có cấu trúc, đính kèm tệp)</span></label>
+        <button class="btn" id="evMake" ${target.length && used.length ? "" : "disabled"}>✨ Tạo câu lệnh</button></div>
+      ${cur ? `<p class="ai-safe">🔒 Câu lệnh không chứa họ tên học sinh. Bảng đối chiếu mã chỉ nằm trên máy/tài khoản giáo viên. <span class="muted">Mã lượt: ${esc(cur.id)}</span></p>
+        ${cur.leaks.length ? `<p class="ai-warn">⛔ Đã chặn sao chép: câu lệnh còn ${cur.leaks.length} chỗ có thể lộ danh tính (${esc(cur.leaks.slice(0, 3).map((l) => l.what + " “" + l.text.slice(0, 20) + "…”").join("; "))}). Hãy bỏ tick “Kèm câu trả lời tự luận” rồi tạo lại.</p>` : ""}
+        ${cur.parts.length > 1 ? `<div class="row">${cur.parts.map((_, i) => `<button class="chip2 ${i === cur.idx ? "on" : ""}" data-epart="${i}">Phần ${i + 1}/${cur.parts.length}</button>`).join("")}<span class="muted">Mỗi phần đầy đủ hướng dẫn — dán lần lượt từng phần, dán kết quả từng phần ở mục ③.</span></div>` : ""}
+        <textarea id="evPrompt" class="ai-ta" spellcheck="false">${esc(cur.parts[cur.idx])}</textarea>
+        <p class="muted">${cur.parts[cur.idx].length.toLocaleString("vi-VN")} ký tự · ${cur.parts.length} phần · ${cur.n} học sinh</p>
+        <div class="row ai-btns"><button class="btn" id="evCopy" ${cur.leaks.length ? "disabled" : ""}>📋 Sao chép</button><button class="btn ghost" id="evDl" ${cur.leaks.length ? "disabled" : ""}>⬇️ Tải tệp .${cur.format}</button>${AI_LINKS}</div>` : `<p class="hint">Mỗi lần tạo là một lượt đánh giá mới; app gán mã HS01, HS02… ngẫu nhiên và lưu bảng đối chiếu trên tài khoản giáo viên.</p>`}</div>`;
+    // ③ nhập kết quả
+    const block3 = `<div class="card"><h3>③ Nhập kết quả từ AI</h3><textarea id="evReply" class="ai-ta small" placeholder="Dán nguyên văn câu trả lời JSON của AI vào đây (mỗi lần một phần)…">${esc(evReplyDraft)}</textarea>
+      <div class="row"><button class="btn" id="evRead">📥 Đọc kết quả</button>${evImport && evImport.res && evImport.res.ok ? `<button class="btn ok" id="evStore">💾 Lưu kết quả</button>` : ""}</div>${evImportView()}</div>`;
+    body.innerHTML = note + head + opts + block2 + block3 + evProfiles(sids, tl);
+    bindEval(body, { tl, sids, target, supMap, pr, used });
+  }
+  function evImportView() {
+    if (!evImport) return "";
+    const r = evImport.res; if (!r.ok) return `<p class="ai-warn">⚠️ ${esc(r.error)}</p>`;
+    const ev = (T.evals || {})[r.evaluationId] || {}, cid = ev.classId;
+    const warn = (r.unknownCodes.length ? `<p class="ai-warn">Bỏ qua mã không có trong lượt đánh giá: ${esc(r.unknownCodes.join(", "))}</p>` : "") + (r.missingCodes.length ? `<p class="ai-warn">AI chưa đánh giá: ${esc(r.missingCodes.map((c) => c + " (" + nameOfSid(cid, ev.map[c]) + ")").join(", "))}</p>` : "");
+    const ta = (i, f, v) => `<textarea data-er="${i}" data-ef="${f}" rows="3">${esc(v)}</textarea>`;
+    return warn + `<p class="hint">Phần ${r.part} · ${r.students.length} học sinh. Mọi ô sửa được trước khi lưu (mỗi ý một dòng).</p><div class="ev-prev"><table class="t"><thead><tr><th>STT</th><th>Họ tên</th><th>Mức</th><th>Ưu điểm</th><th>Hạn chế</th><th>Tiến bộ</th><th>Cần cải thiện</th><th>Xem lại</th><th>Lời nhắn PH</th><th>Tin cậy</th></tr></thead><tbody>${evImport.rows.map((x, i) => `<tr><td>${i + 1}</td><td><b>${esc(nameOfSid(cid, x.sid))}</b>${x.warn.length ? `<br><span class="pill low" title="Thiếu: ${esc(x.warn.join(", "))}">⚠️ thiếu ${esc(x.warn.join(", "))}</span>` : ""}</td>
+      <td><select data-er="${i}" data-ef="level">${["", "Tốt", "Khá", "Đạt", "Chưa đạt"].map((l) => `<option ${l === x.level ? "selected" : ""}>${l}</option>`).join("")}</select></td>
+      <td>${ta(i, "strengths", x.strengths)}</td><td>${ta(i, "weaknesses", x.weaknesses)}</td><td>${ta(i, "progress", x.progress)}</td><td>${ta(i, "improve", x.improve)}</td><td>${ta(i, "review", x.review)}</td><td>${ta(i, "parentMessage", x.parentMessage)}</td><td>${esc(x.confidence)}</td></tr>`).join("")}</tbody></table></div>`;
+  }
+  function evProfiles(sids, tl) {
+    const evs = evOf(evS.classId), latest = (sid) => Object.entries(evs[sid] || {}).sort((a, b) => (b[1].at || 0) - (a[1].at || 0));
+    const rows = sids.map((sid, i) => { const L0 = latest(sid)[0], e = L0 && L0[1]; return `<tr class="${evDetail === sid ? "sel" : ""}"><td>${i + 1}</td><td><b>${esc(nameOfSid(evS.classId, sid))}</b></td><td>${e ? `<span class="pill ${lvlCls(e.level)}">${esc(e.level || "?")}</span>` : `<span class="muted">—</span>`}</td><td class="num">${e ? trendIc(e.progress && e.progress.trend) : ""}</td><td>${e ? (e.approved ? `<span class="pill good">✅ Đã duyệt</span>` : `<span class="pill mid">Nháp AI</span>`) : ""}</td><td>${latest(sid).length} lượt</td><td><button class="btn small ghost" data-epf="${esc(sid)}">Xem</button></td></tr>`; }).join("");
+    // nhận xét chung của lớp / kế hoạch hỗ trợ (lượt gần nhất có) — mã HSxx đổi thành “em <Tên>”
+    const le = Object.entries(T.evals || {}).filter(([, e]) => e.classId === evS.classId && (e.classSummary || e.supportPlan)).sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0))[0];
+    let common = "";
+    if (le) {
+      const ev = le[1], dec = (t) => C.decode(t, ev.map || {}, (sid) => nameOfSid(evS.classId, sid)), li = (a) => (a || []).map((t) => `<li>${esc(dec(t))}</li>`).join(""), cs = ev.classSummary || {};
+      common = `<div class="ev-item"><b>📋 Nhận xét chung của lớp</b> <span class="muted">(lượt ${C.fmtDate(ev.createdAt || 0)}, AI gợi ý)</span>
+        ${[["Điểm mạnh chung", cs.common_strengths], ["Lỗ hổng chung", cs.common_gaps], ["Gợi ý cho giáo viên", cs.suggestions]].filter(([, a]) => a && a.length).map(([k, a]) => `<p><b>${k}:</b></p><ul>${li(a)}</ul>`).join("")}
+        ${(ev.supportPlan || []).length ? `<p><b>Kế hoạch hỗ trợ:</b></p><ul>${ev.supportPlan.map((p) => `<li><b>${esc((p.codes || []).map((c) => nameOfSid(evS.classId, (ev.map || {})[c])).join(", "))}</b> — ${esc(dec(p.goal))}${(p.weeks || []).length ? `<br><span class="muted">${esc(p.weeks.map(dec).join(" · "))}</span>` : ""}</li>`).join("")}</ul>` : ""}</div>`;
+    }
+    return `<div class="card"><h3>④ Hồ sơ từng học sinh</h3><div class="row"><button class="btn ghost" id="evXls">⬇️ Xuất Excel nhận xét</button></div>${common}
+      <table class="t"><thead><tr><th>STT</th><th>Họ tên</th><th>Mức gần nhất</th><th>Xu hướng</th><th>Trạng thái</th><th>Số lượt</th><th></th></tr></thead><tbody>${rows || `<tr><td colspan="7" class="muted">Chưa có học sinh nào có dữ liệu trong khoảng thời gian này.</td></tr>`}</tbody></table>
+      ${evDetail && tl[evDetail] ? evDetailView(evDetail, tl[evDetail]) : ""}</div>`;
+  }
+  function scoreChart(rec) {
+    const e = rec.entries; if (!e.length) return "";
+    const W = 640, H = 180, pl = 50, pr = 30, pt = 22, pb = 30, n = e.length, x = (i) => pl + (W - pl - pr) * (n === 1 ? 0.5 : i / (n - 1)), y = (v) => H - pb - (H - pt - pb) * v / 10;
+    let path = "", started = false; e.forEach((p, i) => { if (!p.present) { started = false; return; } path += (started ? " L" : " M") + x(i) + "," + y(p.score); started = true; });
+    return `<svg viewBox="0 0 ${W} ${H}" class="ev-chart" text-anchor="middle">${[0, 5, 10].map((v) => `<line x1="${pl}" x2="${W - pr}" y1="${y(v)}" y2="${y(v)}" class="imp-grid"/><text x="${pl - 6}" y="${y(v) + 4}" class="imp-ax" text-anchor="end">${v}</text>`).join("")}
+      <path d="${path}" class="imp-line"/>${e.map((p, i) => (p.present ? `<circle cx="${x(i)}" cy="${y(p.score)}" r="5.5" class="${p.mode === "self" ? "ev-self" : "ev-room"}"><title>${C.fmtDate(p.date)} · ${esc(p.lessonTitle)} · ${p.mode === "self" ? "tự học" : "phòng máy, " + p.groupSize + " bạn"}: ${fmt1(p.score)}</title></circle><text x="${x(i)}" y="${y(p.score) - 10}" class="imp-lv">${fmt1(p.score)}</text>` : `<text x="${x(i)}" y="${y(1.5)}" class="imp-ax ev-abs">vắng</text>`) + `<text x="${x(i)}" y="${H - pb + 16}" class="imp-ax">${C.fmtDate(p.date).slice(0, 5)}</text>`).join("")}</svg>
+      <p class="hint"><span class="ev-dot ev-room"></span> phòng máy (kết quả chung của nhóm) · <span class="ev-dot ev-self"></span> tự học (của riêng em) · “vắng” = không tham gia</p>`;
+  }
+  const lines = (a) => (Array.isArray(a) ? a.join("\n") : a || "");
+  function evDetailView(sid, rec) {
+    const evs = Object.entries(evOf(evS.classId)[sid] || {}).sort((a, b) => (b[1].at || 0) - (a[1].at || 0));
+    const block = ([eid, e]) => evEditing === sid + "|" + eid
+      ? `<div class="ev-item"><b>${C.fmtDate(e.at || 0)}</b> — sửa nhận xét<div class="ev-edit">${["level", "strengths", "weaknesses", "improve", "teacherNote", "parentMessage"].map((f) => `<label>${({ level: "Mức", strengths: "Ưu điểm", weaknesses: "Hạn chế", improve: "Cần cải thiện", teacherNote: "Ghi chú GV", parentMessage: "Lời nhắn phụ huynh" })[f]}<textarea data-ed="${f}" rows="${f === "level" ? 1 : 3}">${esc(f in evEditDraft ? evEditDraft[f] : lines(e[f]))}</textarea></label>`).join("")}</div><div class="row"><button class="btn small" id="evEdSave" data-eid="${esc(eid)}">💾 Lưu</button><button class="btn small ghost" id="evEdCancel">Huỷ</button></div></div>`
+      : `<div class="ev-item"><div class="row"><b>${C.fmtDate(e.at || 0)}</b><span class="pill ${lvlCls(e.level)}">${esc(e.level || "?")}</span><span>${trendIc(e.progress && e.progress.trend)} ${esc((e.progress && e.progress.trend) || "")}</span>${e.confidence ? `<span class="muted">tin cậy: ${esc(e.confidence)}</span>` : ""}${e.approved ? `<span class="pill good">✅ Đã duyệt</span>` : `<span class="pill mid">Nháp AI</span>`}${e.editedByTeacher ? `<span class="muted">(GV đã sửa)</span>` : ""}</div>
+        ${[["Ưu điểm", e.strengths], ["Hạn chế", e.weaknesses], ["Sự tiến bộ", e.progress && e.progress.evidence], ["Cần cải thiện", e.improve], ["Bài cần xem lại", (e.review || []).map((r) => `${r.lesson}: ${r.topic}${r.why ? " (" + r.why + ")" : ""}`)], ["Ghi chú GV", e.teacherNote], ["Lời nhắn phụ huynh", e.parentMessage], ["Ghi chú dữ liệu", e.dataNote]].filter(([, v]) => v && (!Array.isArray(v) || v.length)).map(([k, v]) => `<p><b>${k}:</b> ${Array.isArray(v) ? v.map(esc).join(" · ") : esc(v)}</p>`).join("")}
+        <div class="row">${e.approved ? "" : `<button class="btn small ok" data-eap="${esc(eid)}">✅ Giáo viên đã duyệt</button>`}<button class="btn small ghost" data-eed="${esc(eid)}">✏️ Sửa</button><button class="btn small ghost" data-epm="${esc(eid)}" ${e.approved && e.parentMessage ? "" : "disabled title=\"Cần duyệt trước khi chép lời nhắn\""}>📋 Chép lời nhắn phụ huynh</button><span class="sp"></span><button class="btn small ghost" data-edel="${esc(eid)}">🗑 Xóa lượt đánh giá</button></div></div>`;
+    return `<div class="ev-detail"><h3>👤 ${esc(nameOfSid(evS.classId, sid))}</h3>${scoreChart(rec)}${evs.length ? evs.map(block).join("") : `<p class="muted">Chưa có lượt đánh giá nào.</p>`}</div>`;
+  }
+  // Lượt đánh giá mới: gán mã ngẫu nhiên, chia phần (> 20.000 ký tự -> 15 em/phần), lưu bảng đối chiếu (chỉ sid) ở teacher/evals
+  async function evMake(ctx) {
+    const { tl, target, supMap, pr, used } = ctx, codes = target.slice();
+    for (let i = codes.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [codes[i], codes[j]] = [codes[j], codes[i]]; }
+    const all = codes.map((sid, i) => ["HS" + C.pad2(i + 1), sid]), d = new Date(DB.now());
+    const id = `e${d.getFullYear()}${C.pad2(d.getMonth() + 1)}${C.pad2(d.getDate())}-${C.rid(5)}`;
+    const lessonsInfo = [...new Map(used.map((s) => [s.meta.lessonId, evData.lessons[s.meta.lessonId]])).values()].map((Lx) => ({ title: (Lx.meta && Lx.meta.title) || "", core: Lx.coreKnowledge || [] }));
+    const previous = {}; if (evS.withPrev) target.forEach((sid) => { const L0 = Object.values(evOf(evS.classId)[sid] || {}).sort((a, b) => (b.at || 0) - (a.at || 0))[0]; if (L0) previous[sid] = { date: L0.at, level: L0.level, weaknesses: L0.weaknesses, improve: L0.improve }; });
+    const reasons = evS.scope === "support" ? supMap : {}, grade = C.gradeOf((T.classes[evS.classId] || {}).name, used[0] && used[0].meta.lessonId);
+    const gen = (chunks) => chunks.map((ch, i) => C.evalPrompt(tl, Object.fromEntries(ch), { format: evS.format, evaluationId: id, part: i + 1, parts: chunks.length, lessonsInfo, previous, period: pr.label, grade, scope: evS.scope, reasons, classSessions: used.length, withTexts: evS.withTexts }));
+    let chunks = [all], parts = gen(chunks);
+    if (parts[0].length > 20000) { // chia phần: mỗi phần ≤ 20.000 ký tự và ≤ 15 em
+      // xếp các em hay ngồi chung máy cạnh nhau để cùng phần (dữ liệu chung chỉ ghi 1 lần)
+      const seat = (sid) => { const e = (tl[sid] ? tl[sid].entries : []).filter((x) => x.present && x.groupSize > 1).pop(); return e ? e.sessionId + "|" + e.groupId : "~"; };
+      const order = all.slice().sort((a, b) => seat(a[1]).localeCompare(seat(b[1])));
+      let cur = []; chunks = [];
+      order.forEach((p) => { const next = cur.concat([p]); if (cur.length && (cur.length >= 15 || gen([next])[0].length > 20000)) { chunks.push(cur); cur = [p]; } else cur = next; });
+      if (cur.length) chunks.push(cur);
+      chunks.forEach((ch) => ch.sort((a, b) => a[0].localeCompare(b[0]))); parts = gen(chunks);
+    }
+    const roster = {}; clsStudents(evS.classId).forEach(([sid, x]) => { roster[sid] = x; }); Object.entries(evData.names || {}).forEach(([sid, n]) => { if (!roster[sid]) roster[sid] = { name: n }; });
+    const leaks = [].concat(...parts.map((p) => C.leakCheck(p, roster, target)));
+    const rec = { classId: evS.classId, createdAt: DB.now(), from: pr.from || null, to: pr.to || null, scope: evS.scope, format: evS.format, parts: parts.length, map: Object.fromEntries(all), partCodes: Object.fromEntries(chunks.map((ch, i) => [String(i + 1), ch.map(([c]) => c)])) };
+    await DB.set("teacher/evals/" + id, rec);
+    evCur = { id, classId: evS.classId, parts, idx: 0, format: evS.format, leaks, n: all.length };
+    toast(`Đã tạo câu lệnh cho ${all.length} học sinh (${parts.length} phần).`);
+  }
+  function evRows(res) {
+    const ev = (T.evals || {})[res.evaluationId] || {}, cid = ev.classId, nm = (sid) => nameOfSid(cid, sid), dec = (t) => C.decode(t, ev.map || {}, nm);
+    return res.students.map((s) => ({ sid: s.sid, code: s.code, warn: s.warn, level: s.level, strengths: dec(s.strengths.join("\n")), weaknesses: dec(s.weaknesses.join("\n")),
+      progress: (s.progress.trend ? s.progress.trend + ": " : "") + dec(s.progress.evidence), improve: dec(s.improve.join("\n")), review: s.review.map((r) => `${r.lesson} — ${dec(r.topic)}${r.why ? " (" + dec(r.why) + ")" : ""}`).join("\n"),
+      teacherNote: dec(s.teacherNote), parentMessage: dec(s.parentMessage), confidence: s.confidence, dataNote: dec(s.dataNote), trend: s.progress.trend, edited: false }));
+  }
+  function bindEval(body, ctx) {
+    const upd = (f) => { f(); evSave(); evRedraw(); };
+    const cs = $("#evClass"); if (cs) cs.onchange = () => upd(() => { evS.classId = cs.value; evS.sid = ""; evCur = null; evDetail = null; });
+    body.querySelectorAll("[data-ep]").forEach((b) => { b.onclick = () => upd(() => { evS.period = b.dataset.ep; }); });
+    ["#evFrom", "#evTo"].forEach((s) => { const e = $(s); if (e) e.onchange = () => upd(() => { evS[s === "#evFrom" ? "from" : "to"] = e.value; }); });
+    if (!ctx) return;
+    body.querySelectorAll("[data-es]").forEach((b) => { b.onclick = () => upd(() => { evS.scope = b.dataset.es; }); });
+    const sd = $("#evSid"); if (sd) sd.onchange = () => upd(() => { evS.sid = sd.value; });
+    [["#evMin", "minAvg", 1], ["#evDrop", "drop", 1], ["#evAbs", "absentRate", 0.01]].forEach(([s, k, f]) => { const e = $(s); if (e) e.onchange = () => upd(() => { evS.crit[k] = (+e.value || 0) * f; }); });
+    [["#evHide", "hideTest"], ["#evTexts", "withTexts"], ["#evPrev", "withPrev"]].forEach(([s, k]) => { const e = $(s); if (e) e.onchange = () => upd(() => { evS[k] = e.checked; }); });
+    body.querySelectorAll("input[name=evFmt]").forEach((r) => { r.onchange = () => upd(() => { evS.format = r.value; }); });
+    const mk = $("#evMake"); if (mk) mk.onclick = () => { mk.disabled = true; act(evMake(ctx)).then(evRedraw); };
+    body.querySelectorAll("[data-epart]").forEach((b) => { b.onclick = () => { evCur.idx = +b.dataset.epart; evRedraw(); }; });
+    const cp = $("#evCopy"); if (cp) cp.onclick = async () => { const ok = await copyText($("#evPrompt").value, $("#evPrompt")); toast(ok ? `Đã sao chép phần ${evCur.idx + 1}/${evCur.parts.length} — dán vào Claude / ChatGPT / Gemini.` : "Không tự sao chép được — bấm vào ô, Ctrl+A rồi Ctrl+C."); };
+    const dl = $("#evDl"); if (dl) dl.onclick = () => { const c = (T.classes[evS.classId] || {}).name || "Lop", d = new Date(DB.now()); downloadText($("#evPrompt").value, `DanhGia_${c}_${d.getFullYear()}-${C.pad2(d.getMonth() + 1)}-${C.pad2(d.getDate())}_phan${evCur.idx + 1}.${evCur.format}`, evCur.format === "json" ? "application/json" : "text/markdown"); };
+    // giữ chữ đang gõ khi bảng tự vẽ lại (dữ liệu giáo viên đổi)
+    const rp = $("#evReply"); if (rp) rp.oninput = () => { evReplyDraft = rp.value; };
+    body.querySelectorAll("[data-ed]").forEach((t) => { t.oninput = () => { evEditDraft[t.dataset.ed] = t.value; }; });
+    const rd = $("#evRead"); if (rd) rd.onclick = () => { const raw = $("#evReply").value; const res = C.parseEvalReply(raw, T.evals || {}); evImport = { raw, res, rows: res.ok ? evRows(res) : [] }; evRedraw(); };
+    body.querySelectorAll("[data-er]").forEach((e) => { e.onchange = () => { const r = evImport.rows[+e.dataset.er]; r[e.dataset.ef] = e.value; r.edited = true; }; });
+    const sv = $("#evStore"); if (sv) sv.onclick = () => {
+      const r = evImport.res, ev = (T.evals || {})[r.evaluationId]; if (!ev) return toast("Không tìm thấy lượt đánh giá.");
+      const at = DB.now(), up = {}, ln = (s) => String(s || "").split(/\n+/).map((x) => x.trim()).filter(Boolean);
+      evImport.rows.forEach((x) => { const tr = /^(tiến bộ|ổn định|giảm|chưa đủ dữ liệu)\s*:\s*/i.exec(x.progress);
+        up[`studentEvals/${ev.classId}/${x.sid}/${r.evaluationId}`] = { at, level: x.level || null, strengths: ln(x.strengths), weaknesses: ln(x.weaknesses), progress: { trend: tr ? tr[1].toLowerCase() : x.trend || "", evidence: tr ? x.progress.slice(tr[0].length) : x.progress },
+          improve: ln(x.improve), review: ln(x.review).map((t) => { const p = t.split(" — "); return { lesson: p[0] || "", topic: p.slice(1).join(" — ") || t, why: "" }; }), teacherNote: x.teacherNote || null, parentMessage: x.parentMessage || null,
+          confidence: x.confidence || null, dataNote: x.dataNote || null, approved: false, approvedAt: null, editedByTeacher: !!x.edited }; });
+      up[`evals/${r.evaluationId}/importedParts/${r.part}`] = at;
+      if (r.classSummary) up[`evals/${r.evaluationId}/classSummary`] = r.classSummary; if (r.supportPlan) up[`evals/${r.evaluationId}/supportPlan`] = r.supportPlan;
+      act(DB.update("teacher", up), `Đã lưu nhận xét của ${evImport.rows.length} học sinh (trạng thái “Nháp AI”).`).then(() => { evImport = null; evReplyDraft = ""; evRedraw(); });
+    };
+    body.querySelectorAll("[data-epf]").forEach((b) => { b.onclick = () => { evDetail = evDetail === b.dataset.epf ? null : b.dataset.epf; evEditing = null; evRedraw(); }; });
+    const base = (eid) => `teacher/studentEvals/${evS.classId}/${evDetail}/${eid}`;
+    body.querySelectorAll("[data-eap]").forEach((b) => { b.onclick = () => act(DB.update(base(b.dataset.eap), { approved: true, approvedAt: DB.now() }), "Đã duyệt nhận xét."); });
+    body.querySelectorAll("[data-eed]").forEach((b) => { b.onclick = () => { evEditing = evDetail + "|" + b.dataset.eed; evEditDraft = {}; evRedraw(); }; });
+    const es = $("#evEdSave"); if (es) es.onclick = () => { const v = {}; body.querySelectorAll("[data-ed]").forEach((t) => { const f = t.dataset.ed; v[f] = ["strengths", "weaknesses", "improve"].includes(f) ? t.value.split(/\n+/).map((x) => x.trim()).filter(Boolean) : t.value.trim(); }); v.editedByTeacher = true; act(DB.update(base(es.dataset.eid), v), "Đã lưu nhận xét đã sửa.").then(() => { evEditing = null; evEditDraft = {}; evRedraw(); }); };
+    const ec = $("#evEdCancel"); if (ec) ec.onclick = () => { evEditing = null; evEditDraft = {}; evRedraw(); };
+    body.querySelectorAll("[data-epm]").forEach((b) => { b.onclick = async () => { const e = evOf(evS.classId)[evDetail][b.dataset.epm]; const ok = await copyText(e.parentMessage || ""); toast(ok ? "Đã chép lời nhắn phụ huynh — dán vào Zalo." : "Không chép được."); }; });
+    body.querySelectorAll("[data-edel]").forEach((b) => { b.onclick = () => { if (confirm("Xóa lượt đánh giá này của học sinh? Không khôi phục được.")) act(DB.set(base(b.dataset.edel), null), "Đã xóa lượt đánh giá."); }; });
+    const xl = $("#evXls"); if (xl) xl.onclick = () => evExcel(ctx.sids);
+  }
+  function evExcel(sids) {
+    const cid = evS.classId, c = (T.classes[cid] || {}).name || "", evs = evOf(cid), H = (v) => ({ v, s: "head" }), Cc = (v) => ({ v, s: "cell" }), Wr = (v) => ({ v, s: "wrap" }), CT = (v) => ({ v, s: "center" });
+    const j = (a) => (Array.isArray(a) ? a.join("\n") : a || "");
+    const r1 = [[{ v: "NHẬN XÉT QUÁ TRÌNH HỌC TẬP — LỚP " + c.toUpperCase(), s: "title" }], [{ v: "Nhận xét do AI gợi ý từ dữ liệu ẩn danh, giáo viên đã đọc và duyệt. Xuất ngày " + C.fmtDate(DB.now()), s: "sub" }], [],
+      ["STT", "Họ và tên", "Mức", "Ưu điểm", "Hạn chế", "Sự tiến bộ", "Cần cải thiện", "Bài cần xem lại", "Lời nhắn phụ huynh", "Đã duyệt"].map(H)];
+    const allIds = new Set(); sids.forEach((sid) => Object.keys(evs[sid] || {}).forEach((e) => allIds.add(e)));
+    const order = [...allIds].sort((a, b) => (((T.evals || {})[a] || {}).createdAt || 0) - (((T.evals || {})[b] || {}).createdAt || 0));
+    const r2 = [[{ v: "TIẾN BỘ QUA CÁC LƯỢT ĐÁNH GIÁ — LỚP " + c.toUpperCase(), s: "title" }], [], [], [H("STT"), H("Họ và tên"), ...order.map((e) => H("Mức (" + C.fmtDate(((T.evals || {})[e] || {}).createdAt || 0) + ")"))]];
+    sids.forEach((sid, i) => {
+      const list = Object.entries(evs[sid] || {}).sort((a, b) => (b[1].at || 0) - (a[1].at || 0)), e = list[0] && list[0][1];
+      r1.push([CT(i + 1), Cc(nameOfSid(cid, sid)), CT(e ? e.level || "" : ""), Wr(e ? j(e.strengths) : ""), Wr(e ? j(e.weaknesses) : ""), Wr(e ? [(e.progress || {}).trend, (e.progress || {}).evidence].filter(Boolean).join(": ") : ""), Wr(e ? j(e.improve) : ""),
+        Wr(e ? (e.review || []).map((r) => r.lesson + ": " + r.topic).join("\n") : ""), Wr(e && e.approved ? e.parentMessage || "" : ""), CT(e ? (e.approved ? "Có" : "Chưa") : "")]);
+      r2.push([CT(i + 1), Cc(nameOfSid(cid, sid)), ...order.map((eid) => CT(((evs[sid] || {})[eid] || {}).level || ""))]);
+    });
+    const d = new Date(DB.now());
+    XLSX.download([{ name: "Nhận xét", cols: [6, 26, 10, 40, 40, 34, 40, 34, 44, 9], rows: r1, merges: ["A1:J1", "A2:J2"], freezeRow: 4 }, { name: "Tiến bộ", cols: [6, 26, ...order.map(() => 16)], rows: r2, merges: [], freezeRow: 4 }],
+      `NhanXet_${c}_${d.getFullYear()}-${C.pad2(d.getMonth() + 1)}-${C.pad2(d.getDate())}.xlsx`.replace(/[\\/:*?"<>|]/g, "-"));
+    toast("Đã xuất Excel nhận xét.");
   }
 
   // ======================== OVERLAY ========================

@@ -469,7 +469,8 @@
   }
 
   // ---- bảng điểm Excel của 1 tiết ------------------------------------------------------
-  function sessionWorkbook(sess, L) {
+  // aiNote (tuỳ chọn): nhận xét AI đã lưu của tiết (teacher/ai/{id}.note) -> thêm sheet "Nhận xét AI"
+  function sessionWorkbook(sess, L, aiNote) {
     const info = L ? lessonItems(L) : { items: [], openQs: [] }, items = info.items;
     const meta = sess.meta || {}, live = sess.live || {}, excluded = live.excluded || {};
     const inc = items.filter((it) => !excluded[it.aid]);
@@ -524,7 +525,7 @@
         { name: "Theo nhóm", cols: [14, 34, ...acts.map(() => 14), 11, 10, 9], rows: r2, merges: ["A1:F1", "A2:F2"], freezeRow: 4 },
         { name: "Chi tiết từng câu", cols: [6, 26, 50, 10, 10, ...groups.map(() => 11)], rows: r3, merges: ["A1:E1", "A2:H2"], freezeRow: 4 },
         { name: "Tự luận", cols: [14, 30, 45, 60, 9, 10], rows: r4, merges: ["A1:F1", "A2:F2"], freezeRow: 4 },
-      ],
+      ].concat(aiNote && String(aiNote).trim() ? [{ name: "Nhận xét AI", cols: [110], rows: [[{ v: "NHẬN XÉT CỦA TRỢ LÝ AI (giáo viên dán lại, chỉ để tham khảo)", s: "title" }], [{ v: info1, s: "sub" }], []].concat(String(aiNote).split(/\r?\n/).map((l) => [{ v: l, s: "wrap" }])), merges: [], freezeRow: 3 }] : []),
     };
   }
 

@@ -176,6 +176,10 @@ Hệ thống đã có sẵn (không cần làm gì trong bài, chỉ cần biế
 - Vị trí/CSS các thành phần engine (bảng GV, bảng ⏱️, bảng tính…) do engine tự chèn
   (`ensureEngineCSS`) — bài cũ không cần sửa `styles/app.css`. Muốn đổi giao diện chung thì
   sửa ở đó rồi chạy `tools/update-lessons.js`.
+- **Bảng GV có AI hỗ trợ (không gọi AI, không khóa API):** 🤖 Trợ lý AI phân tích một tiết,
+  tab 📈 Tác động (số liệu minh chứng), tab 🎯 Đánh giá HS (mã HSxx ẩn danh). Hàm thuần nằm ở
+  `lop-hoc/public/insight.js`, test bằng `node tools/test-ai-impact.js`. Câu lệnh dùng tên
+  hoạt động, nội dung câu hỏi và `coreKnowledge` của bài → nên đặt `name`/`coreKnowledge` rõ ràng.
 - **Máy HS: ghép đôi / phân loại / sắp xếp / điền khuyết luôn "làm hết rồi nộp"**, chấm
   theo **kết quả cuối** (máy GV chấm lại từ bài làm `{m}|{g}|{o}|{v}`, không tin "ok" máy HS
   gửi). Tự do: nộp 1 lần rồi xem ngay; theo nhịp: làm đủ thì **tự lưu** sau mỗi lần sửa.

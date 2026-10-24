@@ -106,6 +106,89 @@ Khi GV bấm **🏁 Kết thúc**:
   - **mỗi lớp 1 sheet**: mỗi tiết học 1 cột có ghi ngày, rồi *Số tiết tham gia*, *Tổng điểm*, *Trung bình*, dòng *Trung bình lớp*.
   - Học sinh vắng ghi “Vắng”, không tính vào Tổng điểm và Trung bình.
 
+## 4c. 🤖 Trợ lý AI phân tích một tiết
+
+App **không gọi AI** và không cần khóa API. App soạn sẵn câu lệnh, thầy cô tự dán vào Claude / ChatGPT / Gemini.
+
+- Mở bằng nút **🤖 Trợ lý AI phân tích** (tab 📊 Theo câu hỏi) hoặc nút **🤖 AI** trên dòng tiết ở tab 🕘 Lịch sử.
+- Câu lệnh đã **ẩn danh**:
+  - nhóm ghi “Nhóm 1, Nhóm 2…”;
+  - họ tên trong bài tự luận đổi thành `[HS]`;
+  - email và số điện thoại bị xóa.
+- Câu đạt dưới 80% được liệt kê chi tiết (phương án nào bao nhiêu nhóm chọn). Câu đạt từ 80% trở lên chỉ ghi 1 dòng.
+- Hai ô tick:
+  - **Kèm câu trả lời tự luận**;
+  - **Chỉ các hoạt động được tính điểm**.
+- Các bước: **📋 Sao chép** → bấm **Mở Claude / ChatGPT / Gemini** → dán → gửi.
+- Muốn giữ câu trả lời của AI: dán vào ô dưới → **💾 Lưu cùng tiết học**.
+  - Tiết đã lưu nhận xét có dấu ✓ ở nút 🤖.
+  - File Excel của tiết có thêm sheet **Nhận xét AI**.
+
+## 4d. 📈 Tác động — số liệu minh chứng cho hồ sơ
+
+Tab **📈 Tác động** tổng hợp mọi tiết đã dạy.
+
+- **Bộ lọc**:
+  - thời gian: tháng này / 30 ngày / học kì I (01/09–15/01) / học kì II (16/01–31/05) / cả năm học / tùy chọn;
+  - hình thức (phòng máy / tự học), khối, lớp.
+- **Ẩn tiết chạy thử** (mặc định bật):
+  - bỏ tiết có ít hơn 3 nhóm làm bài, hoặc tên lớp có chữ “mẫu / thử / test”;
+  - bấm **xem** để biết tiết nào đã bị ẩn.
+- **Thẻ số liệu**: mỗi thẻ ghi cách tính ngay bên dưới.
+  - Số tiết, lớp, bài, lượt học sinh tham gia.
+  - Tỉ lệ có mặt, tỉ lệ nhóm làm ≥ 80% câu, tỉ lệ hoàn thành.
+  - Điểm trung bình, lượt trả lời chấm tự động, số tiết có dùng AI.
+- **Biểu đồ theo tuần**: cột là số tiết, đường là điểm trung bình.
+- **Bảng**:
+  - theo lớp, có ▲/▼ so tiết đầu với tiết gần nhất (khác bài nên chỉ để tham khảo);
+  - 10 câu khó nhất (ít nhất 5 nhóm làm);
+  - theo bài giảng.
+- **Nút**:
+  - **⬇️ Xuất Excel minh chứng**: 4 sheet Tổng quan, Theo lớp, Theo tiết, Câu khó nhất;
+  - **📋 Sao chép đoạn văn cho hồ sơ**: đoạn văn có sẵn số liệu, dán vào báo cáo SKKN hoặc hồ sơ thi đua;
+  - **🖨️ Chế độ chụp màn hình**: ẩn menu và bộ lọc để chụp hoặc in; bấm **Esc** để thoát.
+- Lần đầu mở tab, app tải chi tiết từng tiết (có hiện tiến độ). Bấm **🔄 Tải lại** khi vừa dạy thêm tiết mới.
+
+## 4e. 🎯 Đánh giá học sinh bằng AI (theo quá trình)
+
+Ở tab **🎯 Đánh giá HS**, làm 4 bước:
+
+1. **① Chọn dữ liệu**.
+   - Chọn lớp và khoảng thời gian.
+   - Chọn phạm vi:
+     - **Cả lớp**;
+     - **Từng học sinh**;
+     - **Nhóm cần hỗ trợ**: điểm TB thấp, điểm giảm, hoặc vắng nhiều. Sửa được tiêu chí.
+   - Tick các mục cần kèm: ẩn tiết chạy thử, kèm tự luận, kèm nhận xét lần trước.
+2. **② Tạo câu lệnh** (Markdown hoặc JSON).
+   - App gán mã **HS01, HS02…** ngẫu nhiên cho mỗi lượt. Câu lệnh **không có họ tên**.
+   - Bảng đối chiếu mã ↔ học sinh chỉ lưu trên tài khoản giáo viên.
+   - Nếu còn chỗ có thể lộ tên, app **chặn sao chép**. Khi đó bỏ tick “Kèm câu trả lời tự luận” rồi tạo lại.
+   - Câu lệnh dài hơn 20.000 ký tự được **chia thành nhiều phần**.
+     - Mỗi phần có đủ hướng dẫn: dán lần lượt từng phần vào AI.
+     - Các em ngồi chung máy được xếp cùng phần. Kết quả chung chỉ ghi một lần (“cùng máy với HSxx”).
+     - Chỉ 5 tiết gần nhất của mỗi em có chi tiết câu sai. Tiết cũ hơn chỉ ghi điểm.
+3. **③ Nhập kết quả**.
+   - Dán nguyên văn câu trả lời JSON của AI → **📥 Đọc kết quả**.
+   - App báo mã lạ, em AI bỏ sót, hoặc trường còn thiếu.
+   - Bảng xem trước đã đổi mã thành “em <Tên>”. Mọi ô sửa được.
+   - Bấm **💾 Lưu kết quả**: lưu ở trạng thái **Nháp AI**.
+4. **④ Hồ sơ từng học sinh**.
+   - Bảng có mức gần nhất, xu hướng và trạng thái của từng em. Bấm **Xem** để mở hồ sơ:
+     - biểu đồ điểm từng tiết: tím là phòng máy, xanh là tự học, “vắng” là không tham gia;
+     - các lượt đánh giá.
+   - Nút trên mỗi lượt đánh giá:
+     - **✅ Giáo viên đã duyệt**;
+     - **✏️ Sửa**;
+     - **📋 Chép lời nhắn phụ huynh**: chỉ bấm được sau khi đã duyệt;
+     - **🗑 Xóa lượt đánh giá**.
+   - **⬇️ Xuất Excel nhận xét** gồm 2 sheet:
+     - **Nhận xét**: lời nhắn phụ huynh chỉ ghi khi đã duyệt;
+     - **Tiến bộ**: mức của từng lượt.
+   - Trong tiết đang dạy, tab 🧑‍🎓 Học sinh có nút **🎯** cạnh tên để mở nhanh hồ sơ của em đó.
+
+> ⚖️ Nhận xét do AI gợi ý chỉ để tham khảo. Giáo viên đọc, sửa và duyệt trước khi gửi phụ huynh. Ở phòng máy, các em ngồi chung máy dùng chung kết quả, nên nhận xét cá nhân có độ tin cậy hạn chế.
+
 ## 5. Cách tính điểm (thang 10, chung cả nhóm)
 
 - Mỗi câu trắc nghiệm / bài ghép đôi / phân loại / sắp xếp / điền khuyết = **1 bài**. Trắc nghiệm được

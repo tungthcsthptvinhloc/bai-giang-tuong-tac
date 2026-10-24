@@ -242,3 +242,70 @@ table.t tr.sel td { background: #fff7ed; }
 .board.many .rank { margin-bottom: 0; font-size: 1.1rem; padding: 7px 12px; grid-template-columns: 46px 1fr 80px; }
 .board.many .rank .sc { font-size: 1.6rem; }
 .board .rank .mb { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- 🤖 Trợ lý AI phân tích (B1) ---- */
+.ai-dlg { width: min(960px, 96vw) !important; }
+.ai-dlg h2 { font-size: 1.3rem; margin-top: 0; }
+.ai-safe { background: var(--ok-soft); border: 1px solid #b7e4c7; border-radius: 10px; padding: 8px 12px; color: #14532d; font-weight: 600; }
+.ai-warn { background: var(--warn-soft); border: 1px solid #fcd9a5; border-radius: 10px; padding: 8px 12px; color: #92400e; margin: 6px 0; }
+.ai-ta { width: 100%; min-height: 280px; font: .86rem/1.45 Consolas, "Courier New", monospace; border: 1.5px solid var(--line, #e4e0f5); border-radius: 10px; padding: 10px; resize: vertical; box-sizing: border-box; }
+.ai-ta.small { min-height: 140px; font-family: inherit; font-size: .95rem; }
+.ai-dlg .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.ai-btns a.btn { text-decoration: none; }
+
+/* ---- 📈 Tổng quan tác động (B2) ---- */
+.imp-filters .chk { display: inline-block; }
+.imp-date { display: inline-flex; gap: 4px; align-items: center; margin-left: 6px; }
+.imp-date input { font: inherit; border: 1.5px solid var(--line); border-radius: 8px; padding: 3px 6px; }
+.imp-actions { margin: 12px 0; }
+.imp-wrap .card { margin-bottom: 14px; }
+.imp-wrap h3 .muted { font-weight: 500; font-size: .9rem; }
+.imp-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+@media (max-width: 600px) { .imp-kpis { grid-template-columns: 1fr 1fr; gap: 8px; } .imp-big { font-size: 1.5rem; } .imp-kpi { padding: 10px; } }
+.imp-kpi { background: #faf8ff; border: 1.5px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.imp-big { font-size: 1.9rem; font-weight: 800; color: var(--pri); line-height: 1.1; }
+.imp-lab { font-weight: 700; margin-top: 4px; }
+.imp-note { font-size: .78rem; color: var(--muted); margin-top: 4px; line-height: 1.35; }
+.imp-chart { width: 100%; max-width: 860px; height: auto; display: block; }
+.imp-bar { fill: #c4b5fd; }
+.imp-line { fill: none; stroke: #ea580c; stroke-width: 2.5; }
+.imp-dot { fill: #ea580c; }
+.imp-grid { stroke: #ece9f6; stroke-width: 1; }
+.imp-ax, .imp-bv, .imp-lv { font-size: 11px; fill: var(--muted); }
+.imp-bv { fill: #3b0764; font-weight: 800; font-size: 13px; }
+.imp-lv { fill: #c2410c; font-weight: 700; }
+.imp-hidden { font-size: .85rem; color: var(--muted); margin: 4px 0 10px; }
+.up { color: var(--ok); } .down { color: var(--bad); }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--pri); font: inherit; text-decoration: underline; cursor: pointer; }
+/* chế độ chụp màn hình: chỉ giữ phần thống kê */
+body.imp-print .top, body.imp-print .side, body.imp-print #headBox, body.imp-print #tabsBox, body.imp-print .imp-filters, body.imp-print .imp-actions, body.imp-print .imp-wrap ~ .hint, body.imp-print .imp-hidden { display: none !important; }
+body.imp-print .layout { display: block; }
+body.imp-print .main { max-width: 1100px; margin: 0 auto; }
+@media print {
+  .top, .side, #headBox, #tabsBox, .imp-filters, .imp-actions, .imp-hidden, .imp-wrap ~ .hint, .toast { display: none !important; }
+  .layout { display: block; } .imp-wrap .card { break-inside: avoid; box-shadow: none; }
+}
+
+/* ---- 🎯 Đánh giá học sinh (B3) ---- */
+.ev-note { background: #fffbeb; border: 1.5px solid #fde68a; color: #78350f; font-weight: 600; }
+.ev-crit input { width: 64px; font: inherit; border: 1.5px solid var(--line); border-radius: 8px; padding: 2px 6px; }
+.ev-sup { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.ev-sup .pill { white-space: normal; }
+.ev-sum { background: var(--pri-soft); border-radius: 10px; padding: 8px 12px; margin: 8px 0 0; }
+.chk input[type=radio] { margin-right: 4px; }
+.row .chk { display: inline-block; margin-right: 10px; }
+.ev-prev { overflow-x: auto; }
+.ev-prev table.t td { vertical-align: top; }
+.ev-prev textarea { width: 180px; font: .85rem/1.35 inherit; border: 1.5px solid var(--line); border-radius: 8px; padding: 4px 6px; resize: vertical; }
+.ev-detail { margin-top: 14px; border-top: 2px dashed var(--line); padding-top: 10px; }
+.ev-chart { width: 100%; max-width: 720px; height: auto; display: block; }
+.ev-room { fill: #7c3aed; } .ev-self { fill: #0ea5e9; }
+.ev-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; }
+.ev-dot.ev-room { background: #7c3aed; } .ev-dot.ev-self { background: #0ea5e9; }
+.ev-item { border: 1.5px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 10px 0; background: #fcfbff; }
+.ev-item p { margin: 6px 0; }
+.ev-edit { display: grid; gap: 8px; margin: 8px 0; }
+.ev-edit label { display: grid; gap: 3px; font-weight: 700; font-size: .9rem; }
+.ev-edit textarea { font: inherit; font-weight: 400; border: 1.5px solid var(--line); border-radius: 8px; padding: 6px 8px; resize: vertical; }
+.imp-wrap td:first-child { white-space: nowrap; }
+.ev-abs { font-style: italic; fill: var(--bad); }
